@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="de">
+
+  <head>
+    <base href="/TrafkSite/">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="files/standard.css">
+    <link rel="stylesheet" href="projects/SourceHop/Documents/Lernkurse/Programmiersprachen/Bash/Bash_Komplettkurs.css">
+
+    <meta name="description" content="Bash Komplettkurs">
+    <meta name="author" content="Trafkhop Entertainment">
+    <title>Bash Komplettkurs</title>
+  </head>
+
+  <body>
+    <div id="header-placeholder"></div><div id="nav-placeholder"></div><div id="footer-placeholder"></div>
+
+    <main>
+
+      
+      
+      
+      <section id="einleitung">
+        <h1>Bash Komplettkurs</h1>
+        <p>
+          Bash (Bourne Again SHell) ist die Standard-Shell auf nahezu jedem Linux-System — und damit das Fundament jeder Automatisierung, jedes Systemskripts und jedes Werkzeugs, das TrafkHop Entertainment auf seiner Linux-Distro TrafkTux laufen lässt. Diese Shell ist keine bloße Befehlszeile: Sie ist eine vollständige Skriptsprache, ein Prozess-Orchestrator und die Klebeschicht, die Programme miteinander verbindet. Wer Bash wirklich beherrscht, kann das System nach Belieben formen.
+        </p>
+        <p>
+          Dieser Kurs ist kein Tutorial für Gelegenheitsnutzer. Er deckt alles ab, was Bash zu bieten hat — von den ersten Variablen bis hin zu Event-Driven Daemons, Unix Sockets und fortgeschrittenen Architektur-Patterns. Nach diesem Kurs sind externe Ressourcen überflüssig.
+        </p>
+        <p>
+          Voraussetzung ist ein laufendes Linux-System. Alle Beispiele beziehen sich auf die TrafkTux-Umgebung mit Hyprland als Wayland-Compositor, was aber für das Verständnis der Sprache selbst keine Rolle spielt.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-1">
+        <h1>Kapitel 1 — Die Shell, Skripte und das erste Programm</h1>
+        <p>
+          Bevor man irgendwelchen Code schreibt, muss man verstehen, was Bash eigentlich ist und wie es mit dem Betriebssystem zusammenarbeitet. <span class="glow">Bash ist ein Prozess wie jeder andere</span> — wenn man ein Terminal öffnet, startet das System eine Bash-Instanz, die auf Eingaben wartet. <span class="glow">Skripte sind nichts anderes als Textdateien voller Bash-Befehle, die sequenziell ausgeführt werden</span>.
+        </p>
+
+        <h2>1.1 — Die Shebang-Zeile</h2>
+        <p>
+          Jedes Bash-Skript beginnt mit <span class="glow">#!/bin/bash</span>. Diese erste Zeile heißt Shebang (kurz für "sharp-bang", also #!). Wenn das Betriebssystem eine ausführbare Textdatei startet, liest es genau diese erste Zeile und übergibt die Datei an den dort genannten Interpreter.
+        </p>
+        <div class="codeblock">
+#!/bin/bash        → startet explizit Bash
+#!/bin/sh          → startet die System-Shell (auf Ubuntu oft dash, nicht bash!)
+#!/usr/bin/env bash → sucht bash im PATH — portabler für verschiedene Systeme
+        </div>
+        <p>
+          Auf Ubuntu ist <span class="glow">/bin/sh</span> meistens dash — eine schlanke, schnelle, aber mit Bash inkompatible Shell. Alles Bash-spezifische wie Arrays, <span class="glow">[[...]]</span>, Prozesssubstitution oder Regex mit <span class="glow">=~</span> funktioniert unter dash nicht. Für TrafkTux-Skripte ist <span class="glow">#!/bin/bash</span> immer die richtige Wahl.
+        </p>
+        <p>
+          Damit ein Skript ausgeführt werden kann, muss es das Execute-Bit gesetzt haben. Das erledigt <span class="glow">chmod</span>:
+        </p>
+        <div class="codeblock">
+chmod +x mein_skript.sh
+./mein_skript.sh
+        </div>
+        <p>
+          Alternativ kann man Bash direkt aufrufen — dann ist die Shebang-Zeile egal, weil man den Interpreter ja selbst angibt:
+        </p>
+        <div class="codeblock">
+bash mein_skript.sh
+        </div>
+
+        <h2>1.2 — Das erste Skript</h2>
+        <p>
+          Das klassische erste Programm gibt eine Nachricht aus. <span class="glow">echo</span> schreibt Text auf stdout — den Standard-Ausgabekanal, der normalerweise das Terminal ist:
+        </p>
+        <div class="codeblock">
+#!/bin/bash
+echo "TrafkHop Entertainment"
+echo "Bash läuft."
+        </div>
+        <p>
+          Kommentare beginnen mit <span class="glow">#</span>. Alles dahinter auf der Zeile wird von Bash ignoriert und dient nur der Dokumentation:
+        </p>
+        <div class="codeblock">
+# Das ist ein Kommentar
+echo "Das wird ausgegeben"  # Das auch hier ist ein Kommentar
+        </div>
+
+        <h2>1.3 — Übung 1.3</h2>
+        <p>
+          Erstelle eine Datei <span class="glow">hallo.sh</span> mit der richtigen Shebang-Zeile. Das Skript soll drei Zeilen ausgeben: den Namen des Studios, das aktuelle Datum (Tipp: der Befehl <span class="glow">date</span> gibt das aktuelle Datum aus) und einen Trennstrich aus Bindestrichen. Setze das Execute-Bit und führe es auf beide Arten aus — einmal mit <span class="glow">./</span> und einmal mit <span class="glow">bash</span>.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-2">
+        <h1>Kapitel 2 — Variablen, Quoting und Spezialvariablen</h1>
+        <p>
+          Variablen sind benannte Speicherplätze für Werte. <span class="glow">In Bash sind alle Variablen standardmäßig Strings</span> — es gibt keinen eingebauten Integer- oder Float-Typ, auch wenn man bestimmte Operationen auf Zahlen anwenden kann. Dieses Kapitel ist eines der wichtigsten, weil Quoting — also das richtige Setzen von Anführungszeichen — die <span class="glow">häufigste Fehlerquelle im Shell-Scripting ist</span>.
+        </p>
+
+        <h2>2.1 — Zuweisung und Abruf</h2>
+        <p>
+          Eine Variable wird ohne Leerzeichen um das Gleichheitszeichen zugewiesen. Das ist <span class="glow">einer der häufigsten Fehler für Einsteiger: Bash interpretiert </span><span class="glow">NAME = "TrafkHop"</span> als den Befehl NAME mit zwei Argumenten.
+        </p>
+        <div class="codeblock">
+NAME="TrafkHop"       # richtig
+NAME = "TrafkHop"     # FEHLER: bash denkt NAME ist ein Befehl
+
+echo "$NAME"          # Abruf mit $ → TrafkHop
+        </div>
+        <p>
+          Doppelte Anführungszeichen beim Abruf sind <span class="glow">fast immer Pflicht</span>. Ohne sie passiert Word Splitting — Bash zerhackt den Wert an Leerzeichen und übergibt ihn als mehrere Argumente:
+        </p>
+        <div class="codeblock">
+DATEI="mein dokument.txt"
+cat $DATEI        # FEHLER: cat kriegt "mein" und "dokument.txt" als zwei Argumente
+cat "$DATEI"      # richtig: ein Argument mit Leerzeichen
+        </div>
+        <p>
+          Die geschweiften Klammern <span class="glow">${}</span> sind nötig, wenn direkt nach der Variable weitere Zeichen folgen sollen:
+        </p>
+        <div class="codeblock">
+echo "${NAME}_backup"  # → TrafkHop_backup
+echo "$NAME_backup"    # → leer! Bash sucht Variable namens "NAME_backup"
+        </div>
+
+        <h2>2.2 — Variablen-Typen und declare</h2>
+        <p>
+          Bash kennt verschiedene Variablen-Typen, die mit <span class="glow">declare</span> gesetzt werden. Im Alltag reicht die normale Zuweisung, aber <span class="glow">declare</span> ermöglicht präzisere Kontrolle:
+        </p>
+        <div class="codeblock">
+NAME="wert"            # lokale Variable (nur im aktuellen Prozess)
+export NAME="wert"     # Umgebungsvariable (auch für Kind-Prozesse sichtbar)
+local NAME="wert"      # nur innerhalb einer Funktion gültig
+readonly NAME="wert"   # kann nicht überschrieben werden
+declare -i ZAHL=42     # Integer-Variable (erzwingt Zahlen-Typ)
+declare -a ARRAY=()    # normales Array
+declare -A HASHMAP=()  # assoziatives Array (Key-Value-Map)
+declare -x NAME        # synonym für export
+declare -r NAME        # synonym für readonly
+        </div>
+        <p>
+          Umgebungsvariablen wie <span class="glow">$HOME</span>, <span class="glow">$USER</span> oder <span class="glow">$PATH</span> werden von der Login-Shell gesetzt und sind immer verfügbar. Sie sind mit <span class="glow">export</span> markiert und werden an alle Kind-Prozesse weitergegeben.
+        </p>
+
+        <h2>2.3 — Quoting: Das Herzstück des Shell-Scriptings</h2>
+        <p>
+          <span class="glow">Quoting ist der komplexeste und fehlerträchtigste Teil von Bash</span>. <span class="glow">Es gibt drei Arten von Anführungszeichen, die sich grundlegend unterscheiden</span>:
+        </p>
+        <div class="codeblock">
+'einfache Anführungszeichen'
+# ALLES ist literal. Kein $, kein \, keine Expansion.
+echo '$HOME'    # → gibt wirklich $HOME aus, nicht den Pfad
+
+"doppelte Anführungszeichen"
+# Variablen werden expandiert. Globbing (* ? []) wird verhindert.
+# \n, \t werden NICHT interpretiert (außer in $'...' oder echo -e).
+echo "$HOME"    # → /home/benutzername
+
+$'...' (ANSI-C Quoting)
+# Escape-Sequenzen werden interpretiert: \n (Newline), \t (Tab), \x1f, \0 etc.
+printf $'Zeile1\nZeile2\n'    # → zwei Zeilen
+        </div>
+        <p>
+          Kein Quoting (also nackter Text ohne Anführungszeichen) führt zu Word Splitting und Globbing. Globbing bedeutet, dass Zeichen wie <span class="glow">*</span>, <span class="glow">?</span> und <span class="glow">[]</span> zu Dateinamen expandiert werden. Das ist manchmal erwünscht, aber nie bei Variablen-Abrufen.
+        </p>
+        <div class="codeblock">
+# Globbing gewollt (alle .sh-Dateien):
+for f in *.sh; do echo "$f"; done
+
+# Globbing ungewollt — FEHLER:
+MUSTER="*.sh"
+for f in $MUSTER; do echo "$f"; done   # expandiert zu Dateiliste!
+for f in "$MUSTER"; do echo "$f"; done # → gibt literal "*.sh" aus — auch falsch
+# Lösung: Globbing explizit, Variablen immer quoten
+        </div>
+        <p>
+          Faustregel: Immer <span class="glow">"$VARIABLE"</span> in Anführungszeichen schreiben. Die einzige Ausnahme ist, wenn man Word Splitting oder Globbing absichtlich möchte.
+        </p>
+
+        <h2>2.4 — Spezialvariablen</h2>
+        <p>
+          Bash setzt automatisch eine Reihe von Variablen, die Informationen über das laufende Skript und seine Umgebung enthalten:
+        </p>
+        <div class="codeblock">
+$0        # Name des Skripts (so wie es aufgerufen wurde)
+$1, $2... # Argumente 1, 2, ...
+$@        # alle Argumente als separate Strings — immer als "$@" nutzen!
+$*        # alle Argumente als ein String (selten nützlich)
+$#        # Anzahl der Argumente
+$?        # Exit-Code des letzten Befehls (0=Erfolg, alles andere=Fehler)
+$$        # PID (Prozess-ID) des aktuellen Skripts
+$!        # PID des zuletzt gestarteten Hintergrundprozesses
+$-        # aktive Shell-Optionen
+$_        # letztes Argument des vorherigen Befehls
+        </div>
+        <p>
+          Ein praktisches Beispiel: Mit <span class="glow">realpath "$0"</span> und <span class="glow">dirname</span> kann ein Skript seinen eigenen absoluten Pfad und seinen Ordner bestimmen — unabhängig davon, wie es aufgerufen wurde:
+        </p>
+        <div class="codeblock">
+SCRIPT_PATH="$(realpath "$0")"
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+# So findet das Skript seine "Geschwister"-Dateien, egal wo es liegt
+        </div>
+
+        <h2>2.5 — Arithmetik</h2>
+        <p>
+          <span class="glow">Bash rechnet nicht automatisch mit Zahlen</span> — <span class="glow">alles ist erstmal Text</span>. Es gibt drei Wege zu rechnen, wobei <span class="glow">$(( ))</span> die moderne und bevorzugte Methode ist:
+        </p>
+        <div class="codeblock">
+# $(( )) — Arithmetik-Expansion (bevorzugt):
+ERGEBNIS=$(( 3 + 4 ))         # → 7
+$(( ZAHL * 2 ))               # Variablen ohne $ innerhalb von (( ))
+$(( ZAHL ** 2 ))              # Potenz
+$(( ZAHL % 3 ))               # Modulo (Rest bei Division)
+
+# let — ältere Syntax:
+let ERGEBNIS=3+4
+
+# expr — externer Befehl, langsam, vermeiden:
+ERGEBNIS=$(expr 3 + 4)
+        </div>
+        <p>
+          <span class="glow">Fließkomma-Rechnung geht in Bash nicht mit</span> <span class="glow">$(( ))</span>. Dafür braucht man externe Tools wie <span class="glow">bc</span> oder <span class="glow">awk</span>:
+        </p>
+        <div class="codeblock">
+echo "scale=2; 10 / 3" | bc        # → 3.33
+awk "BEGIN {print 10/3}"            # → 3.33333
+
+# Praxisbeispiel: Integer-Prozent in Dezimalzahl umwandeln:
+local float_val=$(awk "BEGIN {print $val/100}")
+        </div>
+
+        <h2>2.6 — Übung 2.6</h2>
+        <p>
+          Erstelle ein Skript <span class="glow">monitor-info.sh</span> das mit <span class="glow">$0</span> seinen eigenen Namen ausgibt. Es soll zwei Argumente entgegennehmen: eine Breite und eine Höhe (z.B. <span class="glow">./monitor-info.sh 1920 1080</span>). Berechne mit <span class="glow">$(( ))</span> das Ergebnis von <span class="glow">Breite * Höhe</span> (die Gesamtanzahl an Pixeln) und gib es aus. Teste bewusst einen Fehler: lass ein Leerzeichen ums <span class="glow">=</span> stehen und beobachte die Fehlermeldung.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-3">
+        <h1>Kapitel 3 — Bedingungen: if, case und Testoperatoren</h1>
+        <p>
+          Bedingungen sind die Grundlage jeder Entscheidungslogik in einem Skript. In Bash ist dabei alles auf Exit-Codes aufgebaut: <span class="glow">0 bedeutet true (Erfolg), alles andere bedeutet false (Fehler)</span>. <span class="glow">Das klingt umgekehrt, ist aber Unix-Tradition</span>.
+        </p>
+
+        <h2>3.1 — if und Test-Syntax</h2>
+        <p>
+          Die Grundstruktur eines if-Statements prüft den Exit-Code eines Befehls. Ein beliebiger Befehl kann als Bedingung stehen — Bash interessiert sich nur dafür, ob er 0 oder ungleich 0 zurückgibt:
+        </p>
+        <div class="codeblock">
+if BEFEHL; then
+    ...
+elif ANDERER_BEFEHL; then
+    ...
+else
+    ...
+fi
+
+# Beispiel: if prüft ob ls erfolgreich war
+if ls /tmp; then
+    echo "Verzeichnis existiert und ist lesbar"
+fi
+        </div>
+        <p>
+          Für Vergleiche nutzt man den <span class="glow">[[ ]]</span>-Operator (bash-spezifisch, bevorzugt) oder den alten <span class="glow">[ ]</span>-Befehl (POSIX-kompatibel). <span class="glow">[[ ]]</span> ist sicherer und mächtiger und sollte in Bash-Skripten immer bevorzugt werden.
+        </p>
+        <div class="codeblock">
+if [[ "$NAME" == "TrafkHop" ]]; then
+    echo "Willkommen"
+fi
+        </div>
+
+        <h2>3.2 — [[ ]] vs [ ] — Vergleichsoperatoren</h2>
+        <p>
+          Innerhalb von <span class="glow">[[ ]]</span> stehen alle Vergleichsoperatoren für Strings und Zahlen zur Verfügung. Bei Zahlen kann man alternativ auch <span class="glow">(( ))</span> verwenden, was normale mathematische Vergleichszeichen erlaubt:
+        </p>
+        <div class="codeblock">
+# String-Vergleiche in [[ ]]:
+[[ "$A" == "$B" ]]       # gleich
+[[ "$A" != "$B" ]]       # ungleich
+[[ "$A" < "$B" ]]        # lexikographisch kleiner
+[[ -z "$A" ]]            # leer (zero length)
+[[ -n "$A" ]]            # nicht leer (non-zero length)
+[[ "$A" =~ REGEX ]]      # Regex-Match — nur in [[ ]] möglich!
+
+# Zahlen-Vergleiche in [[ ]] — mit langen Operatoren:
+[[ "$A" -eq "$B" ]]      # gleich        (equal)
+[[ "$A" -ne "$B" ]]      # ungleich      (not equal)
+[[ "$A" -lt "$B" ]]      # kleiner als   (less than)
+[[ "$A" -le "$B" ]]      # kleiner gleich(less or equal)
+[[ "$A" -gt "$B" ]]      # größer als    (greater than)
+[[ "$A" -ge "$B" ]]      # größer gleich (greater or equal)
+
+# Zahlen-Vergleiche in (( )) — mit normalen Zeichen:
+if (( MOUSE_Y >= THRESHOLD )); then
+    echo "Über dem Schwellenwert"
+fi
+
+# Logische Verknüpfungen innerhalb von [[ ]]:
+if [[ "$MOUSE_Y" -ge "$THRESHOLD" && "$HIDDEN" == true ]]; then
+    echo "beides erfüllt"
+fi
+# In [ ] muss man && außerhalb schreiben:
+if [ "$A" -eq 1 ] && [ "$B" -eq 2 ]; then ...
+        </div>
+
+        <h2>3.3 — Datei- und Verzeichnis-Tests</h2>
+        <p>
+          Ein sehr häufiger Anwendungsfall ist das Testen von Dateien und Verzeichnissen. Bash kennt eine Reihe von Test-Flags dafür:
+        </p>
+        <div class="codeblock">
+[[ -f "$DATEI" ]]    # ist eine reguläre Datei (file)
+[[ -d "$PFAD" ]]     # ist ein Verzeichnis (directory)
+[[ -e "$PFAD" ]]     # existiert — egal ob Datei oder Ordner
+[[ -L "$PFAD" ]]     # ist ein Symlink (link)
+[[ -r "$DATEI" ]]    # ist lesbar (readable)
+[[ -w "$DATEI" ]]    # ist schreibbar (writable)
+[[ -x "$DATEI" ]]    # ist ausführbar (executable)
+[[ -s "$DATEI" ]]    # existiert und ist nicht leer (size > 0)
+
+# Praktisches Beispiel: Konfigurationsdatei laden oder Default benutzen:
+if [[ -f "$CONFIG_FILE" ]]; then
+    CONFIG="$(cat "$CONFIG_FILE")"
+else
+    CONFIG='{"host":"localhost"}'
+fi
+
+# return in Funktionen: return 1 = "false" zurückgeben
+is_cache_valid() {
+    [[ -f "$CACHE_FILE" ]] || return 1
+    # ... weitere Prüfungen
+}
+        </div>
+
+        <h2>3.4 — case — Muster-Vergleiche</h2>
+        <p>
+          <span class="glow">case</span> ist Bashs switch-Statement. Es ist besonders nützlich für Befehlszeilen-Argumente und Menü-Logik. Muster nutzen Glob-Syntax, nicht Regex. Die <span class="glow">;;</span> am Ende jedes Blocks sind Pflicht.
+        </p>
+        <div class="codeblock">
+case "$VARIABLE" in
+    muster1)
+        echo "Muster 1 gefunden"
+        ;;
+    muster2|muster3)
+        echo "Muster 2 oder 3"     # | ist das Oder
+        ;;
+    *.sh)
+        echo "Eine .sh-Datei"      # Glob-Muster funktionieren
+        ;;
+    *)
+        echo "Nichts passt — Default"
+        ;;
+esac
+
+# Praxisbeispiel: Helligkeit steuern
+case "$ACTION" in
+    up)     set_value $(( current + 5 )) ;;
+    down)   set_value $(( current - 5 )) ;;
+    status) echo "$current" ;;
+    *)      echo "Unbekannte Aktion: $ACTION"; exit 1 ;;
+esac
+        </div>
+
+        <h2>3.5 — Übung 3.5</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">test-env.sh</span> das prüft, ob die Datei <span class="glow">~/.bashrc</span> existiert und ob sie lesbar ist — jeweils mit einer passenden Ausgabe. Das Skript nimmt außerdem ein Argument (<span class="glow">$1</span>) entgegen: <span class="glow">up</span>, <span class="glow">down</span> oder <span class="glow">status</span>. Mit <span class="glow">case</span> sollen drei verschiedene Ausgaben produziert werden. Bei unbekanntem Argument gibt das Skript eine Fehlermeldung aus und beendet sich mit <span class="glow">exit 1</span>.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-4">
+        <h1>Kapitel 4 — Arrays: Normale und Assoziative</h1>
+        <p>
+          Arrays sind geordnete Sammlungen von Werten. In Bash sind sie ein-dimensional und 0-basiert. Es gibt zwei Arten: normale Arrays mit numerischen Indizes und assoziative Arrays mit String-Schlüsseln. Beide sind in der Praxis unverzichtbar.
+        </p>
+
+        <h2>4.1 — Normale Arrays (Indexed Arrays)</h2>
+        <p>
+          Ein normales Array wird mit runden Klammern erstellt. Der Zugriff erfolgt mit eckigen Klammern. Das kritischste Detail: beim Iterieren immer <span class="glow">"${ARRAY[@]}"</span> in Anführungszeichen, sonst werden Elemente mit Leerzeichen aufgespalten:
+        </p>
+        <div class="codeblock">
+# Erstellen:
+SPIELE=("Tetris" "Pong" "Snake")
+SPIELE[3]="Breakout"               # direkte Index-Zuweisung
+
+# Zugriff:
+echo "${SPIELE[0]}"                # → Tetris
+echo "${SPIELE[@]}"                # → alle Elemente
+echo "${#SPIELE[@]}"               # → Länge: 4
+echo "${!SPIELE[@]}"               # → alle Indizes: 0 1 2 3
+
+# Slicing — Teilarray:
+echo "${SPIELE[@]:1:2}"            # → Pong Snake (ab Index 1, 2 Elemente)
+
+# Letztes Element:
+echo "${SPIELE[-1]}"               # → Breakout (Bash 4.3+)
+
+# Element hinzufügen:
+SPIELE+=("Galaga")
+
+# Element löschen (Lücke bleibt, Index nicht neu nummeriert!):
+unset "SPIELE[1]"
+
+# Nach unset re-indexieren:
+SPIELE=("${SPIELE[@]}")
+
+# In Schleife — <span class="glow">IMMER mit Anführungszeichen:
+for spiel in "${SPIELE[@]}"; do
+    e</span>cho "Spiel: $spiel"
+done
+
+# Mit Index:
+for i in "${!SPIELE[@]}"; do
+    echo "[$i] ${SPIELE[$i]}"
+done
+        </div>
+        <p>
+          Der Unterschied zwischen <span class="glow">"${ARRAY[@]}"</span> und <span class="glow">${ARRAY[@]}</span> ohne Anführungszeichen ist entscheidend:
+        </p>
+        <div class="codeblock">
+SPIELE=("Super Mario" "Half Life")
+for s in ${SPIELE[@]};   do echo "$s"; done  # → 4 Elemente! (falsch)
+for s in "${SPIELE[@]}"; do echo "$s"; done  # → 2 Elemente (korrekt)
+        </div>
+
+        <h2>4.2 — Assoziative Arrays (Hash Maps)</h2>
+        <p>
+          Assoziative Arrays funktionieren wie Key-Value-Maps in anderen Sprachen. Sie müssen zwingend mit <span class="glow">declare -A</span> deklariert werden — <span class="glow">ohne diese Deklaration erstellt Bash ein normales Array und ignoriert die String-Schlüssel</span>:
+        </p>
+        <div class="codeblock">
+# Deklaration ist PFLICHT:
+declare -A KONFIGURATION
+
+# Befüllen:
+KONFIGURATION["host"]="localhost"
+KONFIGURATION["port"]="8080"
+
+# Oder direkt bei Deklaration:
+declare -A FARBEN=(["rot"]="#FF0000" ["grün"]="#00FF00")
+
+# Zugriff:
+echo "${KONFIGURATION["host"]}"       # → localhost
+
+# Alle Keys:
+echo "${!KONFIGURATION[@]}"           # → host port
+
+# Alle Werte:
+echo "${KONFIGURATION[@]}"            # → localhost 8080
+
+# Key-Value-Iteration:
+for key in "${!KONFIGURATION[@]}"; do
+    echo "$key = ${KONFIGURATION[$key]}"
+done
+
+# Prüfen ob Key existiert:
+if [[ -v KONFIGURATION["host"] ]]; then
+    echo "Key host existiert"
+fi
+
+# Key löschen:
+unset "KONFIGURATION[port]"
+
+# Als "Set" nutzen (Existenz, nicht Wert zählt):
+declare -A exclude
+exclude["firefox"]=1
+if [[ -z "${exclude[$cmd]}" ]]; then
+    echo "$cmd ist nicht ausgeschlossen"
+fi
+        </div>
+
+        <h2>4.3 — mapfile / readarray</h2>
+        <p>
+          <span class="glow">mapfile</span> (Synonym: <span class="glow">readarray</span>) liest Zeilen aus einer Datei oder einem Befehl direkt in ein Array. Das <span class="glow">-t</span>-Flag entfernt das abschließende Newline von jeder Zeile. Für Dateinamen mit Leerzeichen kombiniert man es mit <span class="glow">find -print0</span> und dem Null-Byte als Separator:
+        </p>
+        <div class="codeblock">
+# Aus einer Datei:
+mapfile -t ZEILEN < datei.txt
+
+# Aus einem Befehl (Process Substitution — mehr dazu in Kapitel 6):
+mapfile -t PAKETE < <(dpkg --list | awk '{print $2}')
+
+# Mit Null-Byte-Separator (für Dateinamen mit Leerzeichen — sichere Praxis!):
+mapfile -t -d $'\0' DATEIEN < <(find . -name "*.sh" -print0)
+
+# Iterieren:
+for zeile in "${ZEILEN[@]}"; do
+    echo "Verarbeite: $zeile"
+done
+        </div>
+
+        <h2>4.4 — Übung 4.4</h2>
+        <p>
+          Erstelle ein Skript <span class="glow">desktop-scan.sh</span>. Befülle ein Array mit den Pfaden aller <span class="glow">*.desktop</span>-Dateien in <span class="glow">/usr/share/applications</span> mit <span class="glow">mapfile</span> und <span class="glow">find -print0</span>. Iteriere über das Array und gib für jede Datei den Inhalt der Zeile <span class="glow">Name=</span> aus (mit <span class="glow">grep</span>). Deklariere ein assoziatives Array und speichere Name → Pfad. Gib am Ende die Gesamtanzahl aus.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-5">
+        <h1>Kapitel 5 — Funktionen: Aufbau, Parameter, Rückgabe, Scope</h1>
+        <p>
+          Funktionen sind benannte Code-Blöcke, die mehrfach aufgerufen werden können. Sie machen Skripte lesbarer, wartbarer und testbar. In Bash unterscheiden sie sich in einem wichtigen Punkt von anderen Sprachen: Rückgabewerte funktionieren anders.
+        </p>
+
+        <h2>5.1 — Syntax und Aufruf</h2>
+        <p>
+          Es gibt zwei äquivalente Schreibweisen. Die Bash-Stil-Variante ohne das Schlüsselwort <span class="glow">function</span> ist die bevorzugte. Beim Aufruf werden keine Klammern geschrieben:
+        </p>
+        <div class="codeblock">
+# Bash-Stil (bevorzugt):
+meine_funktion() {
+    echo "Hallo aus der Funktion"
+}
+
+# POSIX-Stil:
+function meine_funktion {
+    echo "Hallo"
+}
+
+# Aufruf — kein () beim Aufruf!
+meine_funktion
+
+# Mit Argumenten:
+meine_funktion "arg1" "arg2"
+
+# Argumente innerhalb der Funktion:
+meine_funktion() {
+    echo "$1"   # erstes Argument
+    echo "$2"   # zweites Argument
+    echo "$#"   # Anzahl der Argumente
+    echo "$@"   # alle Argumente
+}
+        </div>
+
+        <h2>5.2 — Rückgabe-Werte</h2>
+        <p>
+          Das ist ein wichtiger Unterschied zu anderen Sprachen. <span class="glow">return</span> gibt in Bash nur einen Exit-Code zurück (0-255), keinen Wert. <span class="glow">Um echte Werte zurückzugeben, gibt die Funktion Text über</span> <span class="glow">echo</span> aus und wird mit <span class="glow">$()</span> aufgerufen:
+        </p>
+        <div class="codeblock">
+# Exit-Code als Rückgabe (true/false):
+ist_gerade() {
+    (( $1 % 2 == 0 ))     # Arithmetik: 0 wenn wahr, 1 wenn falsch
+}
+
+if ist_gerade 4; then echo "Gerade"; fi      # → Gerade
+if ist_gerade 3; then echo "Gerade"; fi      # → (nichts)
+
+# Wert zurückgeben über echo + $():
+get_brightness() {
+    brightnessctl -m | cut -d',' -f4 | tr -d '%'
+}
+
+WERT=$(get_brightness)
+echo "Helligkeit: $WERT%"
+
+# Praxisbeispiel: Icons anhand von Zahlenwerten auswählen
+get_icon() {
+    local v="$1"
+    if   (( v < 34 )); then echo "dunkel"
+    elif (( v < 67 )); then echo "mittel"
+    else                    echo "hell"
+    fi
+}
+
+current=$(get_value)
+icon=$(get_icon "$current")
+        </div>
+
+        <h2>5.3 — local — Scope und warum er wichtig ist</h2>
+        <p>
+          Ohne <span class="glow">local</span> sind alle Variablen in einer Funktion global — das ist die <span class="glow">häufigste versteckte Fehlerquelle in Shell-Skripten</span>. Eine Funktion kann ohne Absicht globale Variablen überschreiben:
+        </p>
+        <div class="codeblock">
+WERT="global"
+
+setze_wert() {
+    WERT="lokal"       # überschreibt global!
+}
+
+setze_wert
+echo "$WERT"    # → lokal  (unerwartetes Verhalten!)
+
+# Richtig: mit local
+setze_wert_richtig() {
+    local WERT="lokal"   # bleibt in der Funktion
+}
+
+setze_wert_richtig
+echo "$WERT"    # → global  (korrekt)
+
+# Faustregel: JEDE Variable am Anfang einer Funktion mit local deklarieren
+meine_funktion() {
+    local val="$1"
+    local ergebnis
+    ergebnis=$(some_command "$val")
+    echo "$ergebnis"
+}
+        </div>
+
+        <h2>5.4 — Rekursion</h2>
+        <p>
+          Bash unterstützt Rekursion, aber sie sollte sparsam eingesetzt werden — Bash startet für jeden Aufruf einen neuen Kontext, was bei tiefer Rekursion langsam wird:
+        </p>
+        <div class="codeblock">
+countdown() {
+    local n="$1"
+    if (( n <= 0 )); then
+        echo "Start!"
+        return
+    fi
+    echo "$n..."
+    countdown $(( n - 1 ))
+}
+
+countdown 5   # → 5... 4... 3... 2... 1... Start!
+        </div>
+
+        <h2>5.5 — Funktionen als Bibliotheken: source</h2>
+        <p>
+          Größere Projekte lagern wiederverwendbare Funktionen in separate Dateien aus. Mit <span class="glow">source</span> (oder dem gleichbedeutenden <span class="glow">.</span>) werden diese Dateien eingebunden, als wären sie Teil des Hauptskripts:
+        </p>
+        <div class="codeblock">
+# In lib/utils.sh:
+log_info()  { echo "[INFO]  $*"; }
+log_error() { echo "[ERROR] $*" >&2; }
+
+# Im Haupt-Skript:
+source "$SCRIPT_DIR/lib/utils.sh"
+# oder equivalent:
+. "$SCRIPT_DIR/lib/utils.sh"
+
+log_info "Skript gestartet"
+log_error "Etwas ist schiefgelaufen"
+        </div>
+
+        <h2>5.6 — Übung 5.6</h2>
+        <p>
+          Schreibe eine Bibliothek <span class="glow">system-utils.sh</span> mit drei Funktionen: <span class="glow">get_uptime()</span> (gibt die Systemlaufzeit zurück), <span class="glow">get_load()</span> (gibt den Load-Average zurück, Tipp: <span class="glow">cat /proc/loadavg</span>) und <span class="glow">process_exists(name)</span> (gibt 0/1 zurück ob ein Prozess läuft, Tipp: <span class="glow">pgrep -x</span>). Importiere die Bibliothek in ein Haupt-Skript und teste alle drei Funktionen.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-6">
+        <h1>Kapitel 6 — Pipes, Umleitungen und Streams</h1>
+        <p>
+          <span class="glow">Das Herzstück der Unix-Philosophie ist die Fähigkeit, kleine, spezialisierte Programme miteinander zu verbinden</span>. Pipes und Umleitungen sind der Mechanismus dahinter. Das Verstehen der drei Standard-Streams ist grundlegend für alles, was folgt.
+        </p>
+
+        <h2>6.1 — Die drei Standard-Streams</h2>
+        <p>
+          Jeder Prozess in Linux hat drei Standard-Datenkanäle, identifiziert durch Datei-Deskriptoren:
+        </p>
+        <div class="codeblock">
+0 = stdin   # Eingabe (normalerweise Tastatur)
+1 = stdout  # Ausgabe (normalerweise Terminal)
+2 = stderr  # Fehlerausgabe (normalerweise Terminal)
+
+echo "Hallo"           # → stdout
+echo "Fehler" >&2      # → stderr — wichtig für Fehlermeldungen!
+read -r EINGABE        # liest aus stdin
+        </div>
+        <p>
+          <span class="glow">Fehlermeldungen gehören auf stderr</span>, damit sie von normaler Ausgabe getrennt werden können.</span></span> Das ist eine Unix-Konvention, die man einhalten sollte.
+        </p>
+
+        <h2>6.2 — Umleitung</h2>
+        <p>
+          Umleitungen verändern, wohin oder woher die Streams fließen. Die wichtigsten:
+        </p>
+        <div class="codeblock">
+> datei.txt      # stdout in Datei schreiben (Datei wird überschrieben)
+>> datei.txt     # stdout anhängen
+< datei.txt      # stdin aus Datei lesen
+2> fehler.txt    # stderr in Datei umleiten
+2>&1             # stderr auf stdout umlenken (beide zusammenführen)
+&> datei.txt     # stdout + stderr in Datei (Kurzform für > datei &>/dev/null)
+&>/dev/null      # alles verwerfen — der "Mülleimer"
+: > datei.txt    # Datei leeren (: ist no-op mit Exit-Code 0)
+
+# Praxisbeispiel: Aktion ausführen, Ausgabe komplett unterdrücken
+hyprctl dispatch fullscreen 1 &>/dev/null
+
+# Nur stderr unterdrücken, stdout bleibt sichtbar:
+git push origin HEAD 2>/dev/null
+        </div>
+
+        <h2>6.3 — Pipes (|)</h2>
+        <p>
+          Eine Pipe verbindet den stdout des linken Befehls mit dem stdin des rechten. Man kann beliebig viele Befehle verketten. Das ist die Unix-Philosophie in ihrer reinsten Form: <span class="glow">viele kleine Tools, jedes macht eine Sache gut</span>:
+        </p>
+        <div class="codeblock">
+befehl1 | befehl2 | befehl3
+
+# Praxisbeispiel: Bildschirmhöhe aus hyprctl extrahieren
+SCREEN_H=$(hyprctl monitors | grep -A 12 "focused: yes" | grep "res" | \
+           awk '{print $2}' | cut -d'x' -f2 | cut -d'@' -f1)
+# Schritt für Schritt:
+# 1. hyprctl monitors     → alle Monitor-Infos
+# 2. grep -A 12 "focused" → fokussierten Monitor + 12 Folgezeilen
+# 3. grep "res"           → Auflösungszeile
+# 4. awk '{print $2}'     → zweites Wort, z.B. "1920x1080@60"
+# 5. cut -d'x' -f2        → "1080@60"
+# 6. cut -d'@' -f1        → "1080"
+        </div>
+
+        <h2>6.4 — tee: Ausgabe duplizieren</h2>
+        <p>
+          <span class="glow">tee</span> schreibt stdin sowohl auf stdout als auch in eine Datei — nützlich wenn man Ausgabe gleichzeitig im Terminal sehen und in eine Logdatei schreiben möchte:
+        </p>
+        <div class="codeblock">
+befehl | tee protokoll.txt | weiterer_befehl
+befehl | tee -a protokoll.txt    # -a für Append statt Überschreiben
+        </div>
+
+        <h2>6.5 — Here-Strings und Here-Documents</h2>
+        <p>
+          Here-Strings und Here-Documents erlauben es, Text direkt als stdin-Eingabe im Skript zu schreiben, ohne eine Datei anlegen zu müssen:
+        </p>
+        <div class="codeblock">
+# Here-String: kurzer Input an einen Befehl:
+grep "Wort" <<< "Dieser Satz hat das gesuchte Wort"
+
+# Here-Document: mehrzeiliger Input (EOF ist frei wählbar):
+cat << EOF
+Zeile 1
+Variablen werden expandiert: $USER
+EOF
+
+# Mit einfachen Anführungszeichen um EOF: keine Expansion:
+cat << 'EOF'
+Dies ist $wirklich literal — keine Expansion
+EOF
+
+# Mit - vor EOF: führende Tabs werden ignoriert:
+cat <<- EOF
+    Diese Tabs werden entfernt
+EOF
+        </div>
+
+        <h2>6.6 — Named Pipes (FIFOs)</h2>
+        <p>
+          Eine Named Pipe ist eine spezielle Datei, die wie eine Pipe wirkt, aber zwischen nicht verwandten Prozessen genutzt werden kann. Sie wird mit <span class="glow">mkfifo</span> erstellt:
+        </p>
+        <div class="codeblock">
+mkfifo /tmp/meine_pipe
+cat /tmp/meine_pipe &           # Liest aus der Pipe (<span class="glow">blockiert im Hintergrund</span>)
+echo "Hallo" > /tmp/meine_pipe  # Schreibt in die Pipe
+rm /tmp/meine_pipe              # Aufräumen
+        </div>
+
+        <h2>6.7 — Übung 6.7</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">process-monitor.sh</span> das einen Prozessnamen als Argument entgegennimmt. Mit <span class="glow">ps aux</span> als Quelle und <span class="glow">grep</span> wird nach dem Prozess gefiltert. Mit <span class="glow">awk</span> werden CPU-Nutzung und PID jedes gefundenen Prozesses ausgegeben. Die Ausgabe wird mit <span class="glow">tee</span> gleichzeitig auf der Konsole und in <span class="glow">/tmp/procs.log</span> gespeichert. Fehlermeldungen werden mit <span class="glow">2>/dev/null</span> unterdrückt.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-7">
+        <h1>Kapitel 7 — Command Substitution und Process Substitution</h1>
+        <p>
+          Command Substitution und Process Substitution sind zwei der mächtigsten Features von Bash. Sie erlauben es, Befehlsausgaben als Variablen oder als Pseudodateien zu behandeln.
+        </p>
+
+        <h2>7.1 — Command Substitution $()</h2>
+        <p>
+          <span class="glow">$()</span> führt einen Befehl aus und ersetzt den Ausdruck durch die Ausgabe des Befehls. Das ist die moderne Syntax — die alte <span class="glow">Backtick-Syntax `` `befehl` `` ist zu vermeiden, da sie keine Verschachtelung erlaubt</span>:
+        </p>
+        <div class="codeblock">
+ERGEBNIS=$(befehl)    # modern, bevorzugt
+ERGEBNIS=`befehl`     # alt, vermeiden
+
+# Verschachtelung geht nur mit $():
+TIEF=$(echo $(date +%Y))
+
+# Wichtig: <span class="glow">Zeilenumbrüche werden entfernt!</span>
+ZEILEN=$(cat datei.txt)
+# "Zeile1\nZeile2" wird zu "Zeile1 Zeile2" in der Variable.
+# Für Zeilen: mapfile oder IFS-Loop nutzen (Kapitel 8, 9).
+
+# Praxisbeispiel:
+SCREEN_H=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .height')
+active_addr=$(hyprctl activewindow -j | jq -r '.address // empty')
+        </div>
+
+        <h2>7.2 — Process Substitution &lt;() — Befehle als Dateien</h2>
+        <p>
+          Process Substitution <span class="glow">&lt;()</span> macht aus der Ausgabe eines Befehls eine temporäre Pseudodatei. Das ist echte Bash-Magie — es erlaubt Befehlen, die Dateipfade als Argumente erwarten, mit Befehlsausgaben zu arbeiten:
+        </p>
+        <div class="codeblock">
+&lt;(befehl)   # Ausgabe des Befehls als Pseudodatei
+>(befehl)   # Eingabe geht in den Befehl als wäre er eine Datei
+
+# Beispiel: zwei Befehlsausgaben vergleichen
+diff &lt;(ls /tmp) &lt;(ls /var)
+# diff braucht zwei Datei-Argumente — mit &lt;() klappt das ohne Temp-Dateien
+
+# mapfile mit Process Substitution:
+mapfile -t PAKETE < &lt;(apt list --installed 2>/dev/null | grep -v "Listing")
+# Das < ist Umleitung, das &lt;() ist Process Substitution — zusammen:
+# "lies die Ausgabe des Befehls als wäre es eine Datei"
+        </div>
+
+        <h2>7.3 — Das Subshell-Problem und die Lösung</h2>
+        <p>
+          <span class="glow">Dieser Unterschied ist kritisch</span> für jeden, der Daten aus Schleifen braucht: <span class="glow">Wenn eine Schleife über eine Pipe läuft, läuft sie in einer Subshell — Variablen, die dort gesetzt werden, sind danach verloren</span>:
+        </p>
+        <div class="codeblock">
+# PROBLEM: Schleife in Subshell, Zähler geht verloren!
+ZAEHLER=0
+ls | while read -r f; do
+    (( ZAEHLER++ ))
+done
+echo "$ZAEHLER"  # → 0! (falsch)
+
+# LÖSUNG: Process Substitution — <span class="glow">Schleife bleibt in aktueller Shell</span>:
+ZAEHLER=0
+while read -r f; do
+    (( ZAEHLER++ ))
+done < &lt;(ls)
+echo "$ZAEHLER"  # → korrekte Zahl!
+
+# Praxisbeispiel aus app-menu.sh:
+while IFS= read -r desktop; do
+    grep -qE '^(NoDisplay|Hidden)=true' "$desktop" && continue
+    name=$(grep -m1 '^Name=' "$desktop" | cut -d= -f2-)
+    # ... Verarbeitung
+done < &lt;(find "$dir" -name "*.desktop" -type f 2>/dev/null)
+        </div>
+
+        <h2>7.4 — Übung 7.4</h2>
+        <p>
+          Erstelle ein Skript <span class="glow">window-list.sh</span>. Nutze <span class="glow">mapfile &lt; &lt;(...)</span> um eine Liste aller laufenden Prozesse (per <span class="glow">ps aux | awk 'NR>1{print $11}'</span>) in ein Array zu laden. Iteriere über das Array und zähle, wie viele eindeutige Prozessnamen es gibt (Tipp: assoziatives Array als Set nutzen). Gib die Gesamtanzahl aus. Erkläre in einem Kommentar warum <span class="glow">mapfile + process substitution</span> hier besser als eine normale Pipe ist.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-8">
+        <h1>Kapitel 8 — Regex, grep, sed, awk und String-Operationen</h1>
+        <p>
+          Textverarbeitung ist das, wofür Shell-Scripting gemacht wurde. Bash selbst, grep, sed und awk bilden zusammen ein vollständiges Toolkit, das praktisch jede Textmanipulation ermöglicht — ohne dass man eine andere Programmiersprache benötigt.
+        </p>
+
+        <h2>8.1 — Bash-interne Regex mit =~</h2>
+        <p>
+          Innerhalb von <span class="glow">[[ ]]</span> kann man mit <span class="glow">=~</span> direkt gegen Extended Regular Expressions testen. Capture-Gruppen landen in <span class="glow">BASH_REMATCH</span>. Wichtig: <span class="glow">der Regex darf keine Anführungszeichen haben, sonst wird er literal genommen</span>:
+        </p>
+        <div class="codeblock">
+[[ "$STRING" =~ REGEX ]]
+
+# Beispiel: IP-Adresse validieren
+IP="192.168.1.100"
+[[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo "Gültige IP"
+
+# Capture-Gruppen in BASH_REMATCH:
+[[ "2026-06-12" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]]
+echo "${BASH_REMATCH[0]}"   # → 2026-06-12  (ganzer Match)
+echo "${BASH_REMATCH[1]}"   # → 2026         (erste Gruppe)
+echo "${BASH_REMATCH[2]}"   # → 06           (zweite Gruppe)
+echo "${BASH_REMATCH[3]}"   # → 12           (dritte Gruppe)
+
+# Praxisbeispiel: Mausposition extrahieren
+# hyprctl cursorpos gibt z.B. "1234, 567" aus
+if [[ "$pos" =~ ^[0-9]+,\ ([0-9]+)$ ]]; then
+    MOUSE_Y="${BASH_REMATCH[1]}"
+fi
+
+# Regex-Variable (für komplexe Muster):
+REGEX="^[0-9]+$"
+[[ "$s" =~ $REGEX ]]    # ohne Anführungszeichen um $REGEX!
+        </div>
+
+        <h2>8.2 — grep: Zeilen filtern</h2>
+        <p>
+          <span class="glow">grep</span> durchsucht Text nach Mustern und gibt passende Zeilen aus. Es ist das meistgenutzte Filter-Tool in Shell-Pipelines:
+        </p>
+        <div class="codeblock">
+grep "muster" datei.txt           # Zeilen mit "muster"
+grep -i "muster" datei.txt        # case-insensitive
+grep -v "muster" datei.txt        # invertiert (Zeilen OHNE muster)
+grep -n "muster" datei.txt        # mit Zeilennummer
+grep -c "muster" datei.txt        # zählt Treffer-Zeilen
+grep -l "muster" *.txt            # nur Dateinamen ausgeben
+grep -r "muster" verzeichnis/     # rekursiv suchen
+grep -E "regex+" datei.txt        # Extended Regex (+ ? | () )
+grep -P "regex\d" datei.txt       # Perl-Regex
+grep -q "muster" datei.txt        # quiet, nur Exit-Code (0=gefunden)
+grep -m1 "muster" datei.txt       # nur ersten Treffer
+grep -A 5 "muster" datei.txt      # 5 Zeilen nach dem Treffer
+grep -B 3 "muster" datei.txt      # 3 Zeilen vor dem Treffer
+
+# Mehrere Muster:
+grep -E "foo|bar" datei.txt
+grep -e "foo" -e "bar" datei.txt  # äquivalent
+
+# Praxisbeispiel: .desktop-Dateien ohne Anzeige filtern
+grep -qE '^(NoDisplay|Hidden)=true' "$desktop" && continue
+
+# Namen aus .desktop-Datei extrahieren:
+name=$(grep -m1 '^Name=' "$desktop" | cut -d= -f2-)
+        </div>
+
+        <h2>8.3 — sed: Stream Editor</h2>
+        <p>
+          <span class="glow">sed</span> verarbeitet Text Zeile für Zeile und führt Transformationen durch. Die häufigste Operation ist Suchen-und-Ersetzen mit <span class="glow">s/alt/neu/</span>:
+        </p>
+        <div class="codeblock">
+# Einfaches Ersetzen (erstes Vorkommen):
+echo "Hallo Welt" | sed 's/Welt/Shell/'   # → Hallo Shell
+
+# Global (alle Vorkommen):
+echo "a a a" | sed 's/a/b/g'              # → b b b
+
+# Case-insensitive:
+echo "Hallo HALLO" | sed 's/hallo/Hi/gI'  # → Hi Hi
+
+# Extended Regex mit -E:
+echo "2026-06-12" | sed -E 's/([0-9]+)-([0-9]+)-([0-9]+)/\3.\2.\1/'
+# → 12.06.2026 (Datum umdrehen mit Capture-Groups)
+
+# Zeilen löschen:
+sed '/muster/d' datei.txt              # Zeilen mit "muster" entfernen
+
+# Bestimmte Zeilen ausgeben:
+sed -n '5,10p' datei.txt              # nur Zeilen 5-10
+
+# In-place Bearbeitung (Datei direkt ändern):
+sed -i 's/alt/neu/g' datei.txt
+sed -i.bak 's/alt/neu/g' datei.txt   # mit Backup
+
+# Mehrere Operationen in einem sed-Aufruf (durch ; getrennt):
+sed 's/%[a-zA-Z]//g;s/^[[:space:]]*//;s/[[:space:]]*$//' datei.txt
+# 1. Desktop-Placeholders entfernen (%f, %u, %F etc.)
+# 2. führende Leerzeichen entfernen
+# 3. abschließende Leerzeichen entfernen
+        </div>
+
+        <h2>8.4 — awk: Spaltenverarbeitung und Programmierung</h2>
+        <p>
+          <span class="glow">awk</span> ist eine vollständige Programmiersprache für Textverarbeitung. Es verarbeitet Zeilen und kennt Spalten (Fields). Es ist besonders stark für tabellarische Daten und Berechnungen:
+        </p>
+        <div class="codeblock">
+# Grundstruktur:
+awk 'MUSTER { AKTION }' datei.txt
+
+# Spalten ausgeben ($1=erste, $2=zweite, $NF=letzte, $0=ganze Zeile):
+echo "Hallo Welt Bash" | awk '{print $2}'     # → Welt
+echo "Hallo Welt Bash" | awk '{print $NF}'    # → Bash
+
+# Mit Trennzeichen (-F):
+echo "user:1000:gruppe" | awk -F: '{print $1}'   # → user
+echo "user:1000:gruppe" | awk -F: '{print $3}'   # → gruppe
+
+# Berechnung:
+echo "10 20 30" | awk '{print $1 + $2 + $3}'     # → 60
+
+# Bedingungen:
+ps aux | awk '$3 > 5 {print $1, $11}'   # Prozesse mit CPU > 5%
+
+# BEGIN und END (vor/nach der Verarbeitung):
+ps aux | awk 'BEGIN{print "Prozesse:"} NR>1{print $11} END{print "Fertig"}'
+# NR = aktuelle Zeilennummer (Number of Record)
+
+# Summieren:
+ps aux | awk 'NR>1{cpu+=$3} END{printf "CPU gesamt: %.1f%%\n", cpu}'
+
+# Fließkomma-Berechnung:
+awk "BEGIN {print $val/100}"
+        </div>
+
+        <h2>8.5 — String-Manipulation in Bash (intern)</h2>
+        <p>
+          Bash hat eingebaute String-Operationen — sie sind schneller als externe Tools wie sed oder awk, weil <span class="glow">kein neuer Prozess gestartet wird</span>:
+        </p>
+        <div class="codeblock">
+STR="Hallo Welt"
+
+# Länge:
+echo "${#STR}"            # → 10
+
+# Substring:
+echo "${STR:6}"           # → Welt  (ab Position 6)
+echo "${STR:0:5}"         # → Hallo (Position 0, Länge 5)
+echo "${STR: -4}"         # → Welt  (von hinten — Leerzeichen wichtig!)
+
+# Groß/Kleinschreibung (Bash 4+):
+echo "${STR,,}"           # → hallo welt  (alles klein)
+echo "${STR^^}"           # → HALLO WELT  (alles groß)
+echo "${STR,}"            # → hallo Welt  (nur erster Buchstabe klein)
+echo "${STR^}"            # → Hallo Welt  (nur erster Buchstabe groß)
+
+# Muster vom Anfang entfernen:
+DATEI="foto.backup.tar.gz"
+echo "${DATEI#*.}"        # → backup.tar.gz  (kürzestes Muster)
+echo "${DATEI##*.}"       # → gz             (längstes Muster)
+
+# Muster vom Ende entfernen:
+echo "${DATEI%.*}"        # → foto.backup.tar (kürzestes Muster)
+echo "${DATEI%%.*}"       # → foto            (längstes Muster)
+
+# Ersetzen:
+echo "${STR/Welt/Shell}"  # → Hallo Shell    (erstes Vorkommen)
+echo "${STR//l/L}"        # → HaLLo WeLt     (alle Vorkommen)
+echo "${STR/#Hallo/Hi}"   # → Hi Welt        (nur am Anfang)
+echo "${STR/%Welt/Du}"    # → Hallo Du       (nur am Ende)
+
+# Praxisbeispiele:
+local clean_addr="${target_addr#0x}"     # "0x" Prefix entfernen
+event="${line%%>>*}"                     # alles ab ">>" entfernen
+data="${line#*>>}"                       # alles bis ">>" entfernen
+name="${name//[$'\t\n\0']/ }"           # Tabs, Newlines → Leerzeichen
+        </div>
+
+        <h2>8.6 — Default-Werte und Fehler-Variablen</h2>
+        <p>
+          Bash bietet eine elegante Syntax für Variablen mit Default-Werten. Diese sogenannte Parameter-Expansion ist sehr nützlich für robuste Skripte:
+        </p>
+        <div class="codeblock">
+${VAR:-default}   # Wert von VAR, oder "default" wenn VAR leer/ungesetzt
+${VAR:=default}   # wie :-, setzt aber VAR auch auf default
+${VAR:+ersatz}    # "ersatz" wenn VAR gesetzt, sonst leer
+${VAR:?fehlermsg} # Fehler + Meldung wenn VAR leer/ungesetzt
+
+# Praxisbeispiele:
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
+# XDG_RUNTIME_DIR ist normalerweise /run/user/1000
+# Falls nicht gesetzt: /tmp als Fallback
+        </div>
+
+        <h2>8.7 — Übung 8.7</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">log-parser.sh</span> das einen Log-Dateipfad als <span class="glow">$1</span> entgegennimmt. Mit <span class="glow">grep</span> werden alle ERROR-Zeilen gefunden. Mit <span class="glow">awk</span> werden Datum (erstes Wort) und Fehlermeldung (Rest der Zeile) extrahiert. Mit <span class="glow">sed</span> werden IP-Adressen durch <span class="glow">[ZENSIERT]</span> ersetzt. Mit <span class="glow">=~</span> und <span class="glow">BASH_REMATCH</span> werden Zeilen mit HTTP-Status-Codes (drei Ziffern) gefunden und der Code ausgegeben.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-9">
+        <h1>Kapitel 9 — Fehlerbehandlung, Exit Codes und Debugging</h1>
+        <p>
+          <span class="glow">Robuste Skripte fallen nicht stillschweigend auseinander</span> — sie erkennen Fehler, behandeln sie sauber und hinterlassen keine inkonsistenten Zustände. Dieses Kapitel zeigt, wie man Skripte defensiv schreibt.
+        </p>
+
+        <h2>9.1 — Exit Codes</h2>
+        <p>
+          Jeder Befehl gibt beim Beenden einen Exit-Code zurück. <span class="glow">0 bedeutet Erfolg, alles andere bedeutet Fehler</span>. <span class="glow">$?</span> enthält immer den Exit-Code des letzten Befehls. Konventionelle Exit-Code-Bedeutungen:
+        </p>
+        <div class="codeblock">
+ls /tmp
+echo "$?"     # → 0 (Erfolg)
+
+ls /gibts_nicht
+echo "$?"     # → 2 (Fehler)
+
+exit 0        # Skript erfolgreich beenden
+exit 1        # allgemeiner Fehler
+exit 2        # falsche Verwendung (Konvention)
+exit 127      # Befehl nicht gefunden
+        </div>
+
+        <h2>9.2 — set -e, set -u, set -o pipefail</h2>
+        <p>
+          Diese drei Shell-Optionen machen Skripte deutlich robuster. Sie werden typischerweise ganz am Anfang eines Skripts gesetzt:
+        </p>
+        <div class="codeblock">
+set -euo pipefail    # Standard für robuste Skripte — alle drei zusammen
+
+# Was sie bedeuten:
+set -e         # "exit on error": abbricht bei jedem nicht-0-Exit-Code
+set -u         # "undefined vars": Fehler bei ungesetzten Variablen
+set -o pipefail # Pipeline schlägt fehl wenn ein Teil scheitert
+set -x         # Debug-Modus: jede Zeile wird vor Ausführung ausgegeben
+
+# Problem mit set -e: manchmal will man Fehler ignorieren
+ls /gibts_nicht || true      # || true: verhindert Abbruch
+grep "nicht_da" datei.txt || true
+
+# Oder mit if:
+if ls /gibts_nicht; then
+    echo "existiert"
+fi
+
+# set -e für einen Block deaktivieren:
+set +e
+riskanter_befehl
+set -e
+        </div>
+
+        <h2>9.3 — trap: Signal Handler</h2>
+        <p>
+          <span class="glow">trap</span> erlaubt es, Code auszuführen wenn bestimmte Events auftreten — z.B. wenn das Skript endet, unterbrochen wird oder ein Signal empfängt. <span class="glow">Das ist unverzichtbar für sauberes Aufräumen</span>:
+        </p>
+        <div class="codeblock">
+trap 'BEFEHLE' SIGNAL
+
+# Wichtige Signale:
+# EXIT  → immer wenn das Skript endet (normal oder Fehler)
+# ERR   → bei jedem Fehler
+# INT   → Ctrl+C (SIGINT)
+# TERM  → kill (SIGTERM)
+# HUP   → Terminal geschlossen (SIGHUP)
+# USR1  → benutzerdefiniertes Signal 1
+# USR2  → benutzerdefiniertes Signal 2
+
+# Cleanup beim Beenden (der wichtigste Anwendungsfall):
+TMP_FILE=$(mktemp)
+trap "rm -f '$TMP_FILE'" EXIT
+# egal wie das Skript endet — die Datei wird immer gelöscht
+
+# Mehrere Signale und Cleanup-Funktion:
+cleanup() {
+    rm -f /tmp/meine_lock_datei
+    echo "Aufgeräumt" >&2
+}
+trap cleanup EXIT INT TERM
+
+# Externes Steuern des Skript-Zustands via Signale:
+HIDDEN=false
+trap "HIDDEN=false" USR2
+# kill -USR2 &lt;PID> setzt HIDDEN von außen auf false
+        </div>
+
+        <h2>9.4 — Signale senden: kill und pkill</h2>
+        <p>
+          <span class="glow">kill</span> sendet Signale an Prozesse. Es beendet nicht zwingend einen Prozess — das hängt davon ab, welches Signal gesendet wird:
+        </p>
+        <div class="codeblock">
+kill PID          # sendet SIGTERM (15) — freundliche Aufforderung
+kill -9 PID       # SIGKILL — sofort beenden, nicht abfangbar
+kill -SIGUSR1 PID # benutzerdefiniertes Signal
+kill -SIGUSR2 PID
+
+pkill -SIGUSR1 waybar   # Signal an Prozess nach Name
+pkill -f "$SCRIPT"      # Signal per vollem Kommandozeilen-String
+        </div>
+
+        <h2>9.5 — Debugging-Techniken</h2>
+        <p>
+          Bash bietet mehrere eingebaute Methoden zum Debuggen von Skripten:
+        </p>
+        <div class="codeblock">
+# 1. set -x — Trace-Modus (zeigt jede ausgeführte Zeile):
+set -x
+VARIABLE="test"
+echo "$VARIABLE"
+set +x
+# Ausgabe: + VARIABLE=test  + echo test  → test
+
+# Nur bestimmten Teil debuggen:
+bash -x skript.sh     # ganzes Skript im Trace-Modus
+
+# 2. Eigene Debug-Funktion (ein-/ausschaltbar):
+DEBUG="${DEBUG:-false}"
+debug() {
+    [[ "$DEBUG" == "true" ]] && echo "[DEBUG] $*" >&2
+}
+debug "Variable ist: $VARIABLE"
+# Aufruf: DEBUG=true ./skript.sh
+
+# 3. Syntax prüfen ohne Ausführen:
+bash -n skript.sh     # nur Syntax-Check
+
+# 4. shellcheck — externer Linter (empfohlen):
+shellcheck skript.sh  # findet häufige Fehler und Antipatterns
+        </div>
+
+        <h2>9.6 — Übung 9.6</h2>
+        <p>
+          Nimm das Skript aus Übung 6.7 und rüste es nach. Füge <span class="glow">set -euo pipefail</span> am Anfang ein. Baue einen <span class="glow">trap EXIT</span> Handler ein, der eine temporäre Logdatei aufräumt. Füge eine <span class="glow">debug()</span>-Funktion ein, die über <span class="glow">DEBUG=true</span> aktivierbar ist und wichtige Schritte protokolliert. Prüfe das Skript mit <span class="glow">bash -n</span> auf Syntaxfehler.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-10">
+        <h1>Kapitel 10 — Schleifen und Kontrollfluss</h1>
+        <p>
+          Schleifen sind das Werkzeug für Wiederholungen. Bash bietet <span class="glow">while</span>, <span class="glow">until</span>, <span class="glow">for</span> und verschiedene Kontrollbefehle. Jede Schleifenart hat ihre Stärken, und das richtige Werkzeug für die richtige Aufgabe macht den Unterschied.
+        </p>
+
+        <h2>10.1 — while, until, for</h2>
+        <div class="codeblock">
+# while: läuft solange Bedingung true ist
+ZAEHLER=0
+while (( ZAEHLER < 5 )); do
+    echo "$ZAEHLER"
+    (( ZAEHLER++ ))
+done
+
+# until: läuft solange Bedingung false ist (umgekehrtes while)
+until pgrep -x "waybar" > /dev/null; do
+    echo "Warte auf waybar..."
+    sleep 1
+done
+
+# Endlosschleife:
+while true; do
+    echo "Läuft..."
+    sleep 1
+done
+# Alternative: while :; do ... done   (:  ist immer true)
+
+# for mit Zahlen-Bereich (Bash-spezifisch):
+for i in {1..10}; do echo $i; done
+for i in {0..100..5}; do echo $i; done   # in 5er-Schritten
+
+# for C-Stil:
+for (( i=0; i<10; i++ )); do
+    echo "$i"
+done
+
+# for über Glob statt ls (korrekt, weil ls bei Leerzeichen versagt):
+for datei in *.sh; do
+    echo "Skript: $datei"
+done
+        </div>
+
+        <h2>10.2 — read in Schleifen: zeilenweise Verarbeitung</h2>
+        <p>
+          Die häufigste Schleifenform in Shell-Skripten ist das zeilenweise Lesen von Dateien oder Befehlsausgaben. <span class="glow">Das richtige Muster nutzt</span> <span class="glow">IFS=</span> und <span class="glow">-r</span>:
+        </p>
+        <div class="codeblock">
+# Datei zeilenweise (<span class="glow">IFS= verhindert Whitespace-Trimming</span>, <span class="glow">-r kein Backslash-Escaping</span>):
+while IFS= read -r zeile; do
+    echo "Zeile: $zeile"
+done < datei.txt
+
+# Aus Befehl — mit Process Substitution (<span class="glow">Schleife bleibt in aktueller Shell</span>!):
+while IFS= read -r zeile; do
+    echo "Zeile: $zeile"
+done < &lt;(find . -name "*.sh")
+
+# Mit Trennzeichen (z.B. TSV — Tab-Separated):
+while IFS=$'\t' read -r name cmd icon; do
+    echo "Name: $name, Cmd: $cmd"
+done < tsv_datei.txt
+
+# Null-Byte getrennt (für Dateinamen mit Leerzeichen — beste Praxis):
+while IFS= read -r -d '' datei; do
+    echo "Datei: $datei"
+done < &lt;(find . -name "*.sh" -print0)
+        </div>
+
+        <h2>10.3 — break, continue, return</h2>
+        <div class="codeblock">
+# break: Schleife sofort verlassen
+for i in {1..10}; do
+    [[ "$i" -eq 5 ]] && break
+    echo "$i"
+done    # → 1 2 3 4
+
+# break N: N Ebenen verlassen (bei verschachtelten Schleifen):
+for i in {1..3}; do
+    for j in {1..3}; do
+        [[ "$i" -eq 2 && "$j" -eq 2 ]] && break 2
+    done
+done
+
+# continue: nächste Iteration
+for i in {1..5}; do
+    [[ "$i" -eq 3 ]] && continue
+    echo "$i"
+done    # → 1 2 4 5
+
+# Praxisbeispiel: .desktop-Dateien überspringen die versteckt sind
+while IFS= read -r desktop; do
+    grep -qE '^NoDisplay=true' "$desktop" && continue
+    # ... verarbeiten
+done < &lt;(find ...)
+        </div>
+
+        <h2>10.4 — Parallele Ausführung: & und wait</h2>
+        <p>
+          Mit <span class="glow">&</span> werden Befehle im Hintergrund gestartet. Das ist nützlich für Aufgaben, die parallel laufen können. <span class="glow">wait</span> wartet auf den Abschluss:
+        </p>
+        <div class="codeblock">
+# Im Hintergrund starten:
+langer_befehl &
+echo "Gestartet, PID: $!"
+
+# Mehrere parallel, dann warten bis alle fertig:
+befehl1 &
+befehl2 &
+befehl3 &
+wait
+
+# Exit-Code eines Hintergrundprozesses:
+befehl &
+PID=$!
+wait $PID
+echo "Exit: $?"
+
+# Praxisbeispiel: Cache im Hintergrund aufbauen damit der Nutzer nicht wartet
+if ! is_cache_valid; then
+    build_desktop_cache &
+fi
+        </div>
+
+        <h2>10.5 — Übung 10.5</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">parallel-fetch.sh</span> das eine Liste von URLs als Argument-Array entgegennimmt. Jede URL wird parallel mit <span class="glow">curl -s URL > /tmp/datei</span> heruntergeladen. Alle PIDs werden in einem Array gespeichert. Das Skript wartet mit <span class="glow">wait</span> auf alle Prozesse und zählt Erfolge und Fehler anhand der Exit-Codes.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-11">
+        <h1>Kapitel 11 — jq: JSON aus der Shell verarbeiten</h1>
+        <p>
+          Moderne System-Tools geben JSON aus — <span class="glow">hyprctl</span>, <span class="glow">systemctl --output=json</span>, REST-APIs und viele andere. <span class="glow">jq</span> ist der Standard-Tool dafür: eine Mini-Programmiersprache speziell für JSON-Verarbeitung in der Shell.
+        </p>
+
+        <h2>11.1 — Grundlagen</h2>
+        <div class="codeblock">
+# Basis-Syntax:
+echo '{"name":"TrafkHop","version":3}' | jq '.name'    # → "TrafkHop"
+echo '{"name":"TrafkHop","version":3}' | jq '.version' # → 3
+echo '{"name":"TrafkHop","version":3}' | jq -r '.name' # → TrafkHop (raw, ohne Anführungszeichen!)
+# <span class="glow">-r ist crucial: ohne -r sind Strings immer mit Anführungszeichen — nicht a</span>ls Shell-Variable nutzbar
+        </div>
+
+        <h2>11.2 — Arrays und Objekte</h2>
+        <div class="codeblock">
+JSON='[{"id":1,"name":"Alpha"},{"id":2,"name":"Beta"}]'
+
+echo "$JSON" | jq '.[0]'              # → {"id":1,"name":"Alpha"}
+echo "$JSON" | jq '.[0].name'         # → "Alpha"
+echo "$JSON" | jq '.[] | .name'       # → "Alpha" "Beta" (alle)
+echo "$JSON" | jq -r '.[] | .name'    # → Alpha \n Beta  (raw)
+
+# Länge:
+echo "$JSON" | jq 'length'            # → 2
+
+# Filtern:
+echo "$JSON" | jq '.[] | select(.id == 2)'   # → {"id":2,"name":"Beta"}
+
+# Ausgabe als Array:
+echo "$JSON" | jq '[.[] | .name]'     # → ["Alpha","Beta"]
+
+# String-Interpolation:
+echo "$JSON" | jq '.[] | "\(.id): \(.name)"'  # → "1: Alpha" "2: Beta"
+        </div>
+
+        <h2>11.3 — jq in der Praxis</h2>
+        <p>
+          Typische Muster bei der Verwendung von <span class="glow">jq</span> mit System-Tools und APIs:
+        </p>
+        <div class="codeblock">
+# Hyprland: fokussierten Monitor finden
+SCREEN_H=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .height')
+
+# Aktives Fenster: erst JSON in Variable, dann mehrfach parsen (nur ein hyprctl-Aufruf!)
+active=$(hyprctl activewindow -j)
+addr=$(echo "$active" | jq -r '.address')
+ws=$(echo "$active" | jq -r '.workspace.id')
+
+# jq -e: Exit-Code 1 wenn Ergebnis null/false (nützlich für if-Bedingungen)
+if ! hyprctl clients -j | jq -e ".[] | select(.address == \"$addr\")" >/dev/null; then
+    echo "Fenster nicht mehr vorhanden"
+fi
+
+# endswith() für Adressen-Matching:
+win_data=$(echo "$clients_json" | jq ".[] | select(.address | endswith(\"$clean_addr\"))")
+
+# Null-Fallback: gibt "" zurück wenn .address null ist, statt "null"
+active_addr=$(hyprctl activewindow -j | jq -r '.address // empty')
+        </div>
+
+        <h2>11.4 — Fortgeschrittenes jq</h2>
+        <div class="codeblock">
+# Neues JSON-Objekt erstellen:
+jq -n '{"status":"ok","data":["a","b"]}'
+
+# Shell-Variablen sicher in jq übergeben (verhindert Injection):
+NAME="TrafkHop"
+jq -n --arg name "$NAME" '{"name":$name}'
+
+# Zwei JSON-Dateien mergen:
+jq -s '.[0] * .[1]' datei1.json datei2.json
+
+# Alle Keys eines Objekts:
+echo '{"a":1,"b":2}' | jq 'keys'    # → ["a","b"]
+
+# Bedingte Logik in jq:
+echo '{"val":5}' | jq '.val | if . > 3 then "groß" else "klein" end'
+
+# Rekursiv alle Strings suchen:
+echo '{"a":{"b":{"c":"ziel"}}}' | jq '.. | strings'
+
+# Komplexes Beispiel: verschachteltes JSON traversieren
+echo "$MENU_JSON" | jq -r --arg p "$path" '
+    (if $p == "." then . else getpath($p | split(".")) end) | to_entries[]
+    | "\(.key)\t\(if (.value|type)=="object" then "dir" else "cmd" end)"
+'
+        </div>
+
+        <h2>11.5 — Übung 11.5</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">workspace-summary.sh</span>. Mit <span class="glow">hyprctl clients -j</span> werden alle Fenster geladen. Per <span class="glow">jq</span> wird gezählt, wie viele Fenster auf jedem Workspace laufen, und die Ausgabe lautet <span class="glow">Workspace 1: 3 Fenster</span>. Floating-Fenster werden separat gezählt. Nutze <span class="glow">mapfile &lt; &lt;(jq -r ...)</span> für die sichere Verarbeitung.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-12">
+        <h1>Kapitel 12 — Subshells, Prozesse und Jobverwaltung</h1>
+        <p>
+          Bash ist ein vollständiger Prozess-Manager. Das Verstehen von Subshells, Hintergrundprozessen und Jobverwaltung ist entscheidend für fortgeschrittene Skripte, die mehrere Aufgaben gleichzeitig koordinieren.
+        </p>
+
+        <h2>12.1 — Was ist eine Subshell?</h2>
+        <p>
+          Wenn Bash einen Befehl in runden Klammern ausführt, startet es eine Subshell — <span class="glow">eine Kopie der aktuellen Shell</span>. <span class="glow">Variablen, die in der Subshell gesetzt werden, sind in der Eltern-Shell nicht sichtbar</span>:
+        </p>
+        <div class="codeblock">
+(
+    LOKAL="nur in Subshell"
+    echo "$LOKAL"   # → "nur in Subshell"
+)
+echo "$LOKAL"   # → leer
+
+# Wann passiert das implizit?
+# - Bei jeder Pipe: cmd1 | cmd2 (cmd2 in Subshell)
+# - Bei $() (technisch fork+exec)
+# - Bei Hintergrundprozessen (&)
+# - Bei &lt;() und >() (Process Substitution)
+
+# Nützlich: Subshell für Isolation (Verzeichniswechsel ohne Auswirkung):
+( cd /tmp && ls )
+# Aktuelles Verzeichnis im Eltern-Prozess unverändert
+        </div>
+
+        <h2>12.2 — setsid: vom Terminal entkoppeln</h2>
+        <p>
+          <span class="glow">setsid</span> erstellt eine neue Session und trennt den Prozess vollständig vom Terminal. Das ist wichtig für GUI-Anwendungen, die von einem Skript gestartet werden und auch dann laufen sollen, wenn das Skript oder Terminal geschlossen wird:
+        </p>
+        <div class="codeblock">
+# Normal: stirbt wenn das Skript endet
+firefox &
+
+# Mit setsid: läuft weiter, komplett unabhängig
+setsid firefox &
+
+# disown ist eine Alternative (Bash "vergisst" den Job):
+firefox &
+disown
+
+# Praxisbeispiel: Anwendung aus einem Launcher starten
+setsid bash -c "$value" >/dev/null 2>&1 &
+        </div>
+
+        <h2>12.3 — Prozess-Informationen</h2>
+        <div class="codeblock">
+ps aux                  # alle Prozesse mit Details
+pgrep -x "waybar"       # PID von waybar (exakter Name-Match)
+pgrep -f "python.*popup" # PID per vollem Kommandozeilen-String
+pidof "waybar"           # ähnlich wie pgrep
+$!                       # PID des zuletzt gestarteten Hintergrundprozesses
+
+# Toggle-Logik: läuft der Prozess? Beenden. Läuft er nicht? Starten.
+if pkill -f "$SCRIPT" 2>/dev/null; then
+    exit 0   # lief und wurde beendet
+fi
+# ... hier starten, weil pkill nichts gefunden hat
+
+# command -v: Pfad eines Befehls, leer wenn nicht gefunden (besser als which)
+command -v brightnessctl &>/dev/null && echo "brightnessctl vorhanden"
+if command -v hyprlock &>/dev/null; then
+    hyprlock
+else
+    loginctl lock-session
+fi
+        </div>
+
+        <h2>12.4 — Jobverwaltung</h2>
+        <div class="codeblock">
+befehl &     # im Hintergrund starten
+fg           # Hintergrundprozess in Vordergrund
+bg           # gestoppten Prozess im Hintergrund weiterführen
+jobs         # alle Hintergrundprozesse anzeigen
+Ctrl+Z       # aktuellen Prozess stoppen (suspend)
+Ctrl+C       # Prozess abbrechen (SIGINT)
+wait         # auf alle Hintergrundprozesse warten
+wait $PID    # auf spezifischen Prozess warten
+        </div>
+
+        <h2>12.5 — Übung 12.5</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">daemon-manager.sh</span> das einen einfachen Daemon simuliert. Es wird mit <span class="glow">start</span>, <span class="glow">stop</span> oder <span class="glow">status</span> aufgerufen. <span class="glow">start</span> startet einen Hintergrundprozess mit <span class="glow">setsid</span> und speichert die PID in <span class="glow">/tmp/mein_daemon.pid</span>. <span class="glow">stop</span> liest die PID und sendet <span class="glow">SIGTERM</span>. <span class="glow">status</span> prüft ob der Prozess noch läuft (Tipp: <span class="glow">kill -0 $PID</span> prüft Existenz ohne Signal zu senden).
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-13">
+        <h1>Kapitel 13 — Unix Sockets, socat und IPC</h1>
+        <p>
+          Inter-Process Communication (IPC) ist die Fähigkeit von Prozessen, miteinander zu kommunizieren. <span class="glow">Unix Domain Sockets sind der Standard dafür auf Linux — schneller als TCP, sicherer weil dateisystembasiert</span>, und von praktisch allen System-Daemons verwendet.
+        </p>
+
+        <h2>13.1 — Was sind Unix Domain Sockets?</h2>
+        <p>
+          Unix Sockets sind spezielle Dateien (Typ 's' in <span class="glow">ls -la</span>) die als Kommunikations-Endpunkte fungieren. Sie sind bidirektional und für komplexere Kommunikation als Named Pipes geeignet. Viele System-Programme kommunizieren ausschließlich darüber: Hyprland, systemd, dbus, X11, Wayland, Docker, Podman:
+        </p>
+        <div class="codeblock">
+ls -la /tmp/*.sock    # Socket-Dateien anzeigen
+ls -la /run/user/1000/hypr/*/   # Hyprland-Sockets
+        </div>
+
+        <h2>13.2 — socat: SOcket CAT</h2>
+        <p>
+          <span class="glow">socat</span> verbindet zwei beliebige Datenströme miteinander — Stdin/Stdout, Dateien, TCP, UDP, Unix Sockets und mehr. Es ist das universelle Werkzeug für Socket-Kommunikation:
+        </p>
+        <div class="codeblock">
+# Unix Socket lesen:
+socat - UNIX-CONNECT:/pfad/zu/socket.sock
+
+# Als Empfänger (Server-Seite):
+socat UNIX-LISTEN:/tmp/test.sock -
+
+# Mit TCP:
+socat TCP:example.com:80 -
+
+# Hyprland Events empfangen:
+socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+# -U: UNIX-Domain Socket
+# Format der Events: "eventname>>daten"
+        </div>
+
+        <h2>13.3 — Hyprland IPC</h2>
+        <p>
+          Hyprland (der Wayland-Compositor auf TrafkTux) hat eine Socket-basierte API. <span class="glow">socket.sock</span> empfängt Befehle, <span class="glow">socket2.sock</span> sendet Events:
+        </p>
+        <div class="codeblock">
+# Alle Events ansehen (dann Fenster bewegen, klicken etc.):
+socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+# Beispiel-Event-Zeilen:
+# "openwindow>>addr,1,workspace.name,firefox"
+# "activewindowv2>>addr"
+# "workspace>>name"
+
+# Event-Parsing:
+event="${line%%>>*}"    # alles vor ">>"
+data="${line#*>>}"      # alles nach ">>"
+        </div>
+
+        <h2>13.4 — Event-Driven Architektur in Shell</h2>
+        <p>
+          <span class="glow">Ein Event-Driven Daemon öffnet eine permanente Socket-Verbindung, liest Events in einer Endlosschleife und reagiert auf relevante Events</span>. Das ist das Shell-Äquivalent von <span class="glow">EventEmitter</span> oder <span class="glow">addEventListener</span>:
+        </p>
+        <div class="codeblock">
+socat -U - "UNIX-CONNECT:$SOCKET" | while read -r event_line; do
+    event="${event_line%%>>*}"
+    data="${event_line#*>>}"
+
+    case "$event" in
+        openwindow)
+            # Kleines Delay damit Hyprland den Zustand aktualisiert hat,
+            # dann in Subshell im Hintergrund — Event-Schleife blockiert nicht!
+            ( sleep 0.08; handle_open "$data" ) &
+            ;;
+        closewindow)
+            handle_close "$data" &
+            ;;
+        workspace|workspacev2)
+            handle_ws "$data" &
+            ;;
+        *)  ;;   # unbekannte Events ignorieren
+    esac
+done
+        </div>
+
+        <h2>13.5 — Übung 13.5</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">hypr-logger.sh</span> das sich mit dem Hyprland <span class="glow">socket2.sock</span> verbindet. Alle Events werden mit Zeitstempel in <span class="glow">/tmp/hypr_events.log</span> geschrieben. <span class="glow">mousemove</span>-Events werden herausgefiltert (zu zahlreich). Ein <span class="glow">trap EXIT</span> sorgt dafür, dass die socat-Verbindung sauber geschlossen wird.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-14">
+        <h1>Kapitel 14 — Rofi-Integration und Skript-Architekturen</h1>
+        <p>
+          Rofi ist ein Launcher und Menü-Tool für Linux. Es kann externe Skripte als dynamische Datenquellen nutzen — ein elegantes IPC-System über stdout/stdin und Environment-Variablen. Dieses Kapitel zeigt die Architektur dahinter am konkreten Beispiel.
+        </p>
+
+        <h2>14.1 — Wie Rofi mit Skripten kommuniziert</h2>
+        <p>
+          Rofi ruft das Skript mehrfach auf und kommuniziert über Environment-Variablen:
+        </p>
+        <div class="codeblock">
+rofi -show menu -modi "menu:/pfad/zum/skript.sh"
+
+# Rofi ruft das Skript so auf:
+# 1. Erster Aufruf (ROFI_RETV=0): Skript gibt Einträge aus.
+# 2. Bei Auswahl (ROFI_RETV=1): Skript kriegt die Selektion als $1.
+# 3. Bei Auswahl+Enter (ROFI_RETV=2): alternative Aktion.
+# 4. Bei Hotkey (ROFI_RETV=10, 11, ...): Hotkey-Aktionen.
+
+# $ROFI_RETV   → 0=erster Aufruf, 1=Auswahl, 2=Auswahl+Enter
+# $ROFI_INFO   → Info-String des ausgewählten Eintrags
+        </div>
+
+        <h2>14.2 — Das Rofi-Ausgabeformat</h2>
+        <p>
+          Rofi versteht ein spezielles Format für Einträge mit Metadaten. Das Null-Byte trennt Anzeigetext von Metadaten, ASCII 31 trennt Key und Value:
+        </p>
+        <div class="codeblock">
+# Format:  "Anzeigetext\0icon\x1fICON_NAME\x1finfo\x1fMEIN_INFO\n"
+# \0   = Null-Byte: trennt Anzeigetext von Metadaten
+# \x1f = ASCII 31 (Unit Separator): trennt Key und Value
+# \n   = neue Zeile = neuer Eintrag
+
+# Eintrag mit Icon und Info:
+printf "← Zurück\0icon\x1fgo-previous\x1finfo\x1fback:\n"
+
+# Dynamisch mit printf %s:
+printf "%s\0icon\x1f%s\x1finfo\x1fcmd:%s\n" "$name" "$icon" "$exec_cmd"
+
+# Steueranweisungen an Rofi (kein Eintrag, nur Rofi-Konfiguration):
+printf "\0prompt\x1fNeuer Prompt\n"       # Prompt-Text ändern
+printf "\0no-custom\x1ffalse\n"           # Freie Eingabe erlauben
+printf "\0keep-selection\x1ftrue\n"       # Auswahl behalten
+        </div>
+
+        <h2>14.3 — State-Management zwischen Aufrufen</h2>
+        <p>
+          Da Rofi das Skript neu aufruft für jeden Schritt, muss der Zustand (welcher Ordner bin ich gerade?) irgendwo gespeichert werden. Die Lösung ist eine State-Datei in <span class="glow">XDG_RUNTIME_DIR</span>:
+        </p>
+        <div class="codeblock">
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
+
+get_path() { [[ -f "$STATE_FILE" ]] && cat "$STATE_FILE" || echo "."; }
+set_path() { echo "$1" > "$STATE_FILE"; }
+
+# Navigation:
+case "$type" in
+    dir)   set_path "$value" ;;
+    back)  set_path "${path%.*}" ;;     # ein Level hoch
+    cmd)   setsid bash -c "$value" >/dev/null 2>&1 &; exit 0 ;;
+    quit)  rm -f "$STATE_FILE"; exit 0 ;;
+esac
+
+# Entry-Point — unterscheidet ob Rofi oder Nutzer aufgerufen hat:
+if [[ -n "$ROFI_RETV" ]]; then
+    run_mode "$1"   # Rofi hat das Skript aufgerufen
+else
+    rm -f "$STATE_FILE"
+    rofi -show menu -modi "menu:$SCRIPT_PATH" ...
+fi
+        </div>
+
+        <h2>14.4 — Cache-Strategien</h2>
+        <p>
+          Teure Operationen (z.B. hunderte .desktop-Dateien lesen) sollen nicht bei jedem Aufruf wiederholt werden. Eine Cache-Datei mit Ablaufzeit löst das Problem:
+        </p>
+        <div class="codeblock">
+CACHE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-desktop-cache"
+CACHE_MAX_AGE=120    # Sekunden
+
+is_cache_valid() {
+    [[ -f "$CACHE_FILE" ]] || return 1
+    local now mod age
+    now=$(date +%s)                                   # aktuelle Zeit als Unix-Timestamp
+    mod=$(stat -c %Y "$CACHE_FILE" 2>/dev/null) || return 1  # Datei-Änderungszeit
+    age=$(( now - mod ))                              # Alter in Sekunden
+    (( age < CACHE_MAX_AGE ))                         # true wenn jung genug
+}
+
+# Cache im Hintergrund auffrischen wenn nötig — Nutzer wartet nicht:
+if [[ -z "$ROFI_RETV" ]] && ! is_cache_valid; then
+    build_desktop_cache &
+fi
+        </div>
+
+        <h2>14.5 — Übung 14.5</h2>
+        <p>
+          Baue ein Rofi-Skript <span class="glow">rofi-workspaces.sh</span>. Alle Hyprland-Workspaces werden als Einträge angezeigt (<span class="glow">hyprctl workspaces -j | jq</span>). Bei Auswahl wird mit <span class="glow">hyprctl dispatch workspace</span> dorthin gewechselt. Es gibt einen Eintrag "Neuer Workspace". Die Workspace-Liste wird mit einem 30-Sekunden-Cache gepuffert.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="kapitel-15">
+        <h1>Kapitel 15 — Fortgeschrittene Patterns, Architektur und Professionelles Scripting</h1>
+        <p>
+          Die letzten Kapitel haben die Werkzeuge gezeigt. Dieses Kapitel zeigt, wie man sie zu guten Skripten zusammenfügt — Skripte, die robust, wartbar und professionell sind.
+        </p>
+
+        <h2>15.1 — Das Dispatcher/Handler Pattern</h2>
+        <p>
+          Viele Shell-Skripte folgen einem klaren Muster: Eingabe entgegennehmen, entscheiden was zu tun ist, Aktion ausführen. Dieses Pattern ist die Grundlage für wartbare Skripte:
+        </p>
+        <div class="codeblock">
+# Eingabe: Event oder Argument
+# Dispatch: case-Statement wählt den Handler
+# Handler: Funktion führt die Aktion aus
+
+# Aus einem Daemon:
+case "$event" in
+    openwindow)   handler_open "$data" ;;
+    closewindow)  handler_close "$data" ;;
+    workspace)    handler_ws "$data" ;;
+    *)            ;;
+esac
+
+# Aus einem Power-Menü:
+case "$chosen" in
+    Shutdown)  systemctl poweroff ;;
+    Reboot)    systemctl reboot ;;
+    Suspend)   systemctl suspend ;;
+    Lock)      hyprlock ;;
+    Logout)    hyprctl dispatch exit ;;
+    *)         exit 0 ;;
+esac
+        </div>
+
+        <h2>15.2 — Idempotenz: Skripte die man beliebig oft aufrufen kann</h2>
+        <p>
+          <span class="glow">Ein idempotentes Skript hat beim zweiten Aufruf dieselbe Wirkung wie beim ersten</span>. Das ist besonders wichtig für Setup- und Konfigurations-Skripte:
+        </p>
+        <div class="codeblock">
+# Nicht idempotent → jeder Aufruf fügt eine Zeile hinzu:
+echo "Zeile" >> datei.txt
+
+# Idempotent → nur hinzufügen wenn noch nicht vorhanden:
+grep -qF "Zeile" datei.txt || echo "Zeile" >> datei.txt
+
+# mkdir -p: kein Fehler wenn schon vorhanden
+mkdir -p neuer_ordner
+
+# ln -sf: überschreibt bestehenden Symlink
+ln -sf quelle ziel    # -f macht das idempotent
+        </div>
+
+        <h2>15.3 — Lock-Files: Race Conditions vermeiden</h2>
+        <p>
+          Wenn ein Skript mehrfach parallel gestartet werden kann (z.B. durch Hotkeys), braucht man manchmal Mutex-Mechanismen. <span class="glow">flock</span> ist die <span class="glow">atomare Lösung</span>:
+        </p>
+        <div class="codeblock">
+LOCK_FILE="/tmp/mein_skript.lock"
+
+# Einfaches Lock (hat eine Race-Condition bei sehr gleichzeitigem Start):
+if [[ -f "$LOCK_FILE" ]]; then
+    echo "Läuft bereits"; exit 1
+fi
+touch "$LOCK_FILE"
+trap "rm -f '$LOCK_FILE'" EXIT
+
+# Atomares Lock mit flock (<span class="glow">keine Race-Condition</span> — die richtige Lösung):
+exec 9>"$LOCK_FILE"
+flock -n 9 || { echo "Läuft bereits"; exit 1; }
+# flock öffnet und sperrt die Datei in einem <span class="glow">atomaren Schritt</span>
+        </div>
+
+        <h2>15.4 — Config-Dateien lesen und schreiben</h2>
+        <p>
+          Konfigurationsdateien im INI-Stil oder JSON sind in Shell-Skripten eine häufige Anforderung:
+        </p>
+        <div class="codeblock">
+# INI-Stil lesen (host=localhost, port=8080):
+while IFS='=' read -r key value; do
+    [[ "$key" =~ ^[[:space:]]*# ]] && continue  # Kommentare überspringen
+    [[ -z "$key" ]] && continue                  # Leerzeilen überspringen
+    key="${key// /}"                              # Leerzeichen entfernen
+    value="${value//\"}"                          # Anführungszeichen entfernen
+    declare -g "CONFIG_${key^^}=$value"           # Als Variable speichern
+done < "$CONFIG_FILE"
+
+echo "$CONFIG_HOST"    # → was in config stand: host=localhost
+
+# JSON-Config mit jq:
+CONFIG=$(cat "$CONFIG_FILE")
+HOST=$(echo "$CONFIG" | jq -r '.host')
+PORT=$(echo "$CONFIG" | jq -r '.port // 8080')  # mit Default-Wert
+        </div>
+
+        <h2>15.5 — Testen von Shell-Skripten</h2>
+        <p>
+          Kein Standard-Test-Framework existiert für Bash, aber es gibt bewährte Muster für Unit-Tests:
+        </p>
+        <div class="codeblock">
+# Einfache Assert-Funktion:
+assert() {
+    local erwartet="$1"
+    local tatsaechlich="$2"
+    local beschreibung="$3"
+    if [[ "$erwartet" == "$tatsaechlich" ]]; then
+        echo "[OK]  $beschreibung"
+    else
+        echo "[FAIL] $beschreibung"
+        echo "  Erwartet:    $erwartet"
+        echo "  Tatsaechlich: $tatsaechlich"
+        return 1
+    fi
+}
+
+# Funktion importieren und testen:
+source ./brightness-utils.sh
+
+result=$(get_icon 20)
+assert "dunkel" "$result" "get_icon unter 34 gibt dunkles Icon"
+
+result=$(get_icon 50)
+assert "mittel" "$result" "get_icon 34-66 gibt mittleres Icon"
+
+# BATS (Bash Automated Testing System) ist ein echtes Test-Framework:
+# github.com/bats-core/bats-core — für größere Projekte empfohlen
+        </div>
+
+        <h2>15.6 — Performance-Optimierung</h2>
+        <p>
+          <span class="glow">Shell-Skripte sind langsam für intensive Berechnungen, aber schnell für Prozess-Orchestrierung</span>. Diese Muster vermeiden die häufigsten Performance-Fallen:
+        </p>
+        <div class="codeblock">
+# Langsam: externe Tools in Schleifen — 1000 Prozesse!
+for i in {1..1000}; do
+    echo "$(date)"
+done
+
+# Schnell: einmal aufrufen, dann wiederverwenden
+DATE=$(date)
+for i in {1..1000}; do
+    echo "$DATE"
+done
+
+# Langsam: unnötiges cat + pipe (Useless Use of Cat)
+cat datei.txt | grep "muster"
+
+# Schnell: direkte Umleitung
+grep "muster" datei.txt
+
+# Bash-intern statt externe Tools (schneller, kein Prozess-Start):
+# Statt: echo "$STR" | tr '[:upper:]' '[:lower:]'
+echo "${STR,,}"   # bash-interne Kleinschreibung
+
+# Teure Operationen cachen (einmal ausführen, mehrfach nutzen):
+clients_json=$(hyprctl clients -j)      # einmal abrufen
+for addr in ...; do
+    echo "$clients_json" | jq ...       # JSON wiederverwenden
+done
+        </div>
+
+        <h2>15.7 — Abschlussübung: workspace-daemon.sh</h2>
+        <p>
+          Diese Abschlussübung kombiniert alles Gelernte in einem vollständigen Daemon-Skript <span class="glow">workspace-daemon.sh</span>:
+        </p>
+        <p>
+          Das Skript verbindet sich mit dem Hyprland Socket (<span class="glow">socket2.sock</span>) und liest Events in einer Endlosschleife. Bei jedem Workspace-Wechsel wird der Event mit Zeitstempel in eine Log-Datei geschrieben. Beim Wechsel auf Workspace 1 oder 2 wird zusätzlich ein Wallpaper-Skript aufgerufen.
+        </p>
+        <p>
+          Idempotentes Start/Stop ist implementiert: eine Lock-Datei mit <span class="glow">flock</span>, <span class="glow">trap EXIT</span> räumt auf. Eine <span class="glow">is_running()</span>-Funktion prüft per PID-Datei ob der Daemon läuft. Das Skript wird mit <span class="glow">start</span>, <span class="glow">stop</span> oder <span class="glow">status</span> aufgerufen und nutzt <span class="glow">set -euo pipefail</span> sowie eine <span class="glow">debug()</span>-Funktion die über <span class="glow">DEBUG=true</span> aktivierbar ist.
+        </p>
+      </section>
+
+      
+      
+      
+      <section id="referenz">
+        <h1>Schnellreferenz</h1>
+        <div class="codeblock">
+SHEBANG:       #!/bin/bash  (immer, auch wenn /bin/sh == dash)
+VARIABLEN:     NAME="wert" (kein Leerzeichen!), "$NAME" (immer quoten!)
+ARITHMETIK:    $(( 3 + 4 )), (( VAR++ )), awk/bc für Fließkomma
+QUOTING:       "double" für Variablen, 'single' für literal, $'...' für Escapes
+BEDINGUNGEN:   [[ ]] (modern), (( )) für Zahlen, [ ] nur wenn POSIX nötig
+TESTS:         -f file, -d dir, -z leer, -n nicht-leer, -e existiert, -x ausführbar
+CASE:          case "$VAR" in muster) ;; esac — für Menüs, Argumente
+ARRAYS:        ARRAY=("a" "b"), "${ARRAY[@]}", "${#ARRAY[@]}", mapfile < &lt;(...)
+ASSOC ARRAYS:  declare -A MAP; MAP["key"]="val"; "${!MAP[@]}" für Keys
+FUNKTIONEN:    func() { local VAR; ... }, Rückgabe via echo + $(), return 0/1
+SCOPE:         Immer local in Funktionen — sonst globale Seiteneffekte!
+PIPES:         cmd1 | cmd2 — stdout→stdin, <span class="glow">rechter Teil in Subshell</span>
+UMLEITUNG:     >, >>, <, 2>, 2>&1, &>/dev/null, <<< "string"
+PROCESS SUB:   &lt;(cmd) als "Datei", < &lt;(cmd) für while-Schleifen (Subshell-safe!)
+REGEX:         [[ "$s" =~ ^regex$ ]], ${BASH_REMATCH[1]} für Gruppen
+STRING-OPS:    ${#STR} Länge, ${STR:N:L} Sub, ${STR//alt/neu} Ersetzen
+               ${STR#muster} ${STR##muster} Prefix, ${STR%muster} Suffix
+               ${STR,,} klein, ${STR^^} groß
+DEFAULTS:      ${VAR:-default}, ${VAR:=setzen}, ${VAR:?fehler}
+SED:           sed 's/alt/neu/g', sed -E für Extended Regex, sed -i für Datei
+AWK:           awk '{print $2}', awk -F: Trennzeichen, awk 'NR>1{summe+=$3}'
+JQ:            jq -r '.field', jq '.[] | select(.x==y)', jq -e für Exit-Code
+SIGNALE:       trap "cleanup" EXIT INT TERM, kill -SIGNAL PID, pkill -f "name"
+BACKGROUND:    befehl &, PID=$!, wait, setsid für echte Entkopplung
+FEHLER:        set -euo pipefail, || { echo; exit 1; }, if cmd; then...
+DEBUG:         set -x, bash -x skript.sh, bash -n für Syntax, shellcheck
+SOCKET:        socat -U - "UNIX-CONNECT:/pfad/socket.sock"
+ROFI:          $ROFI_RETV, $ROFI_INFO, printf "text\0icon\x1fname\x1fwert\n"
+CACHE:         stat -c %Y für Dateialter, date +%s für Unix-Timestamp
+LOCK:          flock -n 9, exec 9>"lockfile"
+IDEMPOTENZ:    mkdir -p, ln -sf, grep || echo >>
+        </div>
+      </section>
+
+      
+      
+      
+      
+
+    </main>
+
+  <script src="files/placeholder.js"></script>
+  <script src="files/nav.js"></script>
+  <script src="files/volume.js"></script>
+  </body>
+
+</html>

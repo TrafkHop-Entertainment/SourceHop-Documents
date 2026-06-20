@@ -1,0 +1,1480 @@
+================================================================================
+PYTHON KOMPLETTKURS — TEIL 2 von 4
+OOP · Module · Dateien · Fehlerbehandlung · Regex · JSON · pathlib
+================================================================================
+
+Voraussetzung: Teil 1 (Grundlagen, Datentypen, Kontrollfluss, Funktionen)
+
+Dieser Teil baut direkt auf deinen Dateien auf:
+  calendar-popup.py  → class CalendarPopup(Gtk.Window), threading, json
+  rofi-menu-editor.py → class MenuEditorWindow, pathlib, json, re, Type Hints
+  smGen.py           → os.walk, os.path, open(), Dateioperationen
+
+================================================================================
+MODUL 8: Objektorientierte Programmierung (OOP)
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Warum OOP? — Das Grundprinzip
+------------------------------------------------------------------------
+
+In Teil 1 hast du Funktionen kennengelernt: Code in wiederverwendbare
+Blöcke aufteilen. OOP geht einen Schritt weiter: es packt Daten (Variablen)
+und Verhalten (Funktionen) die zusammengehören in ein Objekt.
+
+Beispiel ohne OOP:
+  # Popup-Zustand als lose Variablen:
+  popup_year = 2026
+  popup_month = 6
+  popup_today = datetime.date.today()
+
+  def popup_prev_month(year, month):
+      if month == 1:
+          return year - 1, 12
+      return year, month - 1
+
+Mit OOP — alles gehört zusammen:
+  class CalendarPopup:
+      def __init__(self):
+          self.year = 2026
+          self.month = 6
+          self.today = datetime.date.today()
+
+      def prev_month(self):
+          if self.month == 1:
+              self.month = 12
+              self.year -= 1
+          else:
+              self.month -= 1
+
+  popup = CalendarPopup()     ← ein Objekt erstellen (Instanz)
+  popup.prev_month()          ← Methode aufrufen
+
+Begriffe:
+  Klasse    → der Bauplan (class CalendarPopup)
+  Objekt    → eine konkrete Instanz des Bauplans (popup = CalendarPopup())
+  Attribut  → eine Variable die zum Objekt gehört (self.year)
+  Methode   → eine Funktion die zum Objekt gehört (def prev_month(self))
+
+------------------------------------------------------------------------
+8.2  Klassen definieren — Schritt für Schritt
+------------------------------------------------------------------------
+
+  class Popup:                              # Klassendefinition
+      """Ein einfaches Popup-Fenster."""    # Docstring (empfohlen!)
+
+      # Klassen-Attribut — geteilt von ALLEN Instanzen
+      fenster_count = 0
+
+      def __init__(self, titel):            # Konstruktor
+          """Wird automatisch aufgerufen wenn Popup(...) erstellt wird."""
+          # Instanz-Attribute — jede Instanz hat ihre eigenen
+          self.titel = titel
+          self.sichtbar = False
+          Popup.fenster_count += 1          # Klassen-Attribut ändern
+
+      def zeige(self):                      # Methode
+          self.sichtbar = True
+          print(f"'{self.titel}' wird angezeigt.")
+
+      def verstecke(self):
+          self.sichtbar = False
+          print(f"'{self.titel}' versteckt.")
+
+      def __str__(self):                    # Dunder-Methode (später erklärt)
+          status = "sichtbar" if self.sichtbar else "versteckt"
+          return f"Popup('{self.titel}', {status})"
+
+  # Benutzen:
+  kalender = Popup("Kalender")             # __init__ wird aufgerufen
+  lautstärke = Popup("Lautstärke")
+  kalender.zeige()                         # → 'Kalender' wird angezeigt.
+  print(kalender)                          # → Popup('Kalender', sichtbar)
+  print(Popup.fenster_count)               # → 2
+
+Was ist self?
+  self ist eine Referenz auf das aktuelle Objekt. Wenn du
+  kalender.zeige() aufrufst, übergibt Python automatisch kalender als
+  self an die Methode. self muss IMMER der erste Parameter einer Methode
+  sein — aber du rufst die Methode OHNE self auf.
+
+  # Python macht das intern:
+  kalender.zeige()        ← was du schreibst
+  Popup.zeige(kalender)   ← was Python eigentlich tut
+
+------------------------------------------------------------------------
+8.3  Vererbung — Klassen erweitern
+------------------------------------------------------------------------
+
+Das ist das mächtigste OOP-Konzept. Eine Klasse erbt alle Eigenschaften
+einer anderen und kann sie erweitern oder ändern.
+
+Genau das macht dein CalendarPopup:
+  class CalendarPopup(Gtk.Window):   ← erbt von Gtk.Window!
+      def __init__(self):
+          super().__init__(type=Gtk.WindowType.TOPLEVEL)
+          # ↑ ruft den __init__ der Elternklasse (Gtk.Window) auf
+          # Das ist fast immer nötig bei Vererbung!
+
+Eigenes Beispiel:
+
+  class Tier:
+      def __init__(self, name, gewicht):
+          self.name = name
+          self.gewicht = gewicht
+
+      def beschreibe(self):
+          return f"{self.name} ({self.gewicht}kg)"
+
+      def laut(self):
+          return "..."
+
+  class Hund(Tier):                    ← erbt von Tier
+      def __init__(self, name, gewicht, rasse):
+          super().__init__(name, gewicht)  ← Tier.__init__ aufrufen!
+          self.rasse = rasse               ← eigenes neues Attribut
+
+      def laut(self):                  ← ÜBERSCHREIBT Tier.laut
+          return "Wuff!"
+
+      def beschreibe(self):            ← ERWEITERT Tier.beschreibe
+          basis = super().beschreibe() ← Eltern-Methode aufrufen
+          return f"{basis} - Rasse: {self.rasse}"
+
+  class Katze(Tier):
+      def laut(self):
+          return "Miau!"
+
+  bello = Hund("Bello", 25, "Labrador")
+  mitzi = Katze("Mitzi", 4)
+
+  bello.laut()            → "Wuff!"
+  mitzi.laut()            → "Miau!"
+  bello.beschreibe()      → "Bello (25kg) - Rasse: Labrador"
+
+  isinstance(bello, Hund)    → True
+  isinstance(bello, Tier)    → True   ← ein Hund IST AUCH ein Tier!
+  isinstance(bello, Katze)   → False
+
+Mehrfachvererbung (Python kann das, andere Sprachen oft nicht):
+  class A:
+      def hallo(self): return "A"
+
+  class B(A):
+      def hallo(self): return "B"
+
+  class C(A, B):      ← erbt von beiden!
+      pass
+
+  C().hallo()   → "B"  (MRO: Method Resolution Order — komplex, erstmal merken)
+
+Aus deinem rofi-menu-editor.py:
+  class CustomAppDialog(Adw.MessageDialog):     ← erbt von Adw.MessageDialog
+  class FolderDialog(Adw.MessageDialog):        ← auch von Adw.MessageDialog
+  class MenuEditorWindow(Adw.ApplicationWindow): ← erbt von Adw.ApplicationWindow
+
+------------------------------------------------------------------------
+8.4  Dunder-Methoden — Magie unter der Haube
+------------------------------------------------------------------------
+
+Dunder = Double UNDERscore. Diese Methoden werden von Python automatisch
+aufgerufen und geben deinen Klassen eingebautes Verhalten.
+
+  class Temperatur:
+      def __init__(self, celsius):
+          self.celsius = celsius
+
+      def __str__(self):          ← aufgerufen bei str(t) und print(t)
+          return f"{self.celsius}°C"
+
+      def __repr__(self):         ← aufgerufen in der REPL und bei repr(t)
+          return f"Temperatur({self.celsius})"
+
+      def __eq__(self, other):    ← aufgerufen bei t1 == t2
+          return self.celsius == other.celsius
+
+      def __lt__(self, other):    ← aufgerufen bei t1 < t2
+          return self.celsius < other.celsius
+
+      def __add__(self, other):   ← aufgerufen bei t1 + t2
+          return Temperatur(self.celsius + other.celsius)
+
+      def __len__(self):          ← aufgerufen bei len(t)
+          return abs(int(self.celsius))
+
+      def __bool__(self):         ← aufgerufen bei bool(t) und if t:
+          return self.celsius != 0
+
+  t1 = Temperatur(20)
+  t2 = Temperatur(15)
+
+  print(t1)           → 20°C
+  t1 == t2            → False
+  t1 > t2             → True     (weil __lt__ definiert: Python leitet ab)
+  t1 + t2             → Temperatur(35)
+  sorted([t1, t2])    → [15°C, 20°C]
+
+Alle wichtigen Dunder-Methoden:
+  __init__    Konstruktor (Objekt erstellen)
+  __del__     Destruktor (Objekt wird gelöscht, selten benutzen)
+  __str__     Lesbare String-Darstellung
+  __repr__    Technische String-Darstellung (sollte Objekt rekonstruierbar machen)
+  __eq__      ==
+  __ne__      !=
+  __lt__      <
+  __le__      <=
+  __gt__      >
+  __ge__      >=
+  __add__     +
+  __sub__     -
+  __mul__     *
+  __truediv__ /
+  __len__     len()
+  __bool__    bool() und if-Bedingung
+  __contains__ in-Operator
+  __iter__    for-Schleife (macht Objekt iterierbar)
+  __next__    nächstes Element beim Iterieren
+  __getitem__ obj[key]
+  __setitem__ obj[key] = value
+  __delitem__ del obj[key]
+  __call__    obj()   ← Objekt wie Funktion aufrufen!
+  __enter__   with-Block beginnen
+  __exit__    with-Block beenden
+
+------------------------------------------------------------------------
+8.5  Properties — kontrollierter Attribut-Zugriff
+------------------------------------------------------------------------
+
+Mit @property kannst du Attribute wie normale Variablen lesen/schreiben,
+aber im Hintergrund Logik ausführen.
+
+  class Temperatur:
+      def __init__(self, celsius):
+          self._celsius = celsius    ← _ = "intern, nicht direkt ansprechen"
+
+      @property
+      def celsius(self):             ← Getter — wird bei t.celsius aufgerufen
+          return self._celsius
+
+      @celsius.setter
+      def celsius(self, wert):       ← Setter — wird bei t.celsius = x aufgerufen
+          if wert < -273.15:
+              raise ValueError("Temperatur unter absolutem Nullpunkt!")
+          self._celsius = wert
+
+      @property
+      def fahrenheit(self):          ← Berechnete Eigenschaft, kein Setter nötig
+          return self._celsius * 9/5 + 32
+
+  t = Temperatur(20)
+  t.celsius              → 20      ← sieht aus wie Attribut, ist aber Methode!
+  t.fahrenheit           → 68.0
+  t.celsius = -300       ← ValueError!
+
+Aus deinem rofi-menu-editor.py:
+  @property
+  def name(self): return self._name_row.get_text().strip()
+  @property
+  def cmd(self): return self._cmd_row.get_text().strip()
+
+  ← Sehr elegante Kurzform! name und cmd lesen den Text aus GTK-Widgets,
+  ← verhalten sich aber wie normale Attribute. Kein get_name() nötig.
+
+------------------------------------------------------------------------
+8.6  Klassen-Methoden und Statische Methoden
+------------------------------------------------------------------------
+
+  class Popup:
+      _instanzen = []    ← Klassen-Variable
+
+      def __init__(self, name):
+          self.name = name
+          Popup._instanzen.append(self)
+
+      @classmethod                    ← erhält die Klasse als erstes Argument
+      def alle_namen(cls):
+          return [p.name for p in cls._instanzen]
+
+      @staticmethod                   ← erhält nichts automatisch
+      def ist_gültiger_name(name):
+          return bool(name) and len(name) < 50
+
+  Popup("Kalender")
+  Popup("Lautstärke")
+  Popup.alle_namen()                  → ["Kalender", "Lautstärke"]
+  Popup.ist_gültiger_name("Test")     → True
+
+  # classmethod typischer Einsatz: alternative Konstruktoren
+  class Popup:
+      @classmethod
+      def aus_config(cls, config_dict):
+          return cls(config_dict["name"])
+
+------------------------------------------------------------------------
+8.7  Vollständiges Beispiel — TrafkHop-Popup-Klasse
+------------------------------------------------------------------------
+
+Ein reduziertes Beispiel inspiriert direkt von deinem CalendarPopup:
+
+  import datetime
+
+  class KalenderPopup:
+      """Zeigt Kalender und aktuelles Datum an."""
+
+      WMO_ICONS = {0: "☀️", 1: "🌤", 2: "⛅", 3: "☁️", 95: "⛈"}
+      MONATE_DE = ["Januar","Februar","März","April","Mai","Juni",
+                   "Juli","August","September","Oktober","November","Dezember"]
+
+      def __init__(self):
+          heute = datetime.date.today()
+          self._jahr   = heute.year
+          self._monat  = heute.month
+          self._heute  = heute
+          self._wetter = None    ← None als Platzhalter
+
+      @property
+      def monat_name(self):
+          return self.MONATE_DE[self._monat - 1]
+
+      @property
+      def titel(self):
+          return f"{self.monat_name} {self._jahr}"
+
+      def vorheriger_monat(self):
+          if self._monat == 1:
+              self._monat = 12
+              self._jahr -= 1
+          else:
+              self._monat -= 1
+
+      def nächster_monat(self):
+          if self._monat == 12:
+              self._monat = 1
+              self._jahr += 1
+          else:
+              self._monat += 1
+
+      def setze_wetter(self, code, temp):
+          """Wetterdaten setzen."""
+          self._wetter = {
+              "icon": self.WMO_ICONS.get(code, "❓"),
+              "temp": temp
+          }
+
+      def wetter_anzeige(self):
+          if self._wetter is None:
+              return "Lade..."
+          return f"{self._wetter['icon']} {self._wetter['temp']:.0f}°C"
+
+      def __str__(self):
+          return f"KalenderPopup: {self.titel}"
+
+  # Benutzen:
+  popup = KalenderPopup()
+  print(popup.titel)              → "Juni 2026"
+  popup.setze_wetter(2, 21.5)
+  print(popup.wetter_anzeige())   → "⛅ 22°C"
+  popup.vorheriger_monat()
+  print(popup.titel)              → "Mai 2026"
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Erstelle eine Klasse WetterStation mit:
+- __init__(self, ort, lat, lon) — Ort und Koordinaten speichern
+- Eine Property temperatur_c die -99.0 zurückgibt wenn kein Wetter geladen
+- Eine Property temperatur_f die °C in °F umrechnet (Formel: C * 9/5 + 32)
+- Eine Methode lade_wetter(self, code, temp) die Wetterdaten speichert
+- Eine __str__ die "WetterStation Kremsmünster: 21°C ⛅" zurückgibt
+- Eine Klassen-Methode aus_dict(cls, d) die aus einem Dict erstellt:
+  WetterStation.aus_dict({"ort": "Steyr", "lat": 14.4, "lon": 48.0})
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Module und Pakete
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Module importieren
+------------------------------------------------------------------------
+
+Ein Modul ist einfach eine Python-Datei. Alles was du importierst ist
+ein Modul (oder ein Paket = Ordner mit Modulen).
+
+  # Ganzes Modul importieren:
+  import os
+  import json
+  import datetime
+  import re
+  import threading
+  import calendar
+
+  os.path.join(...)       ← Zugriff mit Punkt-Notation
+
+  # Bestimmte Namen importieren:
+  from datetime import datetime, date, timedelta
+  from pathlib import Path
+  from collections import defaultdict, Counter
+
+  # Mit Alias (wenn Name zu lang oder Konflikt):
+  import datetime as dt
+  from datetime import datetime as Datetime
+
+  # Alles importieren (NICHT empfohlen!):
+  from os import *        ← verschmutzt den Namespace, vermeide das
+
+Aus deinen Dateien — alle Imports auf einen Blick:
+  # calendar-popup.py:
+  import calendar, datetime, urllib.request, json, threading, os, cairo
+
+  # rofi-menu-editor.py:
+  import json, os, re
+  from pathlib import Path
+
+  # smGen.py:
+  import os
+  from datetime import datetime
+
+------------------------------------------------------------------------
+9.2  Die wichtigsten Standardbibliothek-Module
+------------------------------------------------------------------------
+
+Python kommt mit über 200 Modulen. Hier die wichtigsten für dein Umfeld:
+
+os — Betriebssystem-Interaktion:
+  import os
+  os.getcwd()                     → aktuelles Verzeichnis
+  os.listdir(".")                 → Dateien im Ordner
+  os.path.join("a", "b", "c")    → "a/b/c" (OS-unabhängig)
+  os.path.exists("/etc/hosts")    → True/False
+  os.path.isfile(...)             → nur für Dateien
+  os.path.isdir(...)              → nur für Verzeichnisse
+  os.path.basename("/a/b/c.txt") → "c.txt"
+  os.path.dirname("/a/b/c.txt")  → "/a/b"
+  os.path.splitext("bild.png")   → ("bild", ".png")
+  os.path.expanduser("~/.config") → "/home/trafk/.config"
+  os.path.realpath(__file__)      → absoluter Pfad der aktuellen Datei
+  os.path.relpath("/a/b", "/a")  → "b"
+  os.makedirs("pfad/zu/ordner", exist_ok=True)
+  os.remove("datei.txt")
+  os.rename("alt.txt", "neu.txt")
+  os.environ.get("PATH")          → Umgebungsvariable lesen
+  os.walk(".")                    → Verzeichnisbaum durchlaufen (in smGen.py!)
+  os.system("befehl")             → Shell-Befehl (veraltet, nutze subprocess)
+  os.access(pfad, os.X_OK)       → Ausführbar? (in rofi-menu-editor.py!)
+
+  # __file__ ist der Pfad zur aktuellen Python-Datei:
+  SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+  ← Aus deinem calendar-popup.py — so findest du Ressourcen neben dem Skript
+
+datetime — Datum und Zeit:
+  from datetime import datetime, date, timedelta
+
+  heute = date.today()                → date(2026, 6, 13)
+  jetzt = datetime.now()              → datetime(2026, 6, 13, 14, 30, 0)
+  heute.year                          → 2026
+  heute.month                         → 6
+  heute.day                           → 13
+  heute.weekday()                     → 0=Mo, 1=Di, ..., 6=So
+  heute.strftime("%d.%m.%Y")         → "13.06.2026"
+  heute.isoformat()                   → "2026-06-13"
+  date.fromisoformat("2026-06-13")   → date(2026, 6, 13)
+
+  # timedelta — Zeitdifferenz:
+  morgen = heute + timedelta(days=1)
+  letzte_woche = heute - timedelta(weeks=1)
+  diff = heute - date(2026, 1, 1)
+  diff.days                           → Anzahl Tage
+
+  # Aus calendar-popup.py:
+  from datetime import datetime, date
+  d = date.fromisoformat(daily["time"][i])
+  d.weekday()    ← Wochentag als Zahl → Index für days_de-Liste
+
+calendar — Kalenderberechnungen:
+  import calendar
+  calendar.monthcalendar(2026, 6)
+  ← Gibt Liste von Wochen zurück. Jede Woche ist eine Liste mit
+  ← 7 Zahlen (Mo-So). 0 bedeutet: dieses Datum liegt nicht in diesem Monat.
+  ← Genau das benutzt dein _render_calendar()!
+
+  calendar.isleap(2024)   → True
+  calendar.monthrange(2026, 6)   → (0, 30)  (Wochentag des 1., Anzahl Tage)
+
+json — JSON lesen und schreiben:
+  import json
+  # Wird im Detail in Modul 12 behandelt
+
+re — Reguläre Ausdrücke:
+  import re
+  # Wird in Modul 11 behandelt
+
+pathlib — Moderner Dateipfad-Umgang:
+  from pathlib import Path
+  # Wird in Modul 12 behandelt
+
+threading — Mehrere Aufgaben gleichzeitig:
+  import threading
+  # Wird in Modul 13 behandelt
+
+sys — Python-Interpreter selbst:
+  import sys
+  sys.argv         → Liste der Kommandozeilen-Argumente
+  sys.exit(0)      → Programm beenden
+  sys.path         → wo Python nach Modulen sucht
+  sys.version      → Python-Version
+
+------------------------------------------------------------------------
+9.3  Eigene Module erstellen
+------------------------------------------------------------------------
+
+Jede .py-Datei ist ein Modul. Einfach importieren:
+
+  # datei: wetter_utils.py
+  WMO_ICONS = {0:"☀️", 1:"🌤", 2:"⛅", 3:"☁️"}
+  WMO_DESC  = {0:"Klar", 1:"Überwiegend klar", 2:"Teilbewölkt"}
+
+  def get_icon(code):
+      return WMO_ICONS.get(code, "❓")
+
+  def get_desc(code):
+      return WMO_DESC.get(code, "Unbekannt")
+
+  # datei: main.py (im gleichen Ordner)
+  import wetter_utils
+  wetter_utils.get_icon(2)     → "⛅"
+
+  from wetter_utils import get_icon, WMO_ICONS
+  get_icon(0)                  → "☀️"
+
+if __name__ == "__main__":
+  Wenn Python eine Datei direkt ausführt, setzt es __name__ auf "__main__".
+  Wenn sie importiert wird, ist __name__ der Modulname.
+  Das benutzt du um Code zu schreiben der nur beim direkten Ausführen läuft:
+
+  # wetter_utils.py
+  def get_icon(code):
+      return WMO_ICONS.get(code, "❓")
+
+  if __name__ == "__main__":
+      # Dieser Block läuft NUR wenn: python3 wetter_utils.py
+      # Nicht wenn: import wetter_utils
+      print(get_icon(0))
+      print("Test fertig!")
+
+  Aus deinen Dateien:
+  if __name__ == "__main__":
+      win = CalendarPopup()
+      Gtk.main()
+
+------------------------------------------------------------------------
+9.4  Pakete — Module organisieren
+------------------------------------------------------------------------
+
+Ein Paket ist ein Ordner mit einer __init__.py Datei:
+
+  trafkhop/
+      __init__.py        ← macht den Ordner zum Paket (kann leer sein)
+      wetter.py
+      kalender.py
+      popups/
+          __init__.py
+          kalender_popup.py
+          volume_popup.py
+
+  # Importieren:
+  import trafkhop.wetter
+  from trafkhop import kalender
+  from trafkhop.popups import volume_popup
+
+  # In __init__.py kannst du Dinge für einfachen Import vorbereiten:
+  # trafkhop/__init__.py:
+  from .wetter import get_icon, get_desc
+  from .kalender import KalenderPopup
+
+  # Dann geht:
+  from trafkhop import get_icon    ← statt trafkhop.wetter.get_icon
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Erstelle eine Datei popup_utils.py mit:
+1. WMO_ICONS und WMO_DESC als Konstanten (aus deinem calendar-popup.py)
+2. get_wetter_info(code) → gibt (icon, beschreibung) als Tupel zurück
+3. format_datum(datum) → gibt "Samstag, 13. Juni 2026" zurück
+   (Nutze datetime.date und .weekday() für den Wochentag auf Deutsch)
+4. Ein if __name__ == "__main__": Block der alle Funktionen testet
+
+Dann importiere get_wetter_info in einer zweiten Datei test_utils.py.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Fehlerbehandlung — try, except, finally
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Fehler in Python — Exception-Typen
+------------------------------------------------------------------------
+
+Python wirft Ausnahmen (Exceptions) wenn etwas schiefläuft.
+Das Programm hört auf, wenn sie nicht abgefangen werden.
+
+Die häufigsten Exception-Typen:
+  ValueError       → Falscher Wert: int("abc"), float("x")
+  TypeError        → Falscher Typ: "a" + 1, len(42)
+  KeyError         → Dict-Key nicht vorhanden: d["xyz"]
+  IndexError       → Listen-Index out of range: l[99]
+  AttributeError   → Attribut existiert nicht: None.strip()
+  NameError        → Variable nicht definiert: print(nicht_definiert)
+  FileNotFoundError → Datei nicht gefunden: open("nein.txt")
+  PermissionError  → Keine Berechtigung: open("/root/x", "w")
+  ZeroDivisionError → Division durch Null: 1/0
+  ImportError      → Modul nicht installiert: import nichtinstalliert
+  OSError          → Allgemeiner Betriebssystem-Fehler
+  RuntimeError     → Allgemeiner Laufzeitfehler
+  StopIteration    → Iterator erschöpft (intern von for genutzt)
+  RecursionError   → Zu tiefe Rekursion
+
+  # Alle Exceptions haben eine Hierarchie:
+  # Exception
+  #   ├── ValueError
+  #   ├── TypeError
+  #   ├── KeyError (erbt von LookupError)
+  #   ├── IndexError (erbt von LookupError)
+  #   ├── OSError
+  #   │     ├── FileNotFoundError
+  #   │     └── PermissionError
+  #   └── ...
+
+------------------------------------------------------------------------
+10.2  try / except — Fehler abfangen
+------------------------------------------------------------------------
+
+  # Grundform:
+  try:
+      ergebnis = 10 / 0              ← ZeroDivisionError
+  except ZeroDivisionError:
+      print("Division durch Null!")
+
+  # Mit Fehler-Info:
+  try:
+      zahl = int("abc")
+  except ValueError as e:
+      print(f"Fehler: {e}")          → "Fehler: invalid literal for int()..."
+
+  # Mehrere Exceptions:
+  try:
+      wert = daten[schlüssel]
+  except KeyError:
+      print("Schlüssel nicht gefunden")
+  except IndexError:
+      print("Index out of range")
+
+  # Mehrere Exceptions zusammen:
+  try:
+      ...
+  except (KeyError, IndexError) as e:
+      print(f"Zugriffsfehler: {e}")
+
+  # Alle Exceptions abfangen (als letzter Ausweg):
+  try:
+      ...
+  except Exception as e:
+      print(f"Unbekannter Fehler: {e}")
+
+  # NIEMALS das hier machen — fängt auch SystemExit und KeyboardInterrupt:
+  except:              ← BAD! Immer mindestens Exception angeben
+
+else und finally:
+  try:
+      datei = open("daten.txt")
+  except FileNotFoundError:
+      print("Datei nicht gefunden!")
+  else:
+      # Wird NUR ausgeführt wenn try KEIN Fehler hatte
+      inhalt = datei.read()
+      print("Datei gelesen!")
+  finally:
+      # Wird IMMER ausgeführt — egal ob Fehler oder nicht
+      # Typisch für: Verbindungen schließen, Ressourcen freigeben
+      print("Fertig (immer)")
+
+Aus deinem calendar-popup.py:
+  try:
+      with urllib.request.urlopen(url, timeout=5) as r:
+          return json.loads(r.read())
+  except Exception:
+      return None
+  ← Wenn das Wetter nicht geladen werden kann (kein Internet, Timeout),
+  ← gibt die Funktion einfach None zurück. Das Popup läuft weiter.
+
+  try:
+      GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+  except AttributeError:
+      GtkLayerShell.set_keyboard_interactivity(self, True)
+  ← Graceful degradation: wenn die neue API nicht vorhanden ist, falle
+  ← auf die ältere zurück. Sehr gutes Muster!
+
+Aus deinem rofi-menu-editor.py:
+  try: raw_menu = json.loads(MENU_JSON_PATH.read_text())
+  except Exception: pass
+  ← Wenn die JSON-Datei kaputt ist, einfach leeres Dict benutzen.
+
+------------------------------------------------------------------------
+10.3  Eigene Exceptions — raise
+------------------------------------------------------------------------
+
+Du kannst Fehler auch selbst auslösen:
+
+  def setze_temperatur(wert):
+      if wert < -273.15:
+          raise ValueError(f"Temperatur {wert}°C ist unter absolutem Nullpunkt!")
+      return wert
+
+  setze_temperatur(-300)   → ValueError: Temperatur -300°C ist unter...
+
+  # Eigene Exception-Klassen:
+  class PopupFehler(Exception):
+      """Basisklasse für Popup-Fehler."""
+      pass
+
+  class KonfigFehler(PopupFehler):
+      def __init__(self, datei, meldung):
+          self.datei = datei
+          super().__init__(f"Konfigfehler in {datei}: {meldung}")
+
+  # Verwenden:
+  try:
+      raise KonfigFehler("config.json", "Ungültiges Format")
+  except KonfigFehler as e:
+      print(e)                → "Konfigfehler in config.json: Ungültiges Format"
+      print(e.datei)          → "config.json"
+
+  # Exception nochmal weiterwerfen:
+  try:
+      datei = open("test.txt")
+  except FileNotFoundError as e:
+      print(f"Logging: {e}")
+      raise   ← wirft die gleiche Exception weiter!
+
+------------------------------------------------------------------------
+10.4  Context Manager — with-Statement
+------------------------------------------------------------------------
+
+with sorgt dafür dass Ressourcen sauber aufgeräumt werden,
+auch wenn ein Fehler passiert:
+
+  # Ohne with — gefährlich:
+  datei = open("test.txt")
+  inhalt = datei.read()    ← wenn hier Fehler → Datei bleibt offen!
+  datei.close()
+
+  # Mit with — sicher:
+  with open("test.txt") as datei:
+      inhalt = datei.read()
+  # datei.close() wird automatisch aufgerufen, egal was passiert!
+
+  # Mehrere Context Manager:
+  with open("quelle.txt") as src, open("ziel.txt", "w") as dst:
+      dst.write(src.read())
+
+Aus deinem calendar-popup.py:
+  with urllib.request.urlopen(url, timeout=5) as r:
+      return json.loads(r.read())
+  ← urlopen gibt einen Context Manager zurück. Verbindung wird automatisch
+  ← geschlossen, auch wenn json.loads fehlschlägt.
+
+Eigene Context Manager (mit __enter__ / __exit__):
+  class Messzeit:
+      def __enter__(self):
+          import time
+          self.start = time.time()
+          return self
+
+      def __exit__(self, typ, wert, tb):
+          self.dauer = time.time() - self.start
+          print(f"Dauer: {self.dauer:.3f}s")
+          return False    ← False = Exceptions werden NICHT unterdrückt
+
+  with Messzeit():
+      # langer Code
+      import time; time.sleep(0.5)
+  # → Dauer: 0.501s
+
+  # Einfacher mit contextlib:
+  from contextlib import contextmanager
+
+  @contextmanager
+  def messzeit():
+      import time
+      start = time.time()
+      yield                              ← hier läuft der with-Block
+      print(f"Dauer: {time.time()-start:.3f}s")
+
+  with messzeit():
+      import time; time.sleep(0.3)
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Schreibe eine Funktion lade_konfig(pfad) die:
+1. Versucht eine JSON-Datei zu öffnen und zu parsen
+2. Bei FileNotFoundError eine eigene KonfigNichtGefunden-Exception wirft
+3. Bei json.JSONDecodeError einen Hinweis ausgibt und ein leeres Dict zurückgibt
+4. In einem finally-Block "Ladeversuch abgeschlossen" ausgibt
+5. Bei Erfolg das geparste Dict zurückgibt
+
+Erstelle dazu auch eine Testdatei mit ungültigem JSON und teste beide Fälle.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Reguläre Ausdrücke — re
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Was sind Regex?
+------------------------------------------------------------------------
+
+Reguläre Ausdrücke (Regex) sind eine Mini-Sprache um Text-Muster zu
+beschreiben. Extrem mächtig, aber auf den ersten Blick kryptisch.
+
+  import re
+
+  # Grundform:
+  muster = re.compile(r"muster")   ← kompiliertes Muster (schneller bei Mehrfachbenutzung)
+  muster = r"muster"               ← auch direkt als String möglich
+
+Wichtig: Fast immer r"..." (Raw String) für Regex benutzen!
+Sonst müsste du \\ statt \ schreiben.
+
+------------------------------------------------------------------------
+11.2  Regex-Grundsymbole
+------------------------------------------------------------------------
+
+Zeichenklassen:
+  .           jedes Zeichen außer Zeilenumbruch
+  \d          Ziffer (0-9)
+  \D          KEIN Ziffer
+  \w          Wort-Zeichen (a-z, A-Z, 0-9, _)
+  \W          KEIN Wort-Zeichen
+  \s          Whitespace (Leerzeichen, Tab, Newline)
+  \S          KEIN Whitespace
+  [abc]       Zeichenmenge: a, b oder c
+  [a-z]       Bereich: a bis z
+  [A-Za-z0-9] Buchstaben und Zahlen
+  [^abc]      NICHT a, b oder c
+
+Quantoren (wie oft?):
+  *           0 oder mehr Mal
+  +           1 oder mehr Mal
+  ?           0 oder 1 Mal (optional)
+  {3}         exakt 3 Mal
+  {2,5}       2 bis 5 Mal
+  {2,}        mindestens 2 Mal
+  {,5}        maximal 5 Mal
+  *? +? ??    nicht-gierig (so wenig wie möglich)
+
+Anker:
+  ^           Anfang des Strings (oder Zeile mit MULTILINE)
+  $           Ende des Strings (oder Zeile)
+  \b          Wortgrenze
+  \B          KEINE Wortgrenze
+
+Gruppen und Alternativen:
+  (abc)       Gruppe — kann zurückgerufen werden
+  (?:abc)     Nicht-fassende Gruppe (kein Rückruf)
+  a|b         a oder b
+  (?P<name>)  Benannte Gruppe
+
+------------------------------------------------------------------------
+11.3  Die re-Funktionen
+------------------------------------------------------------------------
+
+  text = "Temperatur: 21.5°C, Windgeschwindigkeit: 15km/h"
+
+  # re.search — sucht irgendwo im String, gibt Match-Objekt oder None:
+  m = re.search(r"\d+\.?\d*", text)
+  if m:
+      print(m.group())      → "21.5"
+      print(m.start())      → 12   (Startposition)
+      print(m.end())        → 16   (Endposition)
+      print(m.span())       → (12, 16)
+
+  # re.match — sucht nur am ANFANG des Strings:
+  re.match(r"Temp", text)   → Match-Objekt
+  re.match(r"Wind", text)   → None   (Wind steht nicht am Anfang!)
+
+  # re.fullmatch — der gesamte String muss passen:
+  re.fullmatch(r"\d{4}-\d{2}-\d{2}", "2026-06-13")   → Match
+  re.fullmatch(r"\d{4}-\d{2}-\d{2}", "heute")         → None
+
+  # re.findall — alle Treffer als Liste:
+  zahlen = re.findall(r"\d+\.?\d*", text)
+  # → ["21.5", "15"]
+
+  # re.finditer — alle Treffer als Iterator (mit Match-Objekten):
+  for m in re.finditer(r"\d+\.?\d*", text):
+      print(f"Gefunden: {m.group()} an Position {m.start()}")
+
+  # re.sub — ersetzen:
+  bereinigt = re.sub(r"\s+", " ", "Text  mit   vielen   Leerzeichen")
+  # → "Text mit vielen Leerzeichen"
+
+  re.sub(r"//.*", "", "code = 1  // Kommentar")
+  # → "code = 1  "
+  ← Genau das macht dein rofi-menu-editor.py zum Bereinigen von JSONC!
+
+  # re.split — aufteilen mit Regex:
+  re.split(r"[,;]\s*", "a, b; c,d")
+  # → ["a", "b", "c", "d"]
+
+------------------------------------------------------------------------
+11.4  Gruppen — Teile eines Musters extrahieren
+------------------------------------------------------------------------
+
+  # Einfache Gruppen mit ():
+  m = re.search(r"(\d+)\.(\d+)", "Temp: 21.5°C")
+  m.group(0)    → "21.5"   (gesamter Match)
+  m.group(1)    → "21"     (erste Gruppe)
+  m.group(2)    → "5"      (zweite Gruppe)
+  m.groups()    → ("21", "5")
+
+  # Benannte Gruppen:
+  muster = r"(?P<ganz>\d+)\.(?P<komma>\d+)"
+  m = re.search(muster, "21.5")
+  m.group("ganz")    → "21"
+  m.group("komma")   → "5"
+  m.groupdict()      → {"ganz": "21", "komma": "5"}
+
+  # Gruppen in re.sub ersetzen:
+  re.sub(r"(\w+)@(\w+)", r"\2@\1", "user@domain")
+  # → "domain@user"
+
+  re.sub(r"%[a-zA-Z]", "", "firefox %F %U --new-tab")
+  # → "firefox  --new-tab"
+  ← Aus deinem rofi-menu-editor.py! Entfernt .desktop-Platzhalter wie %F, %U
+
+------------------------------------------------------------------------
+11.5  Flags und praktische Muster
+------------------------------------------------------------------------
+
+  # re.IGNORECASE (re.I):
+  re.search(r"python", "Python ist toll", re.IGNORECASE)   → Match
+
+  # re.MULTILINE (re.M):
+  # ^ und $ passen auf jede ZEILE, nicht nur den ganzen String
+  re.findall(r"^\d+", "1. Zeile\n2. Zeile", re.MULTILINE)
+  # → ["1", "2"]
+
+  # re.DOTALL (re.S):
+  # . passt auch auf Zeilenumbrüche
+  re.search(r"start.+ende", "start\nende", re.DOTALL)
+
+  # Kombinieren:
+  re.search(r"muster", text, re.IGNORECASE | re.MULTILINE)
+
+Nützliche fertige Muster:
+  E-Mail:      r"[\w.-]+@[\w.-]+\.\w+"
+  URL:         r"https?://[\w./%-]+"
+  IP-Adresse:  r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+  Datum:       r"\d{4}-\d{2}-\d{2}"
+  Hexfarbe:    r"#[0-9A-Fa-f]{3,6}"
+  Python-Var:  r"[a-zA-Z_]\w*"
+
+Aus deinem rofi-menu-editor.py:
+  content_clean = re.sub(r"//.*", "", content)
+  ← Alle // bis Zeilenende entfernen (für JSONC → JSON Konvertierung)
+
+  exec_clean = re.sub(r"%[a-zA-Z]", "", data.get("Exec", "")).strip()
+  ← .desktop-Datei-Platzhalter entfernen
+
+  mod.startswith("custom/")
+  ← Hier reicht startswith, kein Regex nötig — richtige Entscheidung!
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+1. Schreibe einen Regex der aus dem Weather-API-URL die Parameter extrahiert:
+   url = "https://api.open-meteo.com/v1/forecast?latitude=48.05&longitude=14.13"
+   Extrahiere latitude und longitude als Zahlen.
+
+2. Schreibe eine Funktion bereinige_css(css_text) die:
+   - Alle CSS-Kommentare (/* ... */) entfernt
+   - Mehrfache Leerzeichen zu einem zusammenfasst
+
+3. Prüfe mit Regex ob eine Dateiendung eine der erlaubten ist:
+   erlaubt = r"\.(html|md|txt|css|js|py|json|yaml|yml|sh|xml)$"
+   Teste mit: "index.html", "bild.png", "skript.py", "DATEI.HTML"
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Dateien und JSON
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Dateien lesen und schreiben
+------------------------------------------------------------------------
+
+Der klassische Weg mit open():
+
+  # Lesen:
+  with open("datei.txt", "r", encoding="utf-8") as f:
+      inhalt = f.read()            ← gesamten Inhalt als String
+
+  with open("datei.txt", "r", encoding="utf-8") as f:
+      zeilen = f.readlines()       ← Liste von Zeilen (mit \n am Ende!)
+
+  with open("datei.txt", "r", encoding="utf-8") as f:
+      for zeile in f:              ← Zeile für Zeile (speicherschonend!)
+          print(zeile.strip())
+
+  # Schreiben (überschreibt):
+  with open("datei.txt", "w", encoding="utf-8") as f:
+      f.write("Hallo TrafkHop!\n")
+
+  # Schreiben (anhängen):
+  with open("datei.txt", "a", encoding="utf-8") as f:
+      f.write("Neue Zeile\n")
+
+  # Binär lesen/schreiben (für nicht-Text-Dateien):
+  with open("bild.png", "rb") as f:     ← rb = read binary
+      daten = f.read()
+
+  with open("kopie.png", "wb") as f:    ← wb = write binary
+      f.write(daten)
+
+Modi-Übersicht:
+  "r"     nur lesen (Standard), Fehler wenn nicht vorhanden
+  "w"     schreiben, erstellt/überschreibt
+  "a"     anhängen, erstellt wenn nicht vorhanden
+  "x"     erstellen, Fehler wenn schon vorhanden
+  "r+"    lesen UND schreiben (Datei muss existieren)
+  "b"     binär (kombinieren: "rb", "wb")
+
+IMMER encoding="utf-8" angeben! Ohne das benutzt Python die
+System-Encoding, die auf Windows oft nicht UTF-8 ist.
+
+Aus deinem smGen.py:
+  with open(path, "w", encoding="utf-8") as f:
+      f.write(content)
+  ← Korrekt: "w" für schreiben, encoding="utf-8" explizit angegeben!
+
+------------------------------------------------------------------------
+12.2  pathlib — moderner Pfad-Umgang
+------------------------------------------------------------------------
+
+pathlib.Path ist die moderne Alternative zu os.path. Viel lesbarer!
+
+  from pathlib import Path
+
+  # Pfade erstellen:
+  p = Path("/home/trafk/.config/rofi/menu.json")
+  p = Path.home() / ".config" / "rofi" / "menu.json"
+  ← Der / Operator hängt Teile zusammen — sehr lesbar!
+
+  Path.home()           → Path("/home/trafk")
+  Path.cwd()            → aktuelles Verzeichnis
+
+  # Pfad-Informationen:
+  p.name                → "menu.json"
+  p.stem                → "menu"        (ohne Endung)
+  p.suffix              → ".json"
+  p.suffixes            → [".json"]
+  p.parent              → Path("/home/trafk/.config/rofi")
+  p.parts               → ("/", "home", "trafk", ".config", "rofi", "menu.json")
+
+  # Prüfungen:
+  p.exists()            → True/False
+  p.is_file()           → True/False
+  p.is_dir()            → True/False
+  p.is_symlink()        → True/False
+
+  # Lesen und Schreiben (ohne open!):
+  inhalt = p.read_text(encoding="utf-8")
+  p.write_text("Inhalt", encoding="utf-8")
+  daten = p.read_bytes()
+  p.write_bytes(b"Daten")
+
+  # Verzeichnis-Operationen:
+  p.mkdir(parents=True, exist_ok=True)   ← Verzeichnis erstellen
+  p.unlink()                             ← Datei löschen
+  p.rename(neuer_pfad)                   ← umbenennen/verschieben
+  p.touch()                              ← Datei erstellen oder Timestamp aktualisieren
+
+  # Verzeichnis-Inhalt auflisten:
+  for datei in Path(".").iterdir():
+      print(datei)
+
+  # Glob-Muster:
+  for py_datei in Path(".").glob("*.py"):
+      print(py_datei)
+
+  for datei in Path(".").rglob("*.py"):  ← rekursiv!
+      print(datei)
+
+Aus deinem rofi-menu-editor.py:
+  MENU_JSON_PATH = Path.home() / ".config" / "rofi" / "menu.json"
+  WAYBAR_CONFIG_PATH = Path.home() / ".config" / "waybar" / "config.jsonc"
+
+  if MENU_JSON_PATH.exists():
+      raw_menu = json.loads(MENU_JSON_PATH.read_text())
+
+  WAYBAR_CONFIG_PATH.write_text(json.dumps(data, indent=4, ensure_ascii=False))
+
+  for f in sorted(d.glob("*.desktop")):
+      entry = parse_desktop_file(f)
+
+Vergleich os.path vs pathlib:
+  # os.path (alt):
+  pfad = os.path.join(os.path.expanduser("~"), ".config", "rofi", "menu.json")
+  if os.path.exists(pfad):
+      with open(pfad, "r", encoding="utf-8") as f:
+          inhalt = f.read()
+
+  # pathlib (modern):
+  pfad = Path.home() / ".config" / "rofi" / "menu.json"
+  if pfad.exists():
+      inhalt = pfad.read_text()
+
+------------------------------------------------------------------------
+12.3  JSON — Lesen und Schreiben
+------------------------------------------------------------------------
+
+JSON (JavaScript Object Notation) ist das Standard-Format für
+Konfigurationsdateien und APIs. Python's json-Modul macht das einfach.
+
+  import json
+
+  # Python-Objekt → JSON-String:
+  daten = {
+      "name": "TrafkHop",
+      "version": 2,
+      "aktiv": True,
+      "tags": ["linux", "wayland", "gtk"],
+      "konfig": {"farbe": "#8456dd"}
+  }
+
+  json_string = json.dumps(daten)
+  # → '{"name": "TrafkHop", "version": 2, ...}'
+
+  # Mit schöner Formatierung:
+  json_string = json.dumps(daten, indent=4, ensure_ascii=False)
+  # ← indent=4: 4 Leerzeichen Einrückung
+  # ← ensure_ascii=False: Umlaute und ° direkt, nicht als \u00b0
+
+  # JSON-String → Python-Objekt:
+  daten_zurück = json.loads(json_string)
+  daten_zurück["name"]   → "TrafkHop"
+
+  # JSON-Datei schreiben:
+  with open("konfig.json", "w", encoding="utf-8") as f:
+      json.dump(daten, f, indent=4, ensure_ascii=False)
+
+  # JSON-Datei lesen:
+  with open("konfig.json", "r", encoding="utf-8") as f:
+      konfig = json.load(f)
+
+Typ-Konvertierung (Python ↔ JSON):
+  Python     → JSON          Python     ← JSON
+  dict       → object        dict       ← object
+  list       → array         list       ← array
+  tuple      → array         (KEIN tuple)
+  str        → string        str        ← string
+  int/float  → number        int/float  ← number
+  True/False → true/false    bool       ← true/false
+  None       → null          None       ← null
+
+Achtung: JSON kennt keine Tupel! json.dumps((1,2,3)) → "[1, 2, 3]"
+und nach json.loads ist es eine Liste, kein Tupel!
+
+Fehlerbehandlung:
+  try:
+      daten = json.loads(kaputt)
+  except json.JSONDecodeError as e:
+      print(f"JSON-Fehler: {e}")
+      print(f"Position: Zeile {e.lineno}, Spalte {e.colno}")
+
+JSONC (JSON with Comments):
+  JSON erlaubt keine Kommentare. Deine config.jsonc hat aber Kommentare!
+  Lösung (aus deinem rofi-menu-editor.py):
+  content_clean = re.sub(r"//.*", "", content)   ← // Kommentare entfernen
+  data = json.loads(content_clean)
+
+Aus deinen Dateien — JSON-Muster:
+  # calendar-popup.py:
+  return json.loads(r.read())
+  ← r.read() gibt bytes zurück — json.loads kann bytes direkt verarbeiten!
+
+  # smGen.py:
+  sitemap_lines.append(f"    <loc>{loc}</loc>")
+  ← Kein JSON, aber XML. Ähnliches String-Aufbau-Muster.
+
+  # rofi-menu-editor.py:
+  WAYBAR_CONFIG_PATH.write_text(json.dumps(data, indent=4, ensure_ascii=False))
+  ← pathlib + json.dumps kombiniert — sehr sauber!
+
+------------------------------------------------------------------------
+12.4  os.walk — Verzeichnisbäume durchlaufen
+------------------------------------------------------------------------
+
+os.walk ist das Werkzeug um Ordner rekursiv zu durchsuchen.
+Du benutzt es intensiv in smGen.py.
+
+  import os
+
+  for root, dirs, files in os.walk("."):
+      # root  = aktueller Pfad (str)
+      # dirs  = Liste aller Unterverzeichnisse in root
+      # files = Liste aller Dateien in root
+
+      for datei in files:
+          voller_pfad = os.path.join(root, datei)
+          relativer_pfad = os.path.relpath(voller_pfad, ".")
+          print(relativer_pfad)
+
+  # Verzeichnisse überspringen — dirs[:] MUSS In-Place geändert werden!
+  for root, dirs, files in os.walk("."):
+      dirs[:] = [d for d in dirs if d != ".git"]   ← RICHTIG!
+      dirs = [...]                                  ← FALSCH! os.walk sieht es nicht
+
+  # Nur bestimmte Dateien:
+  for root, dirs, files in os.walk("."):
+      dirs[:] = [d for d in dirs if d not in {".git", "__pycache__"}]
+      for datei in files:
+          if datei.endswith(".py"):
+              print(os.path.join(root, datei))
+
+  # topdown=False — bottom-up (erst Unterordner):
+  for root, dirs, files in os.walk(".", topdown=False):
+      ...
+
+Aus deinem smGen.py:
+  for root, dirs, files in os.walk(directory):
+      dirs[:] = [d for d in dirs if d != ".git"]
+      for filename in files:
+          rel_path = os.path.relpath(os.path.join(root, filename), directory)
+          url_path = rel_path.replace("\\", "/")
+          if should_skip_path(url_path):
+              continue
+          name, ext = os.path.splitext(filename)
+          if ext.lower() in allowed_extensions or ext == "":
+              found_files.append(url_path)
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+Inspiriert von deinem smGen.py, schreibe ein Skript find_py.py das:
+1. Mit os.walk alle .py-Dateien im aktuellen Verzeichnis findet
+2. .git und __pycache__ überspringt
+3. Für jede gefundene Datei ausgibt:
+   - Relativer Pfad
+   - Dateigröße in KB (os.path.getsize())
+   - Letzte Änderung als Datum (os.path.getmtime() + datetime.fromtimestamp())
+4. Am Ende: Gesamtzahl und Gesamtgröße aller .py-Dateien
+5. Das Ergebnis als JSON in py_report.json speichert
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: Type Hints — Python mit Typen
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Warum Type Hints?
+------------------------------------------------------------------------
+
+Python ist dynamisch typisiert — das ist eine Stärke. Aber bei größeren
+Projekten wird es unübersichtlich wenn du nicht weißt welchen Typ eine
+Funktion zurückgibt. Type Hints (seit Python 3.5, erweitert in 3.9+)
+lösen das: du kannst Typen ANGEBEN ohne dass Python sie ERZWINGT.
+
+Der Interpreter ignoriert sie! Sie sind für:
+  - Entwickler (bessere Lesbarkeit)
+  - IDEs (Autovervollständigung, Fehlerhinweise)
+  - Tools wie mypy (statische Typprüfung)
+
+------------------------------------------------------------------------
+13.2  Basis-Syntax
+------------------------------------------------------------------------
+
+  # Variablen:
+  name: str = "TrafkHop"
+  alter: int = 17
+  aktiv: bool = True
+  koordinaten: tuple[float, float] = (48.05, 14.13)
+
+  # Funktionen — Parameter und Rückgabewert:
+  def grüsse(name: str) -> str:
+      return f"Hallo, {name}!"
+
+  def addiere(a: int, b: int) -> int:
+      return a + b
+
+  def lade_konfig(pfad: str) -> dict | None:    ← None als möglicher Rückgabe
+      ...
+
+  def mach_was() -> None:                       ← gibt nichts zurück
+      print("Erledigt")
+
+Aus deinem rofi-menu-editor.py:
+  def flatten_dict(d: dict, parent_key: str = '') -> dict:
+  def parse_desktop_file(path: Path) -> dict | None:
+  def get_desktop_entries() -> list[dict]:
+  def get_binary_entries() -> list[dict]:
+  ← Du benutzt Type Hints schon! Sehr guter Stil.
+
+------------------------------------------------------------------------
+13.3  Komplexe Typen
+------------------------------------------------------------------------
+
+  from typing import Optional, Union, Any, Callable
+  # In Python 3.10+ kannst du | direkt benutzen statt Union
+
+  # Optional — entweder Typ oder None:
+  def suche(name: str) -> Optional[str]:   ← alt, aber weit verbreitet
+  def suche(name: str) -> str | None:      ← modern (Python 3.10+)
+
+  # Union — einer von mehreren Typen:
+  def verarbeite(wert: Union[int, str]) -> str:
+  def verarbeite(wert: int | str) -> str:   ← modern
+
+  # Listen, Dicts, Tupel:
+  def verarbeite_liste(items: list[str]) -> list[int]:
+  def verarbeite_dict(d: dict[str, int]) -> None:
+  def koordinaten() -> tuple[float, float]:
+
+  # Any — beliebiger Typ (vermeide wenn möglich):
+  def debug(wert: Any) -> None:
+      print(wert)
+
+  # Callable — Funktion als Parameter:
+  def anwenden(func: Callable[[int], str], wert: int) -> str:
+      return func(wert)
+
+  # TypeAlias (für Lesbarkeit):
+  WetterDaten = dict[str, int | float | str]
+  def lade_wetter() -> WetterDaten | None:
+      ...
+
+------------------------------------------------------------------------
+13.4  TypedDict und dataclasses
+------------------------------------------------------------------------
+
+  # TypedDict — Dict mit bekannten Keys und Typen:
+  from typing import TypedDict
+
+  class WetterInfo(TypedDict):
+      icon: str
+      temperatur: float
+      beschreibung: str
+
+  def get_wetter(code: int, temp: float) -> WetterInfo:
+      return {
+          "icon": WMO_ICONS.get(code, "❓"),
+          "temperatur": temp,
+          "beschreibung": WMO_DESC.get(code, "Unbekannt")
+      }
+
+  # dataclass — Klasse mit automatischem __init__, __repr__, __eq__:
+  from dataclasses import dataclass, field
+
+  @dataclass
+  class Popup:
+      titel: str
+      breite: int = 400
+      höhe: int = 300
+      sichtbar: bool = False
+      tags: list[str] = field(default_factory=list)  ← Mutable Default!
+
+  p = Popup("Kalender")
+  p.titel              → "Kalender"
+  p.breite             → 400
+  print(p)             → Popup(titel='Kalender', breite=400, ...)
+
+  # Achtung: NIEMALS mutable Defaults direkt!
+  @dataclass
+  class Schlecht:
+      tags: list = []       ← FEHLER! geteilt von allen Instanzen!
+  @dataclass
+  class Gut:
+      tags: list = field(default_factory=list)   ← Richtig!
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+Füge Type Hints zu diesen Funktionen hinzu (aus früheren Übungen):
+
+1. get_priority(url_path: ???) -> ???
+2. should_skip(path: ???) -> ???
+3. get_wetter_info(code: ???, icons: ???, desc: ???) -> ???
+4. lade_konfig(pfad: ???) -> ???
+
+Erstelle dann eine @dataclass WetterStation mit:
+  ort: str
+  lat: float
+  lon: float
+  temperatur: float = 0.0
+  wetter_code: int = 0
+Und einer Methode als_dict(self) -> dict[str, str | float | int]
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — Python Teil 2
+================================================================================
+
+OOP:
+  class Name(Eltern):   __init__(self)   super().__init__()
+  self.attr             @property        @classmethod     @staticmethod
+  __str__  __repr__  __eq__  __len__  __iter__  __enter__  __exit__
+
+FEHLERBEHANDLUNG:
+  try: ... except Typ as e: ... else: ... finally: ...
+  raise ValueError("msg")
+  with open(...) as f:    ← Context Manager
+
+WICHTIGE EXCEPTIONS:
+  ValueError  TypeError  KeyError  IndexError  FileNotFoundError
+  AttributeError  NameError  ZeroDivisionError  ImportError
+
+REGEX (re):
+  re.search(r"muster", text)     → Match oder None
+  re.findall(r"\d+", text)       → Liste aller Treffer
+  re.sub(r"//.*", "", text)      → Ersetzen
+  \d \w \s . * + ? {n} ^ $ \b   → Symbole
+
+JSON:
+  json.loads(string)       → Python-Objekt
+  json.dumps(obj, indent=4, ensure_ascii=False)  → String
+  json.load(f)    json.dump(obj, f)    ← mit Datei
+
+PATHLIB:
+  Path.home() / ".config" / "datei.json"
+  p.exists()  p.read_text()  p.write_text()  p.glob("*.py")
+  p.name  p.stem  p.suffix  p.parent  p.mkdir()  p.unlink()
+
+OS:
+  os.path.join()  .exists()  .splitext()  .basename()  .dirname()
+  os.walk(.)      os.makedirs()  os.environ.get()
+  os.path.expanduser("~")  os.path.realpath(__file__)
+
+TYPE HINTS:
+  def f(x: str) -> int | None:
+  list[str]  dict[str, int]  tuple[float, float]
+  @dataclass  TypedDict  Optional  Union  Callable
+
+================================================================================
+QUELLEN — Python Teil 2
+================================================================================
+
+json Modul    → https://docs.python.org/3/library/json.html
+pathlib       → https://docs.python.org/3/library/pathlib.html
+re Modul      → https://docs.python.org/3/library/re.html
+regex101      → https://regex101.com  (Regex testen und erklären lassen!)
+dataclasses   → https://docs.python.org/3/library/dataclasses.html
+typing        → https://docs.python.org/3/library/typing.html
+mypy          → https://mypy-lang.org (statische Typprüfung)
+
+================================================================================
+Ende Python-Komplettkurs Teil 2 — Weiter mit Teil 3: GTK, threading, subprocess
+================================================================================
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

@@ -1,0 +1,1498 @@
+================================================================================
+JAVA KOMPLETTKURS — TEIL 1 von 4
+Grundlagen · Typen · Kontrollfluss · Methoden · OOP-Einstieg
+================================================================================
+
+Dieser Kurs bringt dir Java von Grund auf — ohne Abkürzungen, ohne
+übersprungene Details, ohne "das erklären wir später". Jedes Konzept,
+jede Regel, jede Ausnahme von der Regel, jeder Operator, jedes Keyword
+wird erklärt. Wenn du diesen Kurs durchgearbeitet hast, kennst du Java.
+
+Teil 1: JVM, Typen, Operatoren, Kontrollfluss, Arrays, Strings, Methoden
+Teil 2: OOP komplett — Klassen, Vererbung, Interfaces, Generics
+Teil 3: Collections, Exceptions, I/O, Lambdas, Streams, Optional
+Teil 4: Threads, Netzwerk, Reflection, Module, Testing, Build-Tools, Projekt
+
+================================================================================
+MODUL 1: Java verstehen — JVM, JDK, Compilation, Ausführung
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Was Java ist und warum es anders ist
+------------------------------------------------------------------------
+
+Java ist eine kompilierte, statisch typisierte, objektorientierte Sprache
+mit automatischer Speicherverwaltung. Das klingt abstrakt — hier was das
+konkret bedeutet:
+
+  Kompiliert — aber nicht zu Maschinencode:
+    Java-Code wird zunächst in sogenannten Bytecode übersetzt (.class-Dateien).
+    Dieser Bytecode läuft NICHT direkt auf der CPU. Er läuft auf der JVM —
+    der Java Virtual Machine. Die JVM ist ein Programm, das Bytecode liest
+    und auf dem jeweiligen Betriebssystem ausführt.
+
+    Dein Code → javac → Bytecode (.class) → JVM → Ausführung
+
+    Das ist Javas "Write Once, Run Anywhere" (WORA). Du kompilierst einmal
+    und der Bytecode läuft auf Windows, Linux, macOS — überall wo eine JVM
+    installiert ist. Das ist ein fundamentaler Unterschied zu C/C++, wo du
+    für jedes System neu kompilieren musst.
+
+  Statisch typisiert:
+    Jede Variable hat einen festen Typ, der zur Compile-Zeit bekannt ist.
+    int x = 5; — x ist für immer ein int. Du kannst x nicht plötzlich
+    einen String zuweisen. Der Compiler prüft das und gibt einen Fehler.
+    Das ist komplett anders als Python oder JavaScript, wo das erst zur
+    Laufzeit auffällt.
+
+    Vorteil: Viele Fehler fallen schon beim Kompilieren auf, nicht erst
+    wenn der Nutzer dein Programm benutzt.
+
+  Objektorientiert — und wie:
+    In Java ist fast ALLES ein Objekt. Es gibt keine globalen Funktionen.
+    Kein Code existiert außerhalb einer Klasse. Die main-Methode, der
+    Einstiegspunkt jedes Programms, ist eine Methode einer Klasse.
+
+    Das ist strikter als Python (wo du einfach Funktionen im Modul-Scope
+    haben kannst) und auch strikter als C++ (wo du globale Funktionen
+    haben kannst).
+
+  Garbage Collection:
+    Du musst Speicher nicht manuell freigeben wie in C mit free() oder
+    in C++ mit delete. Die JVM hat einen Garbage Collector, der nicht mehr
+    erreichbare Objekte automatisch aus dem Speicher entfernt.
+    Nachteil: Du hast weniger Kontrolle. Vorteil: Keine Speicherlecks
+    durch vergessene free()-Aufrufe.
+
+------------------------------------------------------------------------
+1.2  JVM, JRE, JDK — was ist was?
+------------------------------------------------------------------------
+
+Diese drei Begriffe werden häufig verwechselt:
+
+  JVM (Java Virtual Machine):
+    Das eigentliche Laufzeitprogramm. Liest Bytecode, führt ihn aus.
+    Enthält den JIT-Compiler (Just-In-Time), der häufig ausgeführten
+    Bytecode zur Laufzeit in echten Maschinencode übersetzt — das macht
+    Java trotz der Abstraktion sehr schnell.
+
+  JRE (Java Runtime Environment):
+    JVM + Standardbibliotheken (java.lang, java.util, java.io, ...).
+    Das, was du brauchst um Java-Programme zu STARTEN.
+    Früher separat erhältlich — heute meist Teil des JDK.
+
+  JDK (Java Development Kit):
+    JRE + Entwicklerwerkzeuge: javac (Compiler), jar (Archivierung),
+    javadoc (Dokumentation), jdb (Debugger), jshell (REPL), und viele mehr.
+    Das, was du brauchst um Java-Programme zu ENTWICKELN.
+
+  Welches JDK benutzen?
+    → OpenJDK: die quelloffene Referenzimplementierung
+    → Eclipse Temurin (früher AdoptOpenJDK): beliebt, kostenlos
+    → Oracle JDK: kommerziell, für bestimmte Anwendungsfälle
+    → GraalVM: Spezial-JDK mit Native-Image-Kompilierung
+
+    Für diesen Kurs: OpenJDK 21 (LTS). Java 21 ist die aktuelle
+    Long-Term-Support-Version (LTS = wird lange mit Updates versorgt).
+
+  Installation prüfen:
+    java -version     → zeigt JVM-Version
+    javac -version    → zeigt Compiler-Version
+    (beide sollten die gleiche Versionsnummer zeigen)
+
+------------------------------------------------------------------------
+1.3  Das erste Programm — Schritt für Schritt
+------------------------------------------------------------------------
+
+Erstelle eine Datei: HalloWelt.java
+
+    public class HalloWelt {
+        public static void main(String[] args) {
+            System.out.println("Hallo, Welt!");
+        }
+    }
+
+Das ist das kleinste vollständige Java-Programm. Jede Zeile hat eine
+Bedeutung, die du kennen musst:
+
+  public class HalloWelt
+    Jede Java-Datei enthält (mindestens) eine Klasse.
+    Der Klassenname MUSS exakt dem Dateinamen entsprechen — Groß-/Klein-
+    schreibung inklusive. HalloWelt.java → class HalloWelt.
+    public bedeutet: diese Klasse ist von überall sichtbar.
+
+  public static void main(String[] args)
+    Das ist der Einstiegspunkt. Die JVM sucht genau diese Methode.
+    public       → von überall aufrufbar (auch von der JVM)
+    static       → gehört zur Klasse, nicht zu einem Objekt der Klasse.
+                   Die JVM ruft main auf, bevor irgendein Objekt existiert,
+                   also muss es static sein.
+    void         → gibt nichts zurück
+    main         → der Name, nach dem die JVM sucht (fest vorgegeben)
+    String[] args → ein Array von Strings — die Kommandozeilenargumente.
+                   Wenn du dein Programm mit java HalloWelt foo bar startest,
+                   ist args[0]="foo" und args[1]="bar".
+
+  System.out.println("Hallo, Welt!")
+    System       → Klasse aus java.lang (automatisch importiert)
+    out          → statisches Feld vom Typ PrintStream in System
+    println      → Methode von PrintStream — gibt Text aus + Zeilenumbruch
+    print()      → ohne Zeilenumbruch
+    printf()     → formatierte Ausgabe (wie in C)
+
+  Semikolon am Zeilenende:
+    Jede Anweisung (Statement) endet mit ;
+    Das ist in Java (im Gegensatz zu Python) Pflicht. Vergisst du es,
+    gibt es einen Compile-Fehler.
+
+Kompilieren und ausführen:
+    javac HalloWelt.java     → erzeugt HalloWelt.class
+    java HalloWelt           → startet die JVM mit dieser Klasse
+
+  Seit Java 11 gibt es einen Shortcut für einzelne Dateien:
+    java HalloWelt.java      → kompiliert und führt in einem Schritt aus
+                               (nur für Einzeldateien, ohne package)
+
+------------------------------------------------------------------------
+1.4  jshell — Java interaktiv ausprobieren
+------------------------------------------------------------------------
+
+Seit Java 9 gibt es jshell — ein interaktives REPL wie Python's Shell.
+Perfekt zum Ausprobieren ohne eine ganze Klasse schreiben zu müssen.
+
+  jshell starten:
+    jshell
+
+  Einfaches Rechnen:
+    jshell> 2 + 3
+    $1 ==> 5
+
+    jshell> int x = 10;
+    x ==> 10
+
+    jshell> x * 5
+    $3 ==> 50
+
+  String-Ausgabe:
+    jshell> System.out.println("Test")
+    Test
+
+  Klassen und Methoden definieren:
+    jshell> int quadrat(int n) { return n * n; }
+    |  created method quadrat(int)
+
+    jshell> quadrat(7)
+    $5 ==> 49
+
+  Beenden:
+    /exit
+
+  jshell-Befehle (immer mit /):
+    /list          → zeigt alle eingegebenen Snippets
+    /vars          → zeigt alle Variablen
+    /methods       → zeigt alle Methoden
+    /help          → Hilfe
+
+------------------------------------------------------------------------
+1.5  Kommentare
+------------------------------------------------------------------------
+
+Java kennt drei Arten von Kommentaren:
+
+  // Einzeiliger Kommentar
+    Alles hinter // bis zum Zeilenende wird ignoriert.
+
+    int x = 5; // x ist die Anzahl der Versuche
+
+  /* Mehrzeiliger Kommentar */
+    Alles zwischen /* und */ wird ignoriert. Kann über mehrere Zeilen.
+
+    /* Das ist
+       ein mehrzeiliger
+       Kommentar. */
+
+  /** Javadoc-Kommentar */
+    Spezialform für automatische API-Dokumentation.
+    Steht DIREKT vor einer Klasse, Methode oder einem Feld.
+
+    /**
+     * Berechnet die Summe zweier ganzen Zahlen.
+     *
+     * @param a erster Summand
+     * @param b zweiter Summand
+     * @return Summe von a und b
+     */
+    public int addiere(int a, int b) {
+        return a + b;
+    }
+
+    Mit javadoc HalloWelt.java erzeugst du aus diesen Kommentaren
+    automatisch eine HTML-Dokumentation — genau wie die offizielle
+    Java-API-Dokumentation aufgebaut ist.
+
+  Wichtige Tags in Javadoc:
+    @param name Beschreibung     → Parameter dokumentieren
+    @return Beschreibung         → Rückgabewert dokumentieren
+    @throws ExceptionTyp Grund   → mögliche Exceptions dokumentieren
+    @author Name                 → Autor (optional)
+    @since Version               → seit welcher Version vorhanden
+    @deprecated Grund            → als veraltet markieren
+    @see KlasseOderMethode       → Querverweis
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle Hallo.java mit einer Klasse Hallo. Die main-Methode soll deinen
+Namen und "lernt Java" ausgeben — auf zwei separaten Zeilen.
+Kompiliere mit javac und starte mit java.
+Öffne danach jshell und berechne 17 * 23. Was kommt heraus?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Primitive Datentypen, Variablen, Operatoren
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Primitive Datentypen — die acht Grundtypen
+------------------------------------------------------------------------
+
+Java hat genau acht primitive Datentypen. Sie sind KEINE Objekte —
+das macht sie schnell und speichereffizient.
+
+  Ganzzahlen (Integer):
+
+    byte       8 Bit    –128 bis 127
+    short     16 Bit    –32.768 bis 32.767
+    int       32 Bit    –2.147.483.648 bis 2.147.483.647
+    long      64 Bit    –9.223.372.036.854.775.808 bis 9.223.372.036.854.775.807
+
+    In der Praxis benutzt du fast immer int für ganze Zahlen.
+    long brauchst du für sehr große Zahlen (Timestamps, Dateigrößen...).
+    byte und short werden selten direkt benutzt — eher in Arrays wenn
+    Speicher wichtig ist (z.B. Bilddaten).
+
+  Gleitkommazahlen (Floating Point):
+
+    float     32 Bit    ca. ±3.4e38,  ca. 7 Dezimalstellen Genauigkeit
+    double    64 Bit    ca. ±1.8e308, ca. 15 Dezimalstellen Genauigkeit
+
+    Standardtyp für Dezimalzahlen ist double.
+    float ist seltener nötig — nur wenn Speicher/Performance kritisch.
+
+  Zeichen:
+
+    char      16 Bit    ein Unicode-Zeichen (0 bis 65535)
+    In einfachen Anführungszeichen: 'A', '€', '\n'
+
+  Wahrheitswert:
+
+    boolean   Größe intern        true oder false
+    boolean ist KEIN Integer in Java (anders als in C)! 1 ist nicht true.
+
+Literale — wie du Werte im Code schreibst:
+
+  int     → 42, -17, 0
+  long    → 42L oder 42l  (L/l am Ende — ohne L ist es ein int!)
+            2_000_000_000L  (Unterstriche zur Lesbarkeit erlaubt seit Java 7)
+  float   → 3.14f oder 3.14F  (f am Ende — ohne ist es ein double!)
+  double  → 3.14, 3.14d, 1.5e10  (e = Exponent zur Basis 10)
+  char    → 'A', '€', '\n', '\t', '\\', '\'', '\u0041' (Unicode)
+  boolean → true, false  (immer klein geschrieben!)
+
+Zahlenliterale in verschiedenen Basen (seit Java 7 übersichtlicher):
+  int dezimal   = 255;
+  int hexadezimal = 0xFF;      // 0x Präfix → Basis 16
+  int oktal     = 0377;        // 0 Präfix → Basis 8 (selten benutzt)
+  int binär     = 0b11111111;  // 0b Präfix → Basis 2
+
+  Alle vier ergeben 255. Unterstriche für Lesbarkeit:
+  int milliarden = 1_000_000_000;
+  long kredit    = 100_000_000_000L;
+  int farbe      = 0xFF_00_00;   // Rot in RGB
+
+------------------------------------------------------------------------
+2.2  Variablen deklarieren, initialisieren, zuweisen
+------------------------------------------------------------------------
+
+Variablen DEKLARIEREN — Typ und Name festlegen:
+  int alter;
+  double preis;
+  boolean aktiv;
+
+Variablen INITIALISIEREN — ersten Wert zuweisen:
+  int alter = 25;
+  double preis = 9.99;
+  boolean aktiv = true;
+
+Getrennt (erst deklarieren, dann zuweisen):
+  int alter;
+  alter = 25;
+
+Lokale Variablen (in Methoden) MÜSSEN vor Benutzung initialisiert werden:
+  int x;
+  System.out.println(x); // COMPILE-FEHLER: variable x might not have been initialized
+
+Mehrere Variablen gleichen Typs in einer Zeile (erlaubt, aber oft unübersichtlich):
+  int a = 1, b = 2, c = 3;
+
+Konstanten mit final:
+  final int MAX_GROESSE = 100;
+  MAX_GROESSE = 200; // COMPILE-FEHLER: cannot assign a value to final variable
+
+  Konvention: Konstanten in SCREAMING_SNAKE_CASE (alles groß, Unterstriche).
+  final double PI = 3.14159265358979;
+  final String BEGRUESSUNG = "Hallo";
+
+var — lokale Typinferenz (seit Java 10):
+  var name = "Anna";    // Java erkennt: das ist ein String
+  var zahl = 42;        // Java erkennt: das ist ein int
+  var liste = new ArrayList<String>(); // Java erkennt den Typ
+
+  var kann NUR für lokale Variablen benutzt werden (nicht für Felder,
+  Parameter, Rückgabetypen). Der Typ wird aus dem Initializer erschlossen —
+  das bedeutet, var ohne Initialisierung geht nicht:
+  var x; // COMPILE-FEHLER
+
+  var ist kein dynamischer Typ! Einmal String, immer String:
+  var text = "Hallo";
+  text = 42; // COMPILE-FEHLER
+
+------------------------------------------------------------------------
+2.3  Arithmetische Operatoren
+------------------------------------------------------------------------
+
+Grundrechenarten:
+  int a = 10, b = 3;
+  a + b     → 13    Addition
+  a - b     → 7     Subtraktion
+  a * b     → 30    Multiplikation
+  a / b     → 3     INTEGER-Division! (kein Komma, Rest wird abgeschnitten)
+  a % b     → 1     Modulo (Rest bei Division)
+
+INTEGER-Division — das ist ein sehr häufiger Fehler:
+  10 / 3 ergibt 3, NICHT 3.333...
+  Um echte Division zu bekommen, muss mindestens ein Operand double sein:
+  (double) 10 / 3   → 3.333...   (Cast des ersten Operanden)
+  10.0 / 3          → 3.333...   (Literal als double)
+  10 / 3.0          → 3.333...
+  (double) a / b    → 3.333...
+
+Inkrement und Dekrement — zwei Formen:
+  ++x   → Pre-Inkrement:  ERST erhöhen, DANN benutzen
+  x++   → Post-Inkrement: ERST benutzen, DANN erhöhen
+  --x   → Pre-Dekrement
+  x--   → Post-Dekrement
+
+  Beispiel, das viele verwirrt:
+    int x = 5;
+    int y = x++;    // y = 5, x = 6  (erst y = x, dann x = x + 1)
+    int z = ++x;    // z = 7, x = 7  (erst x = x + 1, dann z = x)
+
+  Im Zweifel: lieber auf eigene Zeile schreiben:
+    x++;
+    int y = x;
+  Das ist klarer.
+
+Kombinierte Zuweisungsoperatoren:
+  x += 5;     identisch mit x = x + 5;
+  x -= 3;     identisch mit x = x - 3;
+  x *= 2;     identisch mit x = x * 2;
+  x /= 4;     identisch mit x = x / 4;
+  x %= 3;     identisch mit x = x % 3;
+
+Mathematische Klassen für fortgeschrittene Berechnungen:
+  Math.abs(-5)         → 5      Absolutwert
+  Math.max(3, 7)       → 7      Maximum
+  Math.min(3, 7)       → 3      Minimum
+  Math.pow(2, 10)      → 1024.0 Potenz (gibt immer double zurück)
+  Math.sqrt(16)        → 4.0    Quadratwurzel
+  Math.floor(3.7)      → 3.0    Abrunden
+  Math.ceil(3.2)       → 4.0    Aufrunden
+  Math.round(3.5)      → 4      Runden (gibt long zurück)
+  Math.PI              → 3.14159265358979...
+  Math.E               → 2.71828182845904...
+  Math.random()        → Zufallszahl zwischen 0.0 (inkl.) und 1.0 (exkl.)
+  Math.log(x)          → natürlicher Logarithmus
+  Math.log10(x)        → dekadischer Logarithmus
+  Math.sin(x)          → Sinus (Argument in Bogenmass/Radiant!)
+  Math.cos(x)          → Kosinus
+  Math.tan(x)          → Tangens
+
+------------------------------------------------------------------------
+2.4  Vergleichsoperatoren
+------------------------------------------------------------------------
+
+  ==    gleich (für Primitive: Wertgleichheit)
+  !=    ungleich
+  <     kleiner als
+  >     größer als
+  <=    kleiner oder gleich
+  >=    größer oder gleich
+
+Alle geben boolean zurück:
+  5 == 5    → true
+  5 != 3    → true
+  5 < 3     → false
+  5 >= 5    → true
+
+WARNUNG bei Objekten: == prüft Referenzgleichheit, nicht Wertgleichheit!
+  String a = new String("Hallo");
+  String b = new String("Hallo");
+  a == b      → false (verschiedene Objekte im Speicher)
+  a.equals(b) → true  (gleicher Inhalt)
+
+Für Primitive (int, double, char, boolean...) ist == immer Wertgleichheit.
+Für Objekte (String, Integer, alle anderen) brauchst du .equals().
+
+------------------------------------------------------------------------
+2.5  Logische Operatoren
+------------------------------------------------------------------------
+
+  &&    logisches UND  (beide müssen true sein)
+  ||    logisches ODER (mindestens einer muss true sein)
+  !     logisches NICHT (kehrt true/false um)
+
+  true && true   → true
+  true && false  → false
+  false || true  → true
+  false || false → false
+  !true          → false
+  !false         → true
+
+Short-Circuit-Evaluation (Kurzschlussauswertung):
+  Bei && wird der rechte Teil NICHT ausgewertet, wenn links bereits false:
+    if (x != null && x.length() > 0) → sicher, weil wenn x null ist,
+                                        x.length() nie aufgerufen wird
+
+  Bei || wird der rechte Teil NICHT ausgewertet, wenn links bereits true:
+    if (liste == null || liste.isEmpty()) → sicher
+
+  Das ist wichtig für null-sichere Abfragen!
+
+Bitweise Operatoren (selten im Alltag, aber wichtig zu kennen):
+  &     bitweises UND
+  |     bitweises ODER
+  ^     bitweises XOR (exklusives ODER)
+  ~     bitweises NICHT (Komplement)
+  <<    Linksshift (multipliziert mit 2^n)
+  >>    Rechtsshift mit Vorzeichenerweiterung
+  >>>   Rechtsshift ohne Vorzeichenerweiterung (unsigned)
+
+  Beispiel:
+    int a = 0b1010;  // 10
+    int b = 0b1100;  // 12
+    a & b   → 0b1000 = 8   (beide Bits müssen 1 sein)
+    a | b   → 0b1110 = 14  (mindestens ein Bit muss 1 sein)
+    a ^ b   → 0b0110 = 6   (genau ein Bit muss 1 sein)
+    ~a      → ...11110101 (alle Bits umkehren, ergibt -11 im Two's Complement)
+    a << 2  → 0b101000 = 40 (um 2 Stellen nach links verschoben)
+
+------------------------------------------------------------------------
+2.6  Typkonvertierung — Casting
+------------------------------------------------------------------------
+
+Implizite Konvertierung (automatisch, kein Informationsverlust):
+  byte → short → int → long → float → double
+  char → int
+
+  int i = 100;
+  long l = i;      // OK, long ist größer als int
+  double d = i;    // OK, double kann jeden int exakt darstellen
+  float f = i;     // OK (aber int hat mehr Präzision als float bei großen Zahlen!)
+
+Expliziter Cast (du akzeptierst möglichen Informationsverlust):
+  double d = 9.99;
+  int i = (int) d;    // i = 9 — der Nachkommateil wird ABGESCHNITTEN (nicht gerundet!)
+
+  long l = 10_000_000_000L;
+  int i = (int) l;    // GEFÄHRLICH: Überlauf! (das Ergebnis ist zufällig erscheinend)
+
+  int i = 65;
+  char c = (char) i;  // c = 'A' (ASCII/Unicode 65)
+  char c2 = 'B';
+  int i2 = c2;        // i2 = 66 (implizit, char → int)
+
+String zu Zahl:
+  int i    = Integer.parseInt("42");
+  double d = Double.parseDouble("3.14");
+  long l   = Long.parseLong("10000000000");
+  float f  = Float.parseFloat("1.5");
+  boolean b = Boolean.parseBoolean("true");  // "true" → true, alles andere → false
+
+Zahl zu String:
+  String s1 = String.valueOf(42);       // "42"
+  String s2 = Integer.toString(42);     // "42"
+  String s3 = "" + 42;                  // "42" (Concatenation mit leerem String)
+  String s4 = String.format("%d", 42);  // "42"
+
+------------------------------------------------------------------------
+2.7  Overflow und besondere Float-Werte
+------------------------------------------------------------------------
+
+Integer-Overflow — was passiert wenn du über die Grenzen gehst:
+  int max = Integer.MAX_VALUE;   // 2147483647
+  int naechste = max + 1;        // -2147483648 (Überlauf! dreht um)
+  System.out.println(naechste);  // gibt -2147483648 aus, KEIN Fehler!
+
+  Das ist ein stilles, gefährliches Problem. Java wirft keine Exception.
+  Wenn du weißt, dass Werte sehr groß werden könnten, benutze long.
+  Für beliebig große Zahlen: BigInteger (aus java.math).
+
+Float/Double — spezielle Werte:
+  double positiv = 1.0 / 0.0;   → Double.POSITIVE_INFINITY (keine Exception!)
+  double negativ = -1.0 / 0.0;  → Double.NEGATIVE_INFINITY
+  double nan = 0.0 / 0.0;       → Double.NaN (Not a Number)
+
+  NaN ist ansteckend: NaN + 5 = NaN, NaN * 0 = NaN
+  NaN ist ungleich sich selbst: Double.NaN == Double.NaN → FALSE!
+  Prüfen mit: Double.isNaN(d), Double.isInfinite(d)
+
+Gleitkomma-Ungenauigkeit — das MUSST du wissen:
+  0.1 + 0.2 ergibt in Java NICHT genau 0.3
+  System.out.println(0.1 + 0.2); → 0.30000000000000004
+
+  Das liegt an der Binärdarstellung von Dezimalbrüchen — die meisten
+  Dezimalbrüche lassen sich in Binär nicht exakt darstellen.
+  Für exakte Dezimalberechnungen (Finanzen!) benutze BigDecimal.
+
+  Nie floats/doubles mit == vergleichen:
+  if (preis == 9.99)  // GEFÄHRLICH
+  if (Math.abs(preis - 9.99) < 0.0001)  // besser: Toleranzbereich
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Schreibe ein Programm Rechner.java:
+- Deklariere zwei int-Variablen a = 17 und b = 5
+- Gib aus: Summe, Differenz, Produkt, int-Division, Modulo, echte Division
+- Deklariere double x = 1.0 / 0.0 und gib aus was das ergibt
+- Wandle die double-Zahl 9.7 in einen int um und gib das Ergebnis aus
+- Gib Integer.MAX_VALUE + 1 aus und erkläre im Kommentar was passiert
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Strings — der wichtigste Referenztyp
+================================================================================
+
+------------------------------------------------------------------------
+3.1  String ist kein primitiver Typ
+------------------------------------------------------------------------
+
+String ist in Java eine Klasse — kein primitiver Typ. Aber durch
+syntaktischen Zucker sieht er fast wie einer aus:
+
+  String name = "Anna";
+
+Das Literal "Anna" erzeugt automatisch ein String-Objekt.
+Alternativ (explizit, aber fast nie nötig):
+  String name = new String("Anna");
+
+IMMUTABILITÄT: Strings in Java sind unveränderlich (immutable).
+Einmal erzeugt, kann der Inhalt nicht geändert werden. Alle
+String-Methoden erzeugen immer einen NEUEN String.
+
+  String s = "Hallo";
+  s.toUpperCase();      // s ist immer noch "Hallo"! Rückgabewert ignoriert.
+  s = s.toUpperCase();  // JETZT ist s "HALLO" (neue Referenz)
+
+------------------------------------------------------------------------
+3.2  String-Pool und Referenzgleichheit
+------------------------------------------------------------------------
+
+Java optimiert String-Literale durch einen String Pool (intern im
+Speicher). Gleichartige Literale teilen sich dasselbe Objekt:
+
+  String a = "Hallo";
+  String b = "Hallo";
+  a == b;          // true! (gleiche Referenz aus dem Pool)
+
+  String c = new String("Hallo");  // EXPLIZIT neues Objekt — außerhalb des Pools
+  a == c;          // false! (verschiedene Referenzen)
+  a.equals(c);     // true! (gleicher Inhalt)
+
+Merke: Vergleiche Strings IMMER mit equals(), nie mit ==.
+Sonderfall: Wenn du gegen ein Literal prüfst, schreibe das Literal links:
+  "Hallo".equals(name)    // sicherer als name.equals("Hallo")
+                          // weil null.equals() eine NullPointerException wirft
+                          // "Hallo".equals(null) gibt einfach false zurück
+
+------------------------------------------------------------------------
+3.3  String-Literale und Escape-Sequenzen
+------------------------------------------------------------------------
+
+  "Hallo, Welt"
+  "Er sagte: \"Guten Tag\""   // Anführungszeichen escapen mit \"
+  "Zeile 1\nZeile 2"          // \n = Zeilenumbruch
+  "Spalte1\tSpalte2"          // \t = Tabulator
+  "Rückwärtsschrägstrich: \\" // \\ = ein einzelner Backslash
+  "\u0041"                    // \u + 4 Hex-Ziffern = Unicode-Zeichen ('A')
+
+Alle Escape-Sequenzen:
+  \n    Newline (LF, Zeilenumbruch)
+  \r    Carriage Return (CR)
+  \t    Horizontaler Tabulator
+  \\    Backslash
+  \"    Doppeltes Anführungszeichen (in Strings)
+  \'    Einfaches Anführungszeichen (in Chars)
+  \b    Backspace
+  \f    Form Feed (Seitenvorschub)
+  \0    Null-Zeichen (NUL)
+  \uXXXX  Unicode-Escape
+
+Text Blocks (seit Java 15 stabil) — mehrzeilige Strings:
+  String html = """
+                <html>
+                    <body>
+                        <p>Hallo</p>
+                    </body>
+                </html>
+                """;
+
+  Die """-Anführungszeichen müssen auf einer eigenen Zeile stehen.
+  Die Einrückung wird automatisch entfernt (basierend auf der Einrückung
+  des schließenden """). Das Ergebnis enthält die Newlines, aber die
+  führenden Leerzeichen gemäß Einrückungsregel.
+
+------------------------------------------------------------------------
+3.4  String-Methoden — vollständige Referenz
+------------------------------------------------------------------------
+
+Länge und Zugriff:
+  "Hallo".length()         → 5  (Anzahl der Zeichen)
+  "Hallo".charAt(0)        → 'H'  (Zeichen an Index 0)
+  "Hallo".charAt(4)        → 'o'  (letztes Zeichen)
+  "Hallo".indexOf('l')     → 2  (erster Treffer, -1 wenn nicht gefunden)
+  "Hallo".indexOf('l', 3)  → 3  (suche ab Index 3)
+  "Hallo".lastIndexOf('l') → 3  (letzter Treffer)
+  "Hallo".indexOf("ll")    → 2  (Suche nach Teilstring)
+
+Teilstrings:
+  "Hallo".substring(1)     → "allo"  (von Index 1 bis Ende)
+  "Hallo".substring(1, 4)  → "all"   (von 1 bis EXKL. 4)
+
+Vergleich:
+  "abc".equals("abc")              → true
+  "abc".equals("ABC")              → false
+  "abc".equalsIgnoreCase("ABC")    → true
+  "abc".compareTo("abd")           → -1  (a < b lexikographisch)
+  "abc".compareToIgnoreCase("ABC") → 0
+
+Suchen:
+  "Hallo Welt".contains("Welt")    → true
+  "Hallo".startsWith("Ha")         → true
+  "Hallo".endsWith("lo")           → true
+  "Hallo".matches("H[aeiou]llo")   → true (Regex)
+
+Transformieren (geben immer neuen String zurück!):
+  "Hallo".toUpperCase()            → "HALLO"
+  "HALLO".toLowerCase()            → "hallo"
+  "  Hallo  ".trim()               → "Hallo"  (entfernt führende/nachfolgende Leerzeichen)
+  "  Hallo  ".strip()              → "Hallo"  (seit Java 11, Unicode-bewusst)
+  "  Hallo  ".stripLeading()       → "Hallo  "
+  "  Hallo  ".stripTrailing()      → "  Hallo"
+  "Hallo".replace('l', 'r')        → "Harro"  (alle Vorkommen)
+  "Hallo".replace("ll", "rr")      → "Harro"
+  "Ha.ll.o".replaceAll("\\.", "-") → "Ha-ll-o"  (Regex)
+  "Ha.ll.o".replaceFirst("\\.", "-") → "Ha-ll.o"
+  "abc".repeat(3)                  → "abcabcabc"  (seit Java 11)
+
+Prüfen:
+  "".isEmpty()                     → true  (Länge 0)
+  "  ".isEmpty()                   → false (enthält Leerzeichen)
+  "  ".isBlank()                   → true  (nur Whitespace, seit Java 11)
+  "Hallo".isBlank()                → false
+
+Teilen und Verbinden:
+  "a,b,c".split(",")               → ["a", "b", "c"]  (String-Array)
+  "a,b,c".split(",", 2)            → ["a", "b,c"]  (max. 2 Teile)
+  String.join("-", "a", "b", "c") → "a-b-c"
+  String.join(", ", liste)         → kommaseparierte Liste aus Collection
+
+Konvertierung:
+  String.valueOf(42)               → "42"
+  String.valueOf(true)             → "true"
+  String.valueOf(3.14)             → "3.14"
+
+Zeichen-Array:
+  "Hallo".toCharArray()            → ['H','a','l','l','o']
+  new String(charArray)            → zurück zum String
+
+------------------------------------------------------------------------
+3.5  String-Konkatenation und StringBuilder
+------------------------------------------------------------------------
+
+Mit + verknüpfen:
+  String s = "Hallo" + ", " + "Welt";    // "Hallo, Welt"
+  String s = "Zahl: " + 42;              // "Zahl: 42" (Zahlen werden automatisch umgewandelt)
+  String s = 1 + 2 + " Hallo";           // "3 Hallo" (erst 1+2=3, dann "3 Hallo")
+  String s = "Hallo " + 1 + 2;           // "Hallo 12" (von links: erst "Hallo 1", dann "Hallo 12")
+
+  Das + mit einem operanden der String ist überlädt es mit String-Kontext.
+  Reihenfolge (links nach rechts) ist entscheidend!
+
+ABER: + in Schleifen ist sehr ineffizient:
+  String result = "";
+  for (int i = 0; i < 1000; i++) {
+      result += i;  // erzeugt 1000 neue String-Objekte!
+  }
+
+Stattdessen: StringBuilder — mutable (veränderlicher) String-Puffer:
+  StringBuilder sb = new StringBuilder();
+  for (int i = 0; i < 1000; i++) {
+      sb.append(i);
+  }
+  String result = sb.toString();
+
+  StringBuilder — die wichtigsten Methoden:
+    sb.append("Text")         → anhängen (gibt StringBuilder zurück — chainable!)
+    sb.append(42)             → Zahl anhängen
+    sb.insert(0, "Start:")    → an Position 0 einfügen
+    sb.delete(0, 5)           → Zeichen 0 bis exkl. 5 löschen
+    sb.deleteCharAt(3)        → Zeichen an Index 3 löschen
+    sb.replace(0, 5, "Neu")   → Teilbereich ersetzen
+    sb.reverse()              → umkehren
+    sb.length()               → aktuelle Länge
+    sb.charAt(0)              → Zeichen an Position
+    sb.indexOf("Text")        → Position suchen
+    sb.toString()             → als normaler String
+
+  Method Chaining:
+    String result = new StringBuilder()
+        .append("Hallo")
+        .append(", ")
+        .append("Welt")
+        .append("!")
+        .toString();
+
+  StringBuffer ist das Thread-sichere Äquivalent zu StringBuilder.
+  Wenn du in mehreren Threads schreibst → StringBuffer.
+  Sonst → StringBuilder (schneller).
+
+------------------------------------------------------------------------
+3.6  String.format und printf — formatierte Ausgabe
+------------------------------------------------------------------------
+
+String.format(template, args...) erzeugt einen formatierten String.
+System.out.printf(template, args...) gibt direkt formatiert aus.
+
+Formatspezifikationen — das Herzstück:
+
+  %d   → ganze Zahl (int, long)
+  %f   → Gleitkommazahl (float, double)
+  %s   → String
+  %c   → Zeichen (char)
+  %b   → boolean
+  %n   → Zeilenumbruch (besser als \n — plattformunabhängig)
+  %%   → das Zeichen %
+
+Breite und Ausrichtung:
+  "%10d"    → rechtsbündig in 10 Zeichen breitem Feld
+  "%-10d"   → linksbündig in 10 Zeichen breitem Feld
+  "%010d"   → mit führenden Nullen auffüllen
+  "%.2f"    → 2 Nachkommastellen
+  "%10.2f"  → 10 Zeichen breit, 2 Nachkommastellen
+
+  String.format("%10.2f", 3.14159) → "      3.14"
+  String.format("%-10s|", "Hi")   → "Hi        |"
+
+Mehre Argumente:
+  String.format("Name: %s, Alter: %d, Größe: %.1f m", "Anna", 25, 1.73)
+  → "Name: Anna, Alter: 25, Größe: 1.7 m"
+
+------------------------------------------------------------------------
+3.7  Formatted (seit Java 15) — Alternative
+------------------------------------------------------------------------
+
+Seit Java 15 kannst du Strings so formatieren:
+  String s = "Hallo %s, du bist %d Jahre alt.".formatted("Anna", 25);
+
+Das ist äquivalent zu String.format(), aber lesbarer.
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Schreibe StringSpiel.java:
+- Frage mit Scanner nach Vor- und Nachname (zwei Zeilen)
+- Gib in formatierter Ausgabe aus: "Name: [Nachname], [Vorname]"
+- Gib die Länge des vollständigen Namens aus
+- Prüfe ob der Name einen Buchstaben 'a' enthält (case-insensitive)
+- Gib den Namen rückwärts aus (Tipp: StringBuilder.reverse())
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Kontrollfluss — if, switch, Schleifen
+================================================================================
+
+------------------------------------------------------------------------
+4.1  if-else
+------------------------------------------------------------------------
+
+Grundform:
+  if (bedingung) {
+      // wird ausgeführt wenn bedingung true ist
+  }
+
+if-else:
+  if (alter >= 18) {
+      System.out.println("Volljährig");
+  } else {
+      System.out.println("Minderjährig");
+  }
+
+if-else if-else — Kette:
+  if (note <= 1) {
+      System.out.println("Sehr gut");
+  } else if (note <= 2) {
+      System.out.println("Gut");
+  } else if (note <= 3) {
+      System.out.println("Befriedigend");
+  } else if (note <= 4) {
+      System.out.println("Ausreichend");
+  } else {
+      System.out.println("Nicht bestanden");
+  }
+
+  Nur EINE dieser Blöcke wird ausgeführt — der erste, dessen Bedingung
+  true ist. Wenn keine Bedingung zutrifft, der else-Block.
+
+Ohne geschweifte Klammern (nur für eine Anweisung — aber NICHT empfohlen):
+  if (x > 0) System.out.println("positiv");
+
+  Gefährlich, weil bei Erweiterung Fehler entstehen:
+  if (x > 0)
+      System.out.println("positiv");
+      System.out.println("auch das");   // IMMER ausgeführt, NICHT im if!
+  
+  Immer geschweifte Klammern benutzen — klarer und sicherer.
+
+Ternärer Operator — kurze if-else-Ausdrücke:
+  String text = (alter >= 18) ? "Volljährig" : "Minderjährig";
+  int max = (a > b) ? a : b;
+
+  Syntax: bedingung ? wert_wenn_true : wert_wenn_false
+  Gut für kurze Ausdrücke. Nicht für komplexe Logik schachteln.
+
+------------------------------------------------------------------------
+4.2  switch — mehrere Fälle
+------------------------------------------------------------------------
+
+Klassisches switch (Java 1 bis heute):
+  int tag = 3;
+  switch (tag) {
+      case 1:
+          System.out.println("Montag");
+          break;   // WICHTIG: ohne break "fällt durch" zum nächsten case!
+      case 2:
+          System.out.println("Dienstag");
+          break;
+      case 3:
+      case 4:      // mehrere cases, eine Aktion
+          System.out.println("Mitte der Woche");
+          break;
+      case 5:
+          System.out.println("Freitag");
+          break;
+      default:     // wenn kein case passt (optional, aber empfohlen)
+          System.out.println("Wochenende");
+  }
+
+Fall-Through — das berühmte "vergessene break":
+  switch (x) {
+      case 1:
+          System.out.println("eins");
+          // KEIN break → fällt durch zu case 2!
+      case 2:
+          System.out.println("zwei");
+          break;
+  }
+  // Bei x=1: gibt "eins" UND "zwei" aus!
+  // Bei x=2: gibt nur "zwei" aus.
+  
+  Fall-Through kann gewollt sein (selten) oder ein Bug (häufig).
+  Moderner Java-Code vermeidet es.
+
+switch erlaubte Typen (klassisch):
+  int, byte, short, char, Integer, Byte, Short, Character, String, Enum
+
+  Kein long, kein double, kein float! Auch keine eigenen Klassen
+  (außer Enum).
+
+Switch-Expression (seit Java 14 stabil) — MODERNER ANSATZ:
+  String tagName = switch (tag) {
+      case 1 -> "Montag";
+      case 2 -> "Dienstag";
+      case 3, 4 -> "Mitte der Woche";   // mehrere Werte mit Komma
+      case 5 -> "Freitag";
+      default -> "Wochenende";
+  };   // Semikolon, weil das ein Ausdruck ist
+
+  Der -> (Arrow) macht KEIN Fall-Through — du brauchst kein break.
+  Der switch-Ausdruck gibt einen Wert zurück (hier: String).
+  Alle Fälle MÜSSEN abgedeckt sein (der Compiler prüft das).
+
+Switch-Expression mit Blocks:
+  int punkte = switch (grade) {
+      case 'A' -> 4;
+      case 'B' -> 3;
+      case 'C' -> {
+          System.out.println("Im Mittelfeld");
+          yield 2;    // yield statt return in Switch-Blöcken
+      }
+      default -> 0;
+  };
+
+Pattern Matching in switch (seit Java 21 stabil):
+  Object obj = getEtwas();
+  String beschreibung = switch (obj) {
+      case Integer i   -> "Ganzzahl: " + i;
+      case String s    -> "Text mit Länge " + s.length();
+      case null        → "Nichts";
+      default          -> "Unbekannt: " + obj.getClass().getSimpleName();
+  };
+
+  Das ist sehr mächtig — du kannst den Typ prüfen UND gleichzeitig
+  eine Variable des richtigen Typs binden (hier i, s).
+
+------------------------------------------------------------------------
+4.3  while-Schleife
+------------------------------------------------------------------------
+
+  while (bedingung) {
+      // Körper
+  }
+
+  Der Körper wird ausgeführt, SOLANGE die Bedingung true ist.
+  Wenn die Bedingung von Anfang an false ist, wird der Körper NIE ausgeführt.
+
+  int i = 0;
+  while (i < 5) {
+      System.out.println(i);
+      i++;   // i muss irgendwann die Bedingung false machen, sonst Endlosschleife!
+  }
+  // Gibt aus: 0, 1, 2, 3, 4
+
+Endlosschleife — bewusst benutzt mit break:
+  while (true) {
+      String eingabe = scanner.nextLine();
+      if (eingabe.equals("quit")) break;
+      verarbeite(eingabe);
+  }
+
+------------------------------------------------------------------------
+4.4  do-while-Schleife
+------------------------------------------------------------------------
+
+  do {
+      // Körper
+  } while (bedingung);
+
+  Der Körper wird MINDESTENS EINMAL ausgeführt, dann wird die Bedingung geprüft.
+
+  Typischer Anwendungsfall — Eingabe-Validierung:
+  int eingabe;
+  do {
+      System.out.print("Gib eine Zahl zwischen 1 und 10 ein: ");
+      eingabe = scanner.nextInt();
+  } while (eingabe < 1 || eingabe > 10);
+
+------------------------------------------------------------------------
+4.5  for-Schleife — der Klassiker
+------------------------------------------------------------------------
+
+  for (initialisierung; bedingung; update) {
+      // Körper
+  }
+
+  for (int i = 0; i < 10; i++) {
+      System.out.println(i);
+  }
+  // Gibt 0 bis 9 aus
+
+  Alle drei Teile sind optional:
+  for (;;) { /* Endlosschleife */ }
+
+  Mehrere Variablen möglich:
+  for (int i = 0, j = 10; i < j; i++, j--) {
+      System.out.println(i + " + " + j);
+  }
+
+Rückwärtszählen:
+  for (int i = 10; i > 0; i--) {
+      System.out.println(i);
+  }
+  System.out.println("Start!");
+
+------------------------------------------------------------------------
+4.6  Enhanced for (for-each) — über Collections und Arrays
+------------------------------------------------------------------------
+
+  for (ElementTyp element : sammlung) {
+      // element ist das aktuelle Element
+  }
+
+  int[] zahlen = {1, 2, 3, 4, 5};
+  for (int z : zahlen) {
+      System.out.println(z);
+  }
+
+  List<String> namen = List.of("Anna", "Ben", "Clara");
+  for (String name : namen) {
+      System.out.println(name);
+  }
+
+  Einschränkungen:
+  - Kein Zugriff auf den Index
+  - Kann die Sammlung nicht modifizieren (fügt nicht ein, löscht nicht)
+  - Immer von vorne nach hinten
+
+------------------------------------------------------------------------
+4.7  break, continue, Labels
+------------------------------------------------------------------------
+
+  break;       → verlässt die INNERSTE Schleife sofort
+  continue;    → springt zur nächsten Iteration der INNERSTEN Schleife
+
+  Beispiel continue:
+  for (int i = 0; i < 10; i++) {
+      if (i % 2 == 0) continue;   // gerade Zahlen überspringen
+      System.out.println(i);      // gibt 1, 3, 5, 7, 9 aus
+  }
+
+Labels für break/continue bei geschachtelten Schleifen:
+  outer:
+  for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+          if (i == 1 && j == 1) break outer;   // verlässt BEIDE Schleifen
+          System.out.println(i + "," + j);
+      }
+  }
+
+  Labels sind selten nötig, aber manchmal die sauberste Lösung für
+  verschachtelte Schleifen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Schreibe Zahlenspiel.java:
+- Das Programm "denkt sich" eine Zufallszahl zwischen 1-100
+  (int zahl = (int)(Math.random() * 100) + 1)
+- Mit einer do-while-Schleife und Scanner:
+  Nutzer rät → "Zu klein", "Zu groß" oder "Richtig! Versuche: X"
+- Zähle die Versuche mit
+- Nach dem Erraten: Frage ob nochmal spielen? (j/n)
+- Benutze eine outer-Schleife für das Wiederholungsspiel
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Arrays — Felder fester Größe
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Eindimensionale Arrays
+------------------------------------------------------------------------
+
+Array deklarieren und erzeugen:
+  int[] zahlen = new int[5];       // Array mit 5 int-Slots (alle 0)
+  double[] werte = new double[10]; // 10 doubles (alle 0.0)
+  boolean[] flags = new boolean[3]; // 3 booleans (alle false)
+  String[] namen = new String[4];   // 4 Strings (alle null)
+
+  Standardwerte bei new:
+    int, byte, short, long  → 0
+    float, double            → 0.0
+    boolean                  → false
+    char                     → '\0' (Null-Zeichen)
+    Objekte (String, etc.)   → null
+
+Array-Literal (direkte Initialisierung):
+  int[] zahlen = {1, 2, 3, 4, 5};
+  String[] wochentage = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
+
+  Oder mit explizitem new (für späte Zuweisung):
+  int[] zahlen;
+  zahlen = new int[]{1, 2, 3, 4, 5};   // new int[] nötig außerhalb der Deklaration
+
+Zugriff:
+  zahlen[0]         → 1 (erster Wert)
+  zahlen[4]         → 5 (letzter Wert bei Länge 5)
+  zahlen.length     → 5 (KEIN () — length ist ein Feld, keine Methode!)
+  zahlen[5]         → ArrayIndexOutOfBoundsException! (Index 0 bis 4)
+
+  Letztes Element allgemein: zahlen[zahlen.length - 1]
+
+Schreiben:
+  zahlen[2] = 99;
+
+------------------------------------------------------------------------
+5.2  Arrays durchlaufen
+------------------------------------------------------------------------
+
+Mit klassischem for (wenn Index benötigt):
+  for (int i = 0; i < zahlen.length; i++) {
+      System.out.println("zahlen[" + i + "] = " + zahlen[i]);
+  }
+
+Mit for-each (wenn Index nicht benötigt):
+  for (int z : zahlen) {
+      System.out.println(z);
+  }
+
+Rückwärts:
+  for (int i = zahlen.length - 1; i >= 0; i--) {
+      System.out.println(zahlen[i]);
+  }
+
+------------------------------------------------------------------------
+5.3  Arrays-Klasse — Hilfsmethoden
+------------------------------------------------------------------------
+
+import java.util.Arrays;   // nötig!
+
+  Arrays.sort(zahlen)         → sortiert in aufsteigender Reihenfolge (in-place!)
+  Arrays.sort(zahlen, 2, 5)   → sortiert nur Index 2 bis exkl. 5
+
+  Arrays.toString(zahlen)     → "[1, 2, 3, 4, 5]" (für println)
+  Arrays.deepToString(matrix) → für mehrdimensionale Arrays
+
+  Arrays.fill(zahlen, 0)      → alle Felder auf 0 setzen
+  Arrays.fill(zahlen, 1, 4, 9) → Felder 1 bis exkl. 4 auf 9 setzen
+
+  Arrays.copyOf(zahlen, 3)    → neue Array mit ersten 3 Elementen: [1, 2, 3]
+  Arrays.copyOfRange(zahlen, 1, 4) → Elemente 1 bis exkl. 4: [2, 3, 4]
+  System.arraycopy(quelle, vonIndex, ziel, nachIndex, anzahl) → schnelles Kopieren
+
+  Arrays.equals(a, b)         → sind zwei Arrays gleich? (Inhalt, nicht Referenz)
+  Arrays.deepEquals(a, b)     → für mehrdimensionale Arrays
+
+  Arrays.binarySearch(zahlen, 3) → Index von 3 (Array MUSS vorher sortiert sein!)
+                                    Gibt negativen Wert wenn nicht gefunden.
+
+------------------------------------------------------------------------
+5.4  Mehrdimensionale Arrays
+------------------------------------------------------------------------
+
+Zweidimensionales Array — Matrix:
+  int[][] matrix = new int[3][4];  // 3 Zeilen, 4 Spalten
+  
+  Zugriff:
+  matrix[0][0] = 1;   // Zeile 0, Spalte 0
+  matrix[2][3] = 9;   // Zeile 2, Spalte 3
+
+  Literal:
+  int[][] matrix = {
+      {1, 2, 3},
+      {4, 5, 6},
+      {7, 8, 9}
+  };
+
+Durchlaufen mit verschachtelten Schleifen:
+  for (int i = 0; i < matrix.length; i++) {          // Zeilen
+      for (int j = 0; j < matrix[i].length; j++) {  // Spalten
+          System.out.print(matrix[i][j] + " ");
+      }
+      System.out.println();
+  }
+
+  Mit for-each:
+  for (int[] zeile : matrix) {
+      for (int wert : zeile) {
+          System.out.print(wert + " ");
+      }
+      System.out.println();
+  }
+
+Jagged Arrays (unregelmäßig):
+  int[][] dreieck = new int[3][];   // nur Zeilenanzahl festlegen
+  dreieck[0] = new int[1];         // erste Zeile: 1 Element
+  dreieck[1] = new int[2];         // zweite Zeile: 2 Elemente
+  dreieck[2] = new int[3];         // dritte Zeile: 3 Elemente
+
+  // oder:
+  int[][] dreieck = {{1}, {2, 3}, {4, 5, 6}};
+
+------------------------------------------------------------------------
+5.5  Arrays und Methoden
+------------------------------------------------------------------------
+
+Arrays werden als Referenz übergeben — Änderungen in der Methode
+betreffen das ORIGINAL:
+  static void verdopple(int[] arr) {
+      for (int i = 0; i < arr.length; i++) {
+          arr[i] *= 2;
+      }
+  }
+
+  int[] zahlen = {1, 2, 3};
+  verdopple(zahlen);
+  // zahlen ist jetzt {2, 4, 6}!
+
+Array als Rückgabewert:
+  static int[] erzeugeFibonacci(int n) {
+      int[] fib = new int[n];
+      fib[0] = 0;
+      fib[1] = 1;
+      for (int i = 2; i < n; i++) {
+          fib[i] = fib[i-1] + fib[i-2];
+      }
+      return fib;
+  }
+
+Varargs — variable Anzahl von Argumenten (intern auch ein Array):
+  static int summe(int... zahlen) {
+      int s = 0;
+      for (int z : zahlen) s += z;
+      return s;
+  }
+
+  summe(1, 2, 3)        → 6
+  summe(1, 2, 3, 4, 5)  → 15
+  summe()               → 0
+  
+  int[] arr = {1, 2, 3};
+  summe(arr);           → auch das funktioniert
+
+  Varargs muss das LETZTE Parameter sein.
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Schreibe Statistik.java:
+- Erstelle ein Array mit 10 beliebigen int-Zahlen (selbst ausgedacht)
+- Berechne und gib aus: Minimum, Maximum, Summe, Durchschnitt
+- Sortiere das Array und gib es sortiert aus
+- Prüfe ob 42 im Array enthalten ist (binarySearch oder eigene Suche)
+- Schreibe eine Methode int[] filter(int[] arr, int grenze) die alle
+  Zahlen > grenze als neues Array zurückgibt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Methoden — Wiederverwendbare Code-Einheiten
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Methoden deklarieren — alle Teile erklärt
+------------------------------------------------------------------------
+
+Vollständige Syntax:
+  modifikator rückgabetyp methodenname(parametertyp parameter, ...) {
+      // Körper
+      return wert;
+  }
+
+Beispiel:
+  public static double berechneKreisfläche(double radius) {
+      return Math.PI * radius * radius;
+  }
+
+Bestandteile:
+  public         → Zugriffsmodifikator (öffentlich sichtbar)
+                   Mögliche Werte: public, private, protected, (kein Modifikator)
+  static         → gehört zur Klasse, nicht zu einem Instanzobjekt
+                   (In main-ähnlichen Kontexten ohne Objekte nötig)
+  double         → Rückgabetyp
+                   Wenn nichts zurückgegeben wird: void
+  berechneKreis... → Methodenname: camelCase Konvention
+  (double radius)  → Parameter: Typ + Name, mehrere mit Komma
+
+void-Methoden (geben nichts zurück):
+  public static void grüsse(String name) {
+      System.out.println("Hallo, " + name + "!");
+      // kein return nötig, aber return; (ohne Wert) ist erlaubt
+  }
+
+Methode aufrufen:
+  double fläche = berechneKreisfläche(5.0);
+  grüsse("Anna");
+
+------------------------------------------------------------------------
+6.2  Parameter — Wert vs. Referenz
+------------------------------------------------------------------------
+
+Primitive Typen werden per WERT übergeben (Pass by Value):
+  static void addiere10(int x) {
+      x += 10;  // nur die lokale Kopie wird verändert!
+  }
+
+  int zahl = 5;
+  addiere10(zahl);
+  System.out.println(zahl);  // immer noch 5!
+
+Objekte werden PER REFERENZ übergeben (eigentlich: die Referenz wird per Wert übergeben):
+  static void setzeNull(int[] arr) {
+      arr[0] = 0;  // verändert das ORIGINAL-Array
+  }
+
+  static void neuesArray(int[] arr) {
+      arr = new int[5];  // NUR lokale Referenz wird geändert, Original unberührt!
+  }
+
+  int[] zahlen = {1, 2, 3};
+  setzeNull(zahlen);
+  // zahlen[0] ist jetzt 0 — Original wurde verändert!
+
+  neuesArray(zahlen);
+  // zahlen zeigt immer noch auf {0, 2, 3} — arr = new int[] hat nur lokal gewirkt
+
+------------------------------------------------------------------------
+6.3  Methoden-Overloading (Überladen)
+------------------------------------------------------------------------
+
+Mehrere Methoden mit gleichem Namen aber unterschiedlichen Parametern:
+  static int addiere(int a, int b) {
+      return a + b;
+  }
+
+  static double addiere(double a, double b) {
+      return a + b;
+  }
+
+  static int addiere(int a, int b, int c) {
+      return a + b + c;
+  }
+
+  addiere(3, 4)       → 7 (erste Methode)
+  addiere(1.5, 2.5)   → 4.0 (zweite Methode)
+  addiere(1, 2, 3)    → 6 (dritte Methode)
+
+  Der Compiler wählt die passende Methode anhand der Parametertypen.
+  Das nennt man statisches Dispatch (zur Compile-Zeit).
+
+  Overloading ist erlaubt, wenn sich Parameter unterscheiden in:
+  - Anzahl der Parameter
+  - Typen der Parameter
+  - Reihenfolge der Typen (int, double) vs. (double, int)
+
+  NICHT ausreichend: nur der Rückgabetyp ist verschieden!
+
+------------------------------------------------------------------------
+6.4  Rekursion
+------------------------------------------------------------------------
+
+Eine Methode die sich selbst aufruft:
+  static int fakultät(int n) {
+      if (n <= 1) return 1;           // Basisfall — PFLICHT!
+      return n * fakultät(n - 1);     // rekursiver Fall
+  }
+
+  fakultät(5) = 5 * fakultät(4)
+              = 5 * 4 * fakultät(3)
+              = 5 * 4 * 3 * fakultät(2)
+              = 5 * 4 * 3 * 2 * fakultät(1)
+              = 5 * 4 * 3 * 2 * 1
+              = 120
+
+Fibonacci rekursiv:
+  static int fibonacci(int n) {
+      if (n <= 1) return n;
+      return fibonacci(n - 1) + fibonacci(n - 2);
+  }
+
+  ABER: Sehr ineffizient! fibonacci(50) berechnet fibonacci(1) über
+  10^10 mal. Für große n besser iterativ oder mit Memoization.
+
+Stack Overflow — zu viele Rekursionsebenen:
+  Java hat einen begrenzten Call Stack. Zu tiefe Rekursion führt zu
+  java.lang.StackOverflowError. Standardtiefe: ca. 500-1000 Ebenen.
+
+  Endrekursion (Tail Recursion): Java optimiert sie NICHT automatisch,
+  anders als Sprachen wie Scala oder Haskell. Also im Zweifel iterativ.
+
+------------------------------------------------------------------------
+6.5  Lokale Variablen und Scope (Geltungsbereich)
+------------------------------------------------------------------------
+
+Scope = der Bereich, in dem eine Variable sichtbar und benutzbar ist.
+
+  public static void test() {
+      int x = 10;           // Scope: die ganze Methode test()
+      
+      if (x > 5) {
+          int y = 20;       // Scope: nur innerhalb dieser if-Klammern
+          System.out.println(x + y);  // OK
+      }
+      
+      System.out.println(y); // COMPILE-FEHLER: y ist hier nicht sichtbar!
+      
+      for (int i = 0; i < 3; i++) {
+          // i ist nur im for-Block sichtbar
+      }
+      
+      // i ist hier nicht sichtbar
+  }
+
+Variable-Shadowing (eine Variable überdeckt eine gleichnamige):
+  int x = 5;
+  if (true) {
+      int x = 10; // COMPILE-FEHLER in Java! Keine Shadowing in verschachtelten
+                  // Blöcken innerhalb derselben Methode
+  }
+
+  ABER: Felder einer Klasse können von lokalen Variablen überdeckt werden:
+  class Beispiel {
+      int x = 5;           // Instanzfeld
+      void methode() {
+          int x = 10;      // lokale Variable überdeckt das Feld!
+          System.out.println(x);      // 10 (lokale Variable)
+          System.out.println(this.x); // 5 (Instanzfeld über this)
+      }
+  }
+
+------------------------------------------------------------------------
+6.6  Scanner — Benutzereingaben lesen
+------------------------------------------------------------------------
+
+import java.util.Scanner;
+
+Scanner sc = new Scanner(System.in);
+
+Methoden:
+  sc.nextInt()      → liest nächste ganze Zahl
+  sc.nextDouble()   → liest nächste Dezimalzahl (Achtung: Locale! Komma oder Punkt?)
+  sc.nextLine()     → liest eine ganze Zeile (inkl. Leerzeichen)
+  sc.next()         → liest nächstes Wort (bis Whitespace)
+  sc.nextBoolean()  → liest "true" oder "false"
+  sc.hasNext()      → gibt es noch Eingabe?
+  sc.hasNextInt()   → ist die nächste Eingabe eine ganze Zahl?
+
+Problem nextInt() + nextLine() — häufige Falle:
+  int zahl = sc.nextInt();   // liest "42" — aber "\n" bleibt im Puffer!
+  String zeile = sc.nextLine();  // liest sofort das "\n" → leerer String!
+  
+  Lösung: sc.nextLine() nach nextInt/nextDouble aufrufen um "\n" zu leeren:
+  int zahl = sc.nextInt();
+  sc.nextLine();             // "\n" wegwerfen
+  String zeile = sc.nextLine();  // jetzt klappt es
+
+Am Ende schließen:
+  sc.close();    // gibt Ressource frei (für gute Praxis)
+
+Locale-Problem bei nextDouble():
+  Auf deutschen Systemen erwartet nextDouble() "3,14" mit Komma!
+  Für portablen Code:
+  Scanner sc = new Scanner(System.in).useLocale(Locale.US);
+  // dann akzeptiert er "3.14" mit Punkt
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Schreibe TaschenrechnerMitMethoden.java:
+- Schreibe separate Methoden: add, subtract, multiply, divide, modulo
+  (alle mit zwei double-Parametern, divide mit Prüfung auf Division durch 0)
+- Eine Methode istPrimzahl(int n) → boolean
+- Eine Methode grössterGemeinsamerTeiler(int a, int b) (Euklidischer Algorithmus)
+- main: Lies mit Scanner zwei Zahlen und eine Operation ein (+,-,*,/,%)
+  und gib das Ergebnis aus. Dann zeige ob beide Zahlen Primzahlen sind.
+--------------------------------------------------------------------------------
+
+================================================================================
+ENDE TEIL 1
+================================================================================
+
+Weiter in Teil 2:
+  Modul 7:  Klassen und Objekte — OOP-Einstieg
+  Modul 8:  Konstruktoren, this, static
+  Modul 9:  Vererbung und Polymorphismus
+  Modul 10: Interfaces und abstrakte Klassen
+  Modul 11: Enums und Records
+  Modul 12: Generics
+
+================================================================================

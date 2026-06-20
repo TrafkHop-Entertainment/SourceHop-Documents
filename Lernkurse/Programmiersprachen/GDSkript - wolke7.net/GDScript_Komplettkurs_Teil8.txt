@@ -1,0 +1,1040 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 8 von 9)
+================================================================================
+
+Voraussetzung: Teil 1-7 abgeschlossen. Physik-Grundkenntnisse aus Teil 2
+(RigidBodies, Joints, PhysicsServer) werden hier vertieft.
+
+Dieses Kapitel simuliert die Welt selbst: Ragdoll-Physik, Aerodynamik,
+Wettersysteme, Splitscreen und fortgeschrittene Physik-Interaktionen.
+
+
+################################################################################
+TEIL 8 - SIMULATION UND PHYSIK-TIEFE
+################################################################################
+
+
+================================================================================
+MODUL 33: Ragdoll-Physik
+================================================================================
+
+------------------------------------------------------------------------
+33.1  Grundaufbau eines Ragdolls
+------------------------------------------------------------------------
+
+Ein Ragdoll besteht aus RigidBody3D-Nodes (Koerperteile) die per Joints
+verbunden sind. Im normalen Betrieb steuert die Animation die Bones --
+wenn der Charakter "schlapp macht", uebernimmt die Physik.
+
+Szenen-Aufbau:
+  RagdollRoot (Node3D)
+  |- Huefte      (RigidBody3D + CollisionShape3D)
+  |- Ruecken     (RigidBody3D + CollisionShape3D)
+  |- Kopf        (RigidBody3D + CollisionShape3D)
+  |- OberarmL/R  (RigidBody3D + CollisionShape3D)
+  |- UnterarmL/R (RigidBody3D + CollisionShape3D)
+  |- OberschL/R  (RigidBody3D + CollisionShape3D)
+  |- UnterschL/R (RigidBody3D + CollisionShape3D)
+  |- HuefteRuecken  (Generic6DOFJoint3D)
+  |- RueckenKopf    (ConeTwistJoint3D)
+  |- ... (alle Gelenke)
+
+------------------------------------------------------------------------
+33.2  Joints konfigurieren
+------------------------------------------------------------------------
+
+  # Schultergelenk (sehr beweglich):
+  func schulter_joint(rb_a: RigidBody3D, rb_b: RigidBody3D) -> ConeTwistJoint3D:
+      var joint := ConeTwistJoint3D.new()
+      add_child(joint)
+      joint.global_position = (rb_a.global_position + rb_b.global_position) * 0.5
+      joint.node_a = rb_a.get_path()
+      joint.node_b = rb_b.get_path()
+      joint.set_param(ConeTwistJoint3D.PARAM_SWING_SPAN,  deg_to_rad(100.0))
+      joint.set_param(ConeTwistJoint3D.PARAM_TWIST_SPAN,  deg_to_rad(60.0))
+      joint.set_param(ConeTwistJoint3D.PARAM_SOFTNESS,    0.8)
+      joint.set_param(ConeTwistJoint3D.PARAM_RELAXATION,  1.0)
+      return joint
+
+  # Knie (nur eine Achse -- Scharnier):
+  func knie_joint(rb_a: RigidBody3D, rb_b: RigidBody3D) -> HingeJoint3D:
+      var joint := HingeJoint3D.new()
+      add_child(joint)
+      joint.global_position = (rb_a.global_position + rb_b.global_position) * 0.5
+      joint.node_a = rb_a.get_path()
+      joint.node_b = rb_b.get_path()
+      joint.set_param(HingeJoint3D.PARAM_LIMIT_LOWER, deg_to_rad(0.0))
+      joint.set_param(HingeJoint3D.PARAM_LIMIT_UPPER, deg_to_rad(150.0))
+      joint.set_flag(HingeJoint3D.FLAG_USE_LIMIT, true)
+      return joint
+
+------------------------------------------------------------------------
+33.3  Animation und Ragdoll umschalten
+------------------------------------------------------------------------
+
+  extends Node3D
+
+  var ist_ragdoll: bool = false
+  var koerperteile: Dictionary = {}   # bone_name -> RigidBody3D
+
+  @onready var skeleton: Skeleton3D = $CharacterMesh/Skeleton3D
+  @onready var anim: AnimationPlayer = $AnimationPlayer
+
+  func ragdoll_an() -> void:
+      if ist_ragdoll:
+          return
+      ist_ragdoll = true
+      anim.stop()
+
+      # Aktuelle Bone-Posen auf RigidBodies uebertragen:
+      for bone_name in koerperteile:
+          var rb: RigidBody3D = koerperteile[bone_name]
+          var bone_idx: int = skeleton.find_bone(bone_name)
+          if bone_idx < 0:
+              continue
+          var bone_global := skeleton.global_transform * skeleton.get_bone_global_pose(bone_idx)
+          rb.global_transform = bone_global
+          rb.freeze = false
+
+  func ragdoll_aus() -> void:
+      if not ist_ragdoll:
+          return
+      ist_ragdoll = false
+      for bone_name in koerperteile:
+          koerperteile[bone_name].freeze = true
+      anim.play("idle", 0.4)   # sanft einblenden
+
+  func _physics_process(_delta: float) -> void:
+      if not ist_ragdoll:
+          return
+      # RigidBody-Posen zurueck auf Skeleton schreiben:
+      for bone_name in koerperteile:
+          var rb: RigidBody3D = koerperteile[bone_name]
+          var bone_idx: int = skeleton.find_bone(bone_name)
+          if bone_idx < 0:
+              continue
+          var lokal := skeleton.global_transform.inverse() * rb.global_transform
+          skeleton.set_bone_global_pose_override(bone_idx, lokal, 1.0, true)
+
+------------------------------------------------------------------------
+33.4  Human: Fall Flat -- wackelige Arm-Steuerung
+------------------------------------------------------------------------
+
+Das Besondere an HFF: der Spieler-Torso ist ein normaler CharacterBody3D,
+aber die Arme sind RigidBodies die per PD-Controller (Proportional-Derivative)
+zu einer Zielpose gezwungen werden -- das ergibt den wackeligen Look.
+
+  extends RigidBody3D   # Ein Arm
+
+  @export var ziel_position: Vector3 = Vector3.ZERO
+  @export var ziel_rotation: Quaternion = Quaternion.IDENTITY
+
+  # PD-Controller-Parameter:
+  @export var kraft: float    = 200.0
+  @export var daempfung: float = 20.0
+  @export var dreh_kraft: float = 50.0
+  @export var dreh_daempfung: float = 5.0
+
+  func _physics_process(delta: float) -> void:
+      # Lineare Kraft zur Zielposition:
+      var pos_fehler: Vector3 = ziel_position - global_position
+      var vel_fehler: Vector3 = -linear_velocity
+      var lineare_kraft: Vector3 = pos_fehler * kraft + vel_fehler * daempfung
+      apply_central_force(lineare_kraft)
+
+      # Drehkraft zur Zielrotation:
+      var aktuelle_quat := Quaternion(global_transform.basis)
+      var dreh_fehler_quat: Quaternion = ziel_rotation * aktuelle_quat.inverse()
+      # Quaternion -> Achse+Winkel fuer Kraftanwendung:
+      var achse: Vector3 = Vector3.ZERO
+      var winkel: float = 0.0
+      if dreh_fehler_quat.w < 1.0:
+          achse = Vector3(dreh_fehler_quat.x, dreh_fehler_quat.y, dreh_fehler_quat.z).normalized()
+          winkel = 2.0 * acos(clamp(dreh_fehler_quat.w, -1.0, 1.0))
+      var dreh_fehler: Vector3 = achse * winkel
+      var dreh_k: Vector3 = dreh_fehler * dreh_kraft - angular_velocity * dreh_daempfung
+      apply_torque(dreh_k)
+
+  # Zielposition kommt vom Spieler-Input (z.B. Maus oder Controller):
+  # Der Spieler "zieht" den Arm zu einem Punkt, der Arm folgt wackelig nach.
+
+------------------------------------------------------------------------
+33.5  Greifen und Klettern
+------------------------------------------------------------------------
+
+  extends Node3D   # Greif-System
+
+  @export var greif_reichweite: float = 1.2
+  @export var greif_kraft: float = 500.0
+
+  var gegriffenes_objekt: RigidBody3D = null
+  var greif_joint: Generic6DOFJoint3D = null
+  var greif_anker: Node3D   # Leerer Node am Hand-Ende
+
+  func greifen_versuchen() -> void:
+      var space := get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(
+          greif_anker.global_position,
+          greif_anker.global_position + (-greif_anker.global_transform.basis.z) * greif_reichweite
+      )
+      var treffer := space.intersect_ray(query)
+      if not treffer or not treffer["collider"] is RigidBody3D:
+          return
+
+      gegriffenes_objekt = treffer["collider"] as RigidBody3D
+
+      # Joint zwischen Hand-Anker und Objekt:
+      greif_joint = Generic6DOFJoint3D.new()
+      add_child(greif_joint)
+      greif_joint.global_position = treffer["position"]
+      greif_joint.node_a = greif_anker.get_path()
+      greif_joint.node_b = gegriffenes_objekt.get_path()
+      # Alle Freiheitsgrade sperren (Objekt fest in Hand):
+      for achse in range(3):
+          greif_joint.set_linear_limit_softness(achse, 0.9)
+
+  func loslassen() -> void:
+      if greif_joint:
+          greif_joint.queue_free()
+          greif_joint = null
+      gegriffenes_objekt = null
+
+--------------------------------------------------------------------------------
+UEBUNG 33:
+1. Baue einen vollstaendigen Ragdoll mit 10 Koerperteilen und passenden Joints.
+2. Implementiere den Umschalter Animation/Ragdoll -- Charakter faellt bei
+   Treffer schlaff und steht nach 3 Sekunden wieder auf.
+3. Baue einen PD-Controller-Arm: Arm folgt der Mausposition wackelig nach.
+4. Implementiere einfaches Greifen: Spieler kann RigidBodies aufheben.
+5. Bonus: Trete-Mechanik -- Spieler gibt einem Ragdoll einen Impuls,
+   Ragdoll fliegt physikalisch korrekt weg und landet auf dem Boden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 34: Aerodynamik und Flugsimulation
+================================================================================
+
+------------------------------------------------------------------------
+34.1  Grundprinzip der Aerodynamik in Godot
+------------------------------------------------------------------------
+
+Echte Aerodynamik basiert auf vier Kraeften:
+  Auftrieb   (Lift)     -- haelt das Flugzeug oben
+  Widerstand (Drag)     -- bremst die Vorwaertsbewegung
+  Schub      (Thrust)   -- treibt vorwaerts
+  Schwerkraft           -- zieht runter
+
+Wir simulieren diese per RigidBody3D mit manuellen Kraeften.
+
+  extends RigidBody3D
+
+  @export var max_schub: float      = 15000.0   # Newton
+  @export var fluegel_flaeche: float = 16.0      # m^2
+  @export var auftrieb_koeff: float  = 1.2
+  @export var widerstand_koeff: float = 0.03
+  @export var luft_dichte: float    = 1.225      # kg/m^3 auf Meereshoehe
+
+  var schub_prozent: float = 0.0   # 0.0 bis 1.0
+
+  func _physics_process(delta: float) -> void:
+      var v: Vector3   = linear_velocity
+      var speed: float = v.length()
+
+      # Lokale Vorwaerts-Richtung des Flugzeugs:
+      var vorwaerts: Vector3 = -global_transform.basis.z
+      var oben: Vector3     =  global_transform.basis.y
+
+      # Anstellwinkel (Angle of Attack) -- Winkel zwischen Geschwindigkeit und Fluegel:
+      var anstellwinkel: float = 0.0
+      if speed > 0.1:
+          anstellwinkel = vorwaerts.angle_to(v.normalized())
+
+      # 1. SCHUB
+      var schub_kraft: Vector3 = vorwaerts * schub_prozent * max_schub
+      apply_central_force(schub_kraft)
+
+      # 2. AUFTRIEB (steigt mit Geschwindigkeit^2 und Anstellwinkel)
+      var auftrieb_staerke: float = 0.5 * luft_dichte * speed * speed * fluegel_flaeche * auftrieb_koeff
+      auftrieb_staerke *= sin(anstellwinkel * 2.0)   # Sinuskurve beim Anstellwinkel
+      var auftrieb_kraft: Vector3 = oben * auftrieb_staerke
+      apply_central_force(auftrieb_kraft)
+
+      # 3. LUFTWIDERSTAND (entgegen der Bewegungsrichtung, quadratisch)
+      if speed > 0.1:
+          var drag_staerke: float = 0.5 * luft_dichte * speed * speed * fluegel_flaeche * widerstand_koeff
+          var drag_kraft: Vector3 = -v.normalized() * drag_staerke
+          apply_central_force(drag_kraft)
+
+      # 4. RUDERKRAEFTE (Steuerung durch Drehmom ente):
+      steuereingabe_verarbeiten(delta)
+
+  func steuereingabe_verarbeiten(delta: float) -> void:
+      var pitch_input := Input.get_axis("pitch_up", "pitch_down")
+      var roll_input  := Input.get_axis("roll_left", "roll_right")
+      var yaw_input   := Input.get_axis("yaw_left", "yaw_right")
+
+      var steuer_kraft: float = linear_velocity.length() * 2.0
+
+      # Pitch (Nickbewegung -- Nase hoch/runter):
+      apply_torque(global_transform.basis.x * pitch_input * steuer_kraft)
+      # Roll (Rollbewegung -- Fluegel neigen):
+      apply_torque(global_transform.basis.z * roll_input * steuer_kraft)
+      # Yaw (Gierbewegung -- Nase links/rechts):
+      apply_torque(global_transform.basis.y * yaw_input * steuer_kraft * 0.3)
+
+      # Schub:
+      if Input.is_action_pressed("throttle_up"):
+          schub_prozent = min(schub_prozent + delta * 0.5, 1.0)
+      if Input.is_action_pressed("throttle_down"):
+          schub_prozent = max(schub_prozent - delta * 0.5, 0.0)
+
+------------------------------------------------------------------------
+34.2  Hoehenabhaengige Luftdichte
+------------------------------------------------------------------------
+
+In echten Spielen aendert sich die Luftdichte mit der Hoehe -- Flugzeuge
+brauchen mehr Schub in grosser Hoehe.
+
+  func luft_dichte_bei_hoehe(hoehe_meter: float) -> float:
+      # ISA-Standardatmosphaere (vereinfacht):
+      # Bis 11000m: lineare Abnahme
+      var temperatur: float = 288.15 - 0.0065 * min(hoehe_meter, 11000.0)
+      var druck_verhaeltnis: float = pow(temperatur / 288.15, 5.2561)
+      return 1.225 * druck_verhaeltnis
+
+  func _physics_process(delta: float) -> void:
+      luft_dichte = luft_dichte_bei_hoehe(global_position.y)
+      # ... Rest wie oben
+
+------------------------------------------------------------------------
+34.3  Helikopter-Physik
+------------------------------------------------------------------------
+
+Helikopter unterscheiden sich fundamental: kein Fluegel-Auftrieb,
+stattdessen direkter Auftrieb durch den Rotor.
+
+  extends RigidBody3D
+
+  @export var max_schub_oben: float = 12000.0
+  @export var torque_staerke: float = 3000.0
+
+  var kollektiv: float = 0.0    # 0-1: Rotor-Pitch = Auftrieb
+  var zyklisch_x: float = 0.0   # Links/Rechts neigen
+  var zyklisch_z: float = 0.0   # Vor/Zurueck neigen
+  var heckrotor: float = 0.0    # Gegentorque
+
+  func _physics_process(delta: float) -> void:
+      eingabe_lesen(delta)
+
+      var oben: Vector3 = global_transform.basis.y
+      var speed: float = linear_velocity.length()
+
+      # Hauptrotor-Auftrieb:
+      var auftrieb: Vector3 = oben * kollektiv * max_schub_oben
+      apply_central_force(auftrieb)
+
+      # Luftwiderstand:
+      apply_central_force(-linear_velocity * 2.0 * mass)
+
+      # Zyklischer Input (neigt den Helikopter):
+      apply_torque(global_transform.basis.x * zyklisch_z * torque_staerke)
+      apply_torque(global_transform.basis.z * -zyklisch_x * torque_staerke)
+
+      # Heckrotor verhindert Eigenrotation durch Hauptrotor:
+      apply_torque(global_transform.basis.y * heckrotor * torque_staerke * 0.5)
+      # Ohne Heckrotor dreht sich der Koerper (realistisch!):
+      apply_torque(global_transform.basis.y * -kollektiv * 200.0)
+
+      # Stabilisierungs-Daempfung (macht Heli leichter zu fliegen):
+      angular_velocity = angular_velocity.lerp(Vector3.ZERO, delta * 2.0)
+
+  func eingabe_lesen(delta: float) -> void:
+      kollektiv = clamp(kollektiv + Input.get_axis("collective_down", "collective_up") * delta, 0.0, 1.0)
+      zyklisch_x = Input.get_axis("cyclic_left", "cyclic_right")
+      zyklisch_z = Input.get_axis("cyclic_back", "cyclic_forward")
+      heckrotor  = Input.get_axis("pedal_left", "pedal_right")
+
+------------------------------------------------------------------------
+34.4  Kfz-Physik mit VehicleBody3D
+------------------------------------------------------------------------
+
+Godot hat einen eingebauten VehicleBody3D fuer Fahrzeuge:
+
+  extends VehicleBody3D
+
+  @export var max_lenkwinkel: float = 0.4   # Radiant
+  @export var motor_kraft: float    = 150.0
+  @export var brems_kraft: float    = 8.0
+
+  @onready var vorderrad_l: VehicleWheel3D = $VorderradL
+  @onready var vorderrad_r: VehicleWheel3D = $VorderradR
+  @onready var hinterrad_l: VehicleWheel3D = $HinterradL
+  @onready var hinterrad_r: VehicleWheel3D = $HinterradR
+
+  func _ready() -> void:
+      # Vorderraeder lenken, Hinterraeder treiben:
+      vorderrad_l.use_as_steering = true
+      vorderrad_r.use_as_steering = true
+      hinterrad_l.use_as_traction = true
+      hinterrad_r.use_as_traction = true
+
+  func _physics_process(_delta: float) -> void:
+      var gas    := Input.get_axis("brake", "accelerate")
+      var lenken := Input.get_axis("steer_right", "steer_left")
+
+      engine_force = gas * motor_kraft
+      steering = lerp(steering, lenken * max_lenkwinkel, 0.2)
+      brake = motor_kraft * 0.1 if gas == 0.0 else 0.0
+
+      if Input.is_action_pressed("handbrake"):
+          hinterrad_l.wheel_friction_slip = 0.4
+          hinterrad_r.wheel_friction_slip = 0.4
+      else:
+          hinterrad_l.wheel_friction_slip = 10.5
+          hinterrad_r.wheel_friction_slip = 10.5
+
+--------------------------------------------------------------------------------
+UEBUNG 34:
+1. Baue ein einfaches Flugzeug (MeshInstance3D + RigidBody3D).
+   Implementiere Schub, Auftrieb, Widerstand, Steuerflaechen.
+2. Fuege hoehenabhaengige Luftdichte hinzu. Steige auf 5000m und beobachte
+   wie das Flugzeug mehr Schub benoetigt.
+3. Implementiere einen Helikopter mit Kollektiv + Zyklisch + Heckrotor.
+   Ohne Heckrotor-Input soll er sich eigenstaendig drehen.
+4. Baue ein Fahrzeug mit VehicleBody3D (4 Raeder, Lenkung, Motor, Handbremse).
+5. Bonus: Schaden durch Kollision -- wenn Aufprallgeschwindigkeit > 30m/s,
+   wird der Spieler verwundet (Ragdoll aktivieren).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 35: Wettersimulation
+================================================================================
+
+------------------------------------------------------------------------
+35.1  Wetter-System-Architektur
+------------------------------------------------------------------------
+
+Ein Wettersystem in einem Open-World-Spiel hat mehrere Schichten:
+
+  WettermanagerAutoload  -- steuert globalen Wetter-Zustand
+  WetterEffekte (Node3D) -- visuelle Darstellung (Regen, Schnee, Nebel)
+  WetterAudio            -- Wind, Regen-Sound
+  WetterPhysik           -- Windkraft auf RigidBodies, Spieler-Verlangsamung
+  WetterLicht            -- Bewoelkung, Blitze, Lichtaenderung
+
+  # WeatherManager.gd (Autoload)
+  extends Node
+
+  signal wetter_geaendert(neues_wetter: WetterZustand)
+
+  enum WetterZustand { SONNIG, BEWOELKT, REGEN, GEWITTER, SCHNEE, NEBEL }
+
+  var aktuelles_wetter: WetterZustand = WetterZustand.SONNIG
+  var ziel_wetter: WetterZustand      = WetterZustand.SONNIG
+  var uebergangs_fortschritt: float   = 1.0   # 0=anfang, 1=fertig
+
+  @export var wetter_wechsel_intervall: float = 120.0   # 2 Minuten
+  var wechsel_timer: float = 0.0
+
+  func _process(delta: float) -> void:
+      wechsel_timer += delta
+      if wechsel_timer >= wetter_wechsel_intervall:
+          wechsel_timer = 0.0
+          naechstes_wetter_wuerfeln()
+
+      if uebergangs_fortschritt < 1.0:
+          uebergangs_fortschritt = min(uebergangs_fortschritt + delta / 30.0, 1.0)
+          uebergang_anwenden()
+
+  func naechstes_wetter_wuerfeln() -> void:
+      var gewichte: Dictionary = {
+          WetterZustand.SONNIG:   40,
+          WetterZustand.BEWOELKT: 25,
+          WetterZustand.REGEN:    20,
+          WetterZustand.GEWITTER: 5,
+          WetterZustand.SCHNEE:   8,
+          WetterZustand.NEBEL:    2
+      }
+      # Wetter das gerade laeuft, weniger wahrscheinlich:
+      gewichte[aktuelles_wetter] = max(gewichte[aktuelles_wetter] - 30, 5)
+
+      var gesamt: int = 0
+      for w in gewichte:
+          gesamt += gewichte[w]
+      var wuerfel := randi_range(0, gesamt - 1)
+      var akkum: int = 0
+      for w in gewichte:
+          akkum += gewichte[w]
+          if wuerfel < akkum:
+              wetter_setzen(w)
+              break
+
+  func wetter_setzen(neues_wetter: WetterZustand) -> void:
+      if neues_wetter == aktuelles_wetter:
+          return
+      aktuelles_wetter = neues_wetter
+      uebergangs_fortschritt = 0.0
+      wetter_geaendert.emit(neues_wetter)
+
+  func uebergang_anwenden() -> void:
+      var t: float = uebergangs_fortschritt
+      # Alle angemeldeten WetterEffekte informieren:
+      get_tree().call_group("wetter_empfaenger", "wetter_uebergang", aktuelles_wetter, t)
+
+------------------------------------------------------------------------
+35.2  Regen-Partikel
+------------------------------------------------------------------------
+
+  extends GPUParticles3D   # Regen-Node
+
+  var aktiv: bool = false
+  var intensitaet: float = 0.0   # 0.0 bis 1.0
+
+  func _ready() -> void:
+      add_to_group("wetter_empfaenger")
+      # Partikel-Material konfigurieren:
+      var mat := ParticleProcessMaterial.new()
+      mat.direction          = Vector3(0.2, -1.0, 0.0)   # Leichter Schraegregen
+      mat.spread             = 5.0
+      mat.initial_velocity_min = 15.0
+      mat.initial_velocity_max = 20.0
+      mat.gravity            = Vector3(0, -9.8, 0)
+      mat.scale_min          = 0.05
+      mat.scale_max          = 0.08
+      mat.color              = Color(0.6, 0.7, 0.9, 0.6)
+      process_material = mat
+
+      # Grosse Box oberhalb des Spielers:
+      var form := BoxShape3D.new()
+      form.size = Vector3(40, 1, 40)
+      visibility_aabb = AABB(Vector3(-20, 0, -20), Vector3(40, 60, 40))
+
+  func wetter_uebergang(wetter: int, t: float) -> void:
+      match wetter:
+          WeatherManager.WetterZustand.REGEN:
+              intensitaet = t
+          WeatherManager.WetterZustand.GEWITTER:
+              intensitaet = t
+          _:
+              intensitaet = 1.0 - t   # Ausblenden
+
+      emitting = intensitaet > 0.01
+      amount = int(5000 * intensitaet)
+      modulate.a = intensitaet
+
+  func _process(_delta: float) -> void:
+      if not emitting:
+          return
+      # Partikel-System dem Spieler folgen lassen:
+      var spieler: Node3D = get_tree().get_first_node_in_group("spieler")
+      if spieler:
+          global_position = spieler.global_position + Vector3(0, 30, 0)
+
+------------------------------------------------------------------------
+35.3  Windkraft auf RigidBodies
+------------------------------------------------------------------------
+
+  # WindZone.gd -- aehnlich wie Unity's WindZone
+  extends Area3D
+
+  @export var wind_richtung: Vector3 = Vector3(1, 0, 0)
+  @export var wind_staerke: float    = 10.0
+  @export var turbulenz: float       = 0.3
+  @export var baumeinfluss: bool     = true
+
+  var noise := FastNoiseLite.new()
+
+  func _ready() -> void:
+      noise.seed = randi()
+      noise.frequency = 0.5
+
+  func _physics_process(delta: float) -> void:
+      var zeit: float = Time.get_ticks_msec() / 1000.0
+      for body in get_overlapping_bodies():
+          if body is RigidBody3D:
+              # Turbulenz durch Noise:
+              var turb: Vector3 = Vector3(
+                  noise.get_noise_2d(zeit, body.global_position.x) * turbulenz,
+                  noise.get_noise_2d(zeit + 100, body.global_position.y) * turbulenz * 0.3,
+                  noise.get_noise_2d(zeit + 200, body.global_position.z) * turbulenz
+              )
+              var kraft: Vector3 = (wind_richtung.normalized() + turb) * wind_staerke * body.mass
+              body.apply_central_force(kraft)
+
+  # Auf CharacterBody3D:
+  func wind_auf_spieler(spieler: CharacterBody2D, delta: float) -> void:
+      spieler.velocity += wind_richtung.normalized() * wind_staerke * 0.3 * delta
+
+------------------------------------------------------------------------
+35.4  Blitze
+------------------------------------------------------------------------
+
+  extends Node3D
+
+  @export var blitz_intervall_min: float = 5.0
+  @export var blitz_intervall_max: float = 20.0
+  @onready var direktional: DirectionalLight3D = get_parent().get_node("Sonne")
+  @onready var donner_audio: AudioStreamPlayer = $DonnerAudio
+
+  var ist_gewitter: bool = false
+
+  func _ready() -> void:
+      add_to_group("wetter_empfaenger")
+
+  func wetter_uebergang(wetter: int, t: float) -> void:
+      ist_gewitter = (wetter == WeatherManager.WetterZustand.GEWITTER) and t > 0.5
+
+  func blitz_abspielen() -> void:
+      # Kurzen Helligkeitsblitz:
+      var tween := create_tween()
+      tween.tween_property(direktional, "light_energy", 8.0, 0.05)
+      tween.tween_property(direktional, "light_energy", 0.2, 0.1)
+      tween.tween_property(direktional, "light_energy", 6.0, 0.05)
+      tween.tween_property(direktional, "light_energy", 0.2, 0.3)
+
+      # Donner mit Verzoegerung (Schall braucht Zeit):
+      var distanz := randf_range(200, 2000)
+      var verzoegerung := distanz / 340.0   # Schallgeschwindigkeit
+      await get_tree().create_timer(verzoegerung).timeout
+      donner_audio.volume_db = linear_to_db(1.0 - distanz / 3000.0)
+      donner_audio.play()
+
+  func _process(_delta: float) -> void:
+      if not ist_gewitter:
+          return
+      if randf() < _delta / randf_range(blitz_intervall_min, blitz_intervall_max):
+          blitz_abspielen()
+
+------------------------------------------------------------------------
+35.5  Nebel und Sichtweiten-Dynamik
+------------------------------------------------------------------------
+
+  extends Node   # NebelsSystem
+
+  @onready var env: Environment = $WorldEnvironment.environment
+
+  func _ready() -> void:
+      add_to_group("wetter_empfaenger")
+      env = env.duplicate()
+      $WorldEnvironment.environment = env
+
+  func wetter_uebergang(wetter: int, t: float) -> void:
+      match wetter:
+          WeatherManager.WetterZustand.NEBEL:
+              env.fog_enabled = true
+              env.fog_density = lerp(0.0, 0.08, t)
+              env.fog_light_color = Color(0.8, 0.85, 0.9)
+          WeatherManager.WetterZustand.REGEN:
+              env.fog_enabled = true
+              env.fog_density = lerp(0.0, 0.02, t)
+          WeatherManager.WetterZustand.GEWITTER:
+              env.fog_density = lerp(0.0, 0.03, t)
+              env.fog_light_color = Color(0.4, 0.4, 0.5)
+          WeatherManager.WetterZustand.SONNIG:
+              env.fog_density = lerp(env.fog_density, 0.0, t)
+              if t >= 1.0:
+                  env.fog_enabled = false
+
+--------------------------------------------------------------------------------
+UEBUNG 35:
+1. Implementiere den WeatherManager Autoload mit 5 Wetter-Zustaenden
+   und gewichtetem Zufalls-Wechsel alle 2 Minuten.
+2. Baue das Regen-Partikel-System das dem Spieler folgt.
+3. Implementiere eine WindZone die RigidBodies wegblaest.
+4. Baue das Blitz-System mit korrekter Donner-Verzoegerung (Schall = 340m/s).
+5. Bonus: Verbinde das Wetter mit dem Tag/Nacht-System (Modul 20):
+   Gewitter nur nachts, Schnee nur wenn Temperatur < 0 (= hohe Hoehe).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 36: Splitscreen und lokaler Multiplayer
+================================================================================
+
+------------------------------------------------------------------------
+36.1  Viewport-Splitscreen-Architektur
+------------------------------------------------------------------------
+
+Splitscreen funktioniert in Godot mit mehreren SubViewports --
+jeder Spieler bekommt seinen eigenen Viewport mit eigener Kamera.
+
+Szenen-Aufbau fuer 2-Spieler-Splitscreen:
+  HauptSzene
+  |- SubViewportContainer (HBoxContainer)
+  |   |- LeftContainer  (SubViewportContainer)
+  |   |   |- SubViewport1
+  |   |       |- Camera3D (Spieler 1)
+  |   |- RightContainer (SubViewportContainer)
+  |       |- SubViewport2
+  |           |- Camera3D (Spieler 2)
+  |- SpielWelt (die echte 3D-Welt, geteilt von beiden Viewports)
+
+  # WICHTIG: Die Spielwelt existiert NUR EINMAL. Beide Viewports
+  # rendern dieselbe Welt, nur aus verschiedenen Perspektiven.
+
+------------------------------------------------------------------------
+36.2  Splitscreen per Code aufbauen
+------------------------------------------------------------------------
+
+  extends Node
+
+  @export var spieler_szene: PackedScene
+  @export var kamera_abstand: float = 5.0
+
+  var spieler_viewports: Array[SubViewport] = []
+  var spieler_nodes: Array[CharacterBody3D] = []
+
+  func splitscreen_aufbauen(anzahl_spieler: int) -> void:
+      var container := HBoxContainer.new()
+      container.set_anchors_preset(Control.PRESET_FULL_RECT)
+      add_child(container)
+
+      for i in range(anzahl_spieler):
+          var viewport_container := SubViewportContainer.new()
+          viewport_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+          viewport_container.stretch = true
+          container.add_child(viewport_container)
+
+          var viewport := SubViewport.new()
+          viewport.own_world_3d = false   # TEILT die Spielwelt!
+          viewport.audio_listener_enable_3d = (i == 0)   # Nur Spieler 1 Audio-Listener
+          viewport_container.add_child(viewport)
+          spieler_viewports.append(viewport)
+
+          # Spieler und Kamera spawnen:
+          var spieler: CharacterBody3D = spieler_szene.instantiate()
+          $SpielWelt.add_child(spieler)
+          spieler.global_position = Vector3(i * 3.0, 1, 0)
+          spieler.spieler_index = i
+          spieler_nodes.append(spieler)
+
+          # Eigene Kamera fuer diesen Spieler im Viewport:
+          var kamera := Camera3D.new()
+          viewport.add_child(kamera)
+          kamera.current = true
+          # Kamera-Script das dem Spieler folgt:
+          var cam_script := SplitscreenKamera.new()
+          cam_script.ziel = spieler
+          kamera.add_child(cam_script)
+
+------------------------------------------------------------------------
+36.3  Kamera pro Spieler
+------------------------------------------------------------------------
+
+  extends Camera3D   # SplitscreenKamera
+
+  @export var ziel: Node3D
+  @export var abstand: Vector3 = Vector3(0, 5, 8)
+  @export var glaettung: float = 5.0
+
+  func _physics_process(delta: float) -> void:
+      if not is_instance_valid(ziel):
+          return
+      var ziel_pos: Vector3 = ziel.global_position + abstand
+      global_position = global_position.lerp(ziel_pos, glaettung * delta)
+      look_at(ziel.global_position, Vector3.UP)
+
+------------------------------------------------------------------------
+36.4  Controller-Zuordnung fuer Splitscreen
+------------------------------------------------------------------------
+
+  # Spieler-Skript: weiss welcher Controller ihm gehoert
+  extends CharacterBody3D
+
+  @export var spieler_index: int = 0   # 0 = Spieler 1, 1 = Spieler 2
+
+  func _physics_process(delta: float) -> void:
+      var richtung := Vector2.ZERO
+
+      if spieler_index == 0:
+          # Spieler 1: Tastatur ODER Controller 0
+          richtung.x = Input.get_axis("p1_links", "p1_rechts")
+          richtung.y = Input.get_axis("p1_oben",  "p1_unten")
+          # Controller-Fallback:
+          if richtung == Vector2.ZERO:
+              richtung.x = Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+              richtung.y = Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+      elif spieler_index == 1:
+          # Spieler 2: Controller 1
+          richtung.x = Input.get_joy_axis(1, JOY_AXIS_LEFT_X)
+          richtung.y = Input.get_joy_axis(1, JOY_AXIS_LEFT_Y)
+
+      # Deadzone:
+      if richtung.length() < 0.15:
+          richtung = Vector2.ZERO
+
+      var dir3d := (transform.basis * Vector3(richtung.x, 0, richtung.y)).normalized()
+      velocity.x = dir3d.x * 5.0
+      velocity.z = dir3d.z * 5.0
+      if not is_on_floor():
+          velocity.y -= 9.8 * delta
+      if Input.is_joy_button_pressed(spieler_index, JOY_BUTTON_A) and is_on_floor():
+          velocity.y = 6.0
+      move_and_slide()
+
+------------------------------------------------------------------------
+36.5  Dynamisches Splitscreen (Naehe-basiert)
+------------------------------------------------------------------------
+
+Wenn Spieler nah sind: ein Viewport. Wenn weit: Splitscreen.
+
+  extends Node
+
+  @onready var left_container: SubViewportContainer  = $Links
+  @onready var right_container: SubViewportContainer = $Rechts
+  @onready var full_container: SubViewportContainer  = $Voll
+
+  const SPLIT_DISTANZ: float = 20.0
+
+  func _process(_delta: float) -> void:
+      if spieler_nodes.size() < 2:
+          return
+      var distanz: float = spieler_nodes[0].global_position.distance_to(
+          spieler_nodes[1].global_position
+      )
+
+      var soll_gesplit: bool = distanz > SPLIT_DISTANZ
+      if soll_gesplit != ist_gesplit:
+          ist_gesplit = soll_gesplit
+          left_container.visible  = soll_gesplit
+          right_container.visible = soll_gesplit
+          full_container.visible  = not soll_gesplit
+
+--------------------------------------------------------------------------------
+UEBUNG 36:
+1. Baue einen 2-Spieler-Splitscreen (nebeneinander).
+   Jeder Spieler bekommt einen eigenen Controller.
+2. Erweitere auf 4-Spieler (2x2-Grid, vier SubViewports).
+3. Implementiere dynamisches Splitscreen: unter 15m Abstand = gemeinsam,
+   darueber = geteilt (mit sanftem Blend-Uebergang).
+4. Lokal-Multiplayer-Minispiel: Beide Spieler muessen gleichzeitig einen
+   Knopf druecken um eine Tuer zu oeffnen.
+5. Bonus: Splitscreen-Rennspiel -- zwei Spieler, eigene Kamera,
+   gemeinsame Strecke, Rundenzeit-Vergleich.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 37: Fortgeschrittene Physik-Interaktionen
+================================================================================
+
+------------------------------------------------------------------------
+37.1  Soft Bodies -- weiche Koerper
+------------------------------------------------------------------------
+
+Godot 4 unterstuetzt SoftBody3D -- deformierbare Mesh-Objekte.
+
+  extends SoftBody3D
+
+  func _ready() -> void:
+      # Simulation-Qualitaet:
+      simulation_precision = 5    # 1-10, hoeher = genauer aber langsamer
+      total_mass = 2.0
+      linear_stiffness = 0.8      # 0-1, wie steif ist das Material?
+      pressure_coefficient = 0.0  # > 0 = aufgeblasenes Objekt (Ballon!)
+      damping_coefficient = 0.01  # Luftwiderstand/Energieverlust
+
+  # Einzelne Punkte des Soft Body fixieren (z.B. aufgehaengtes Tuch):
+  func eckpunkte_fixieren() -> void:
+      # Punkt 0 und 1 fixieren:
+      set_point_pinned(0, true)
+      set_point_pinned(1, true)
+
+  # Kraft auf einzelne Punkte:
+  func wind_kraft_anwenden(punkt_idx: int, kraft: Vector3) -> void:
+      # Direkt ueber PhysicsServer (kein direktes API am SoftBody):
+      PhysicsServer3D.soft_body_apply_impulse(get_rid(), punkt_idx, kraft)
+
+------------------------------------------------------------------------
+37.2  Fluid-Simulation (vereinfacht per Partikel)
+------------------------------------------------------------------------
+
+Echte Fluid-Simulation (SPH, Lattice Boltzmann) ist sehr komplex und
+GPU-intensiv. Fuer Indie-Spiele: vereinfachte Wasser-Simulation mit
+RigidBodies + Auftriebskraft.
+
+  extends Area3D   # Wasser-Volume
+
+  @export var dichte: float       = 1000.0   # kg/m^3 (Wasser)
+  @export var viskositaet: float  = 2.0      # Daempfung in Wasser
+  @export var stroemung: Vector3  = Vector3(0.5, 0, 0)   # Stroemungsrichtung
+
+  func _physics_process(delta: float) -> void:
+      for body in get_overlapping_bodies():
+          if not body is RigidBody3D:
+              continue
+          var rb := body as RigidBody3D
+
+          # Eintauchtiefe schaetzen (AABB-basiert, vereinfacht):
+          var body_aabb: AABB = rb.get_node("CollisionShape3D").shape.get_debug_mesh().get_aabb()
+          var body_oben:  float = rb.global_position.y + body_aabb.size.y * 0.5
+          var body_unten: float = rb.global_position.y - body_aabb.size.y * 0.5
+          var wasser_oben: float = global_position.y + $CollisionShape3D.shape.size.y * 0.5
+
+          var eintauch_verhaeltnis: float = clamp(
+              (wasser_oben - body_unten) / body_aabb.size.y, 0.0, 1.0
+          )
+          if eintauch_verhaeltnis <= 0.0:
+              continue
+
+          # Archimedes: Auftrieb = Dichte * g * eingetauchtes_Volumen:
+          var volumen: float = body_aabb.size.x * body_aabb.size.y * body_aabb.size.z * eintauch_verhaeltnis
+          var auftrieb: Vector3 = Vector3.UP * dichte * 9.8 * volumen
+          rb.apply_central_force(auftrieb)
+
+          # Viskositaets-Daempfung:
+          rb.apply_central_force(-rb.linear_velocity  * viskositaet * eintauch_verhaeltnis)
+          rb.apply_torque(-rb.angular_velocity * viskositaet * 0.5 * eintauch_verhaeltnis)
+
+          # Stroemungskraft:
+          rb.apply_central_force(stroemung * dichte * eintauch_verhaeltnis)
+
+------------------------------------------------------------------------
+37.3  Constraint-basierte Physik -- Seile und Ketten
+------------------------------------------------------------------------
+
+  extends Node3D   # Seil-System
+
+  @export var ankerpunkt: Node3D    # Oben befestigt
+  @export var anzahl_glieder: int = 10
+  @export var glied_laenge: float = 0.3
+  @export var masse_pro_glied: float = 0.1
+
+  var glieder: Array[RigidBody3D] = []
+
+  func seil_aufbauen() -> void:
+      var vorheriges: RigidBody3D = null
+      for i in range(anzahl_glieder):
+          var glied := RigidBody3D.new()
+          glied.mass = masse_pro_glied
+          var col := CollisionShape3D.new()
+          var form := CapsuleShape3D.new()
+          form.radius = 0.04
+          form.height = glied_laenge
+          col.shape = form
+          glied.add_child(col)
+          add_child(glied)
+
+          glied.global_position = ankerpunkt.global_position + Vector3(0, -i * glied_laenge, 0)
+          glieder.append(glied)
+
+          # Gelenk zum vorherigen:
+          var joint := Generic6DOFJoint3D.new()
+          add_child(joint)
+          joint.global_position = glied.global_position + Vector3(0, glied_laenge * 0.5, 0)
+
+          if vorheriges:
+              joint.node_a = vorheriges.get_path()
+              joint.node_b = glied.get_path()
+          else:
+              # Erstes Glied: am Ankerpunkt befestigen:
+              ankerpunkt.freeze = true
+              joint.node_a = ankerpunkt.get_path()
+              joint.node_b = glied.get_path()
+
+          # Nur Rotation erlauben, keine Translation:
+          for achse in range(3):
+              joint.set_flag_x(Generic6DOFJoint3D.FLAG_ENABLE_LINEAR_LIMIT, true)
+              joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+              joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+
+          vorheriges = glied
+
+------------------------------------------------------------------------
+37.4  Physik-Callbacks und Kollisions-Events
+------------------------------------------------------------------------
+
+  extends RigidBody3D
+
+  signal aufprall(staerke: float, normal: Vector3)
+
+  func _ready() -> void:
+      contact_monitor = true
+      max_contacts_reported = 4
+
+  func _physics_process(_delta: float) -> void:
+      for i in range(get_contact_count()):
+          var impulse: Vector3 = get_contact_impulse(i)
+          var staerke: float = impulse.length()
+          if staerke > 5.0:   # Nur signifikante Aufpralle
+              var normal: Vector3 = get_contact_local_normal(i)
+              aufprall.emit(staerke, normal)
+              aufprall_effekt(get_contact_local_position(i), staerke)
+
+  func aufprall_effekt(pos: Vector3, staerke: float) -> void:
+      # Partikel:
+      if staerke > 20.0:
+          $AufprallPartikel.global_position = pos
+          $AufprallPartikel.restart()
+      # Sound:
+      $AufprallAudio.volume_db = linear_to_db(clamp(staerke / 50.0, 0.0, 1.0))
+      $AufprallAudio.play()
+      # Schaden wenn zu hart:
+      if staerke > 30.0 and has_method("schaden_nehmen"):
+          schaden_nehmen(int(staerke * 0.5))
+
+--------------------------------------------------------------------------------
+UEBUNG 37:
+1. Erstelle ein Tuch (SoftBody3D, 2 obere Punkte fixiert).
+   Wende Windkraft an. Tuch soll sich realistisch bewegen.
+2. Baue ein Wasser-Volume (Area3D) mit Auftrieb.
+   Wirf RigidBodies ins Wasser -- leichte sollen schwimmen, schwere sinken.
+3. Baue ein Seil aus 12 Gliedern mit Joints.
+   Einen Kasten haengt am unteren Ende. Spieler kann das Seil anstossen.
+4. Implementiere Aufprall-Events: Auto prallt gegen Wand ->
+   Lautstaerke-basierter Sound + Partikel + Schaden wenn zu schnell.
+5. Bonus: Kombiniere Seil + Physik-Callback:
+   Wenn Spieler zu stark am Seil zieht (Seil-Spannung > Grenzwert), reisst es.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 8
+################################################################################
+
+RAGDOLL:
+  RigidBody3D + CollisionShape3D pro Koerperteil
+  ConeTwistJoint3D  -- Schulter, Huefte (viele Freiheitsgrade)
+  HingeJoint3D      -- Knie, Ellbogen (eine Achse)
+  ragdoll_an(): freeze=false + Bone-Posen uebertragen
+  ragdoll_aus(): freeze=true + Animation einblenden
+  _physics_process: RB-Poses -> skeleton.set_bone_global_pose_override()
+
+PD-CONTROLLER (wackelige Bewegung):
+  var fehler := ziel_pos - global_position
+  apply_central_force(fehler * kraft - linear_velocity * daempfung)
+
+AERODYNAMIK (RigidBody3D):
+  auftrieb = 0.5 * luft_dichte * v^2 * flaeche * koeff
+  drag     = 0.5 * luft_dichte * v^2 * flaeche * drag_koeff (entgegen v)
+  schub    = vorwaerts * schub_prozent * max_schub
+  steuerung: apply_torque() an lokalen Achsen
+
+WETTER:
+  WeatherManager Autoload mit Enum + gewichtetem Zufalls-Wechsel
+  Gruppe "wetter_empfaenger" + wetter_uebergang(typ, t) aufrufen
+  Regen: GPUParticles3D folgt Spieler
+  Blitz: DirectionalLight blinkt + Donner verzoegert (340m/s)
+  Nebel: env.fog_density per Tween animieren
+
+SPLITSCREEN:
+  SubViewport mit own_world_3d = false  -- teilt die Spielwelt
+  Eine Kamera pro Viewport
+  spieler_index -> welcher Controller/welche Tasten
+  Dynamisch: Distanz pruefen -> ein/zwei Viewports umschalten
+
+SOFTBODY:
+  SoftBody3D: linear_stiffness, pressure_coefficient, damping_coefficient
+  set_point_pinned(idx, true) -- Punkt fixieren
+
+AUFTRIEB (Wasser):
+  Area3D ueberwacht RigidBodies
+  Auftrieb = dichte * g * eingetauchtes_Volumen
+  Daempfung = -linear_velocity * viskositaet * eintauch_verhaeltnis
+
+================================================================================
+ENDE TEIL 8 -- Weiter mit Teil 9: Werkzeuge, Workflows, Level-Editor,
+  geile Menues, Plugins, Export und Abschlussprojekte
+================================================================================

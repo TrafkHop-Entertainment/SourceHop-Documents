@@ -1,0 +1,2433 @@
+================================================================================
+C# — VOLLSTÄNDIGER PROFIKURS v2
+Von Grundlagen bis zu ASP.NET, Reflection und modernem C#
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+Alle Rechte vorbehalten. Erstellt mit Unterstützung von Claude (Anthropic).
+================================================================================
+
+C# ist Microsofts Flaggschiff-Sprache — modern, typsicher, ausdrucksstark.
+Du wirst nach diesem Kurs ALLES in C# können: OOP, Generics, LINQ, async/await,
+Reflection, ASP.NET, Entity Framework und mehr.
+
+Struktur:
+  TEIL 1 — Grundlagen (Module 1–4)
+  TEIL 2 — OOP & Typsystem (Module 5–7)
+  TEIL 3 — Delegates, Events, LINQ (Module 8–10)
+  TEIL 4 — Async & Threading (Modul 11)
+  TEIL 5 — Fortgeschrittene Features (Module 12–14)
+  TEIL 6 — Praxis: ASP.NET, EF, Testing (Module 15–17)
+  SCHNELLREFERENZ
+
+================================================================================
+TEIL 1 — GRUNDLAGEN
+================================================================================
+
+================================================================================
+MODUL 1: Das .NET Ökosystem und C# Grundlagen
+================================================================================
+
+------------------------------------------------------------------------
+1.1  .NET — Was ist das?
+------------------------------------------------------------------------
+
+.NET ist Microsofts Open-Source-Plattform für C#, F# und VB.NET:
+
+  .NET-Versionen:
+    .NET Framework    Windows-only (Legacy, 1.0–4.8)
+    .NET Core         Cross-platform (ab 2016, dann einfach ".NET")
+    .NET 5/6/7/8/9   Aktuell, cross-platform, high performance
+
+  CLR (Common Language Runtime):
+    → JIT-Kompilierung: IL-Code → Maschinencode
+    → Garbage Collector (GC): automatische Speicherverwaltung
+    → Type Safety: kein Pointer-Chaos wie in C
+    → Exception Handling
+
+  IL (Intermediate Language):
+    C#-Code → Compiler → IL-Code (.dll/.exe)
+               → JIT → Maschinencode → Ausführung
+    
+    IL kann mit ildasm.exe oder sharplab.io angeschaut werden!
+
+  NuGet:
+    Paket-Manager für .NET (wie npm für JavaScript, pip für Python)
+    dotnet add package Newtonsoft.Json
+    dotnet add package Microsoft.EntityFrameworkCore
+
+  Projekt erstellen:
+    dotnet new console -n MeinProgramm   → Console-App
+    dotnet new webapi  -n MeineApi       → Web API
+    dotnet new blazor  -n MeineWeb       → Blazor Web App
+    dotnet new xunit   -n MeineTests     → xUnit Test-Projekt
+    dotnet build                          → kompilieren
+    dotnet run                            → kompilieren und starten
+    dotnet test                           → Tests ausführen
+    dotnet publish -c Release             → Release-Build
+
+C#-Versionen:
+  C# 6     2015: String Interpolation, null-conditional
+  C# 7     2017: out variables, Tupel, Pattern Matching basics
+  C# 8     2019: nullable reference types, switch expressions, using declarations
+  C# 9     2020: Records, init-only, top-level statements, with
+  C# 10    2022: File-scoped namespaces, global using, record structs
+  C# 11    2023: required members, raw string literals, generic attributes
+  C# 12    2024: Primary constructors, collection expressions, default lambda params
+  C# 13    2025: params collections, partial properties, lock object
+
+------------------------------------------------------------------------
+1.2  Aufbau eines C#-Programms
+------------------------------------------------------------------------
+
+Modernes C# (C# 9+, Top-level statements):
+  // Program.cs — keine Klasse, kein Main nötig!
+  using System;
+  
+  Console.WriteLine("Hallo Welt!");
+  int x = 42;
+  Console.WriteLine($"x = {x}");
+
+Klassisches C#:
+  using System;
+  using System.Collections.Generic;
+  
+  namespace MeinProgramm
+  {
+      class Program
+      {
+          static void Main(string[] args)
+          {
+              Console.WriteLine("Hallo Welt!");
+              Console.ReadLine();
+          }
+      }
+  }
+
+Moderne Schreibweise (C# 10+):
+  // File-scoped namespace:
+  namespace MeinProgramm;
+  
+  // Kein namespace-Block mehr nötig!
+  class Program { ... }
+
+Global Usings (C# 10+):
+  // GlobalUsings.cs — gilt für ALLE Dateien im Projekt:
+  global using System;
+  global using System.Collections.Generic;
+  global using System.Linq;
+  // Oder in .csproj: <ImplicitUsings>enable</ImplicitUsings>
+
+------------------------------------------------------------------------
+1.3  Datentypen in C#
+------------------------------------------------------------------------
+
+VALUE TYPES (Werttypen — auf dem Stack):
+  bool      true / false
+  byte      8-Bit, 0–255
+  sbyte     8-Bit, -128–127
+  short     16-Bit, -32768–32767
+  ushort    16-Bit, 0–65535
+  int       32-Bit, -2.147.483.648–2.147.483.647
+  uint      32-Bit unsigned
+  long      64-Bit, ±9.2×10^18
+  ulong     64-Bit unsigned
+  float     32-Bit IEEE 754 (~7 Stellen)
+  double    64-Bit IEEE 754 (~15 Stellen)
+  decimal   128-Bit Dezimal, genau für Geld! (kein Floating-Point-Fehler)
+  char      16-Bit Unicode-Zeichen (UTF-16)
+
+  // Literals:
+  int    i = 1_000_000;     // Unterstrich als Trennzeichen (C# 7)
+  double d = 3.14;
+  float  f = 3.14f;
+  decimal m = 19.99m;       // m-Suffix für decimal! PFLICHT!
+  long   l = 1234567890L;
+  char   c = 'A';
+  bool   b = true;
+
+REFERENCE TYPES (Referenztypen — auf dem Heap):
+  string    Unveränderlicher Unicode-String
+  object    Basis aller Typen (Wurzel der Typ-Hierarchie)
+  dynamic   Dynamischer Typ (Typ zur Laufzeit bestimmt)
+  Klassen, Interfaces, Arrays, Delegates
+
+  // string ist IMMUTABLE:
+  string s = "Hallo";
+  s += " Welt";   // erstellt NEUEN String! "Hallo" bleibt im Speicher
+  
+  // Für viele Änderungen: StringBuilder nutzen!
+  var sb = new System.Text.StringBuilder();
+  sb.Append("Hallo");
+  sb.Append(" Welt");
+  string result = sb.ToString();
+
+NULLABLE TYPES (C# 8+):
+  int? nullable_int = null;    // Value Type der null sein kann
+  int? n = 42;
+  
+  if (n.HasValue) Console.WriteLine(n.Value);
+  Console.WriteLine(n ?? -1);   // -1 wenn null (null-coalescing)
+  n?.ToString();                 // null wenn n null (null-conditional)
+  
+  // Nullable Reference Types (C# 8+, sehr wichtig!):
+  // <Nullable>enable</Nullable> in .csproj
+  string? name = null;           // darf null sein
+  string email = "a@b.c";       // darf NICHT null sein
+  
+  int laenge = name?.Length ?? 0;   // sicher
+
+var — Type Inference:
+  var liste = new List<int>();        // Compiler weiß: List<int>
+  var zahl = 42;                      // int
+  var text = "Hallo";                 // string
+  var obj = new { Name="Max", Alter=17 };  // anonymer Typ
+  
+  // var MUSS bei Deklaration initialisiert werden!
+  // var x;   → FEHLER
+
+------------------------------------------------------------------------
+1.4  Strings in C# (vollständig)
+------------------------------------------------------------------------
+
+String Interpolation (C# 6+):
+  string name = "Max";
+  int alter = 17;
+  
+  string msg = $"Hallo {name}, du bist {alter} Jahre alt.";
+  string math = $"2 + 3 = {2 + 3}";
+  string format = $"Pi ≈ {Math.PI:F4}";    // 3.1416
+  string padded = $"{name,10}";             // rechtsbündig in 10 Zeichen
+  string padded2 = $"{name,-10}";           // linksbündig
+
+  // Bedingte Formatierung:
+  string typ = $"Du bist {(alter >= 18 ? "volljährig" : "minderjährig")}.";
+
+Raw String Literals (C# 11+):
+  string json = """
+      {
+          "name": "Max",
+          "alter": 17
+      }
+      """;   // kein Escape nötig!
+  
+  string path = """C:\Users\Max\Dokumente""";   // Backslashes literal
+
+Wichtige String-Methoden:
+  s.Length                    Länge
+  s.ToUpper() / ToLower()     Groß/Klein
+  s.Trim() / TrimStart() / TrimEnd()   Whitespace entfernen
+  s.Contains("abc")           Enthält?
+  s.StartsWith("A")           Beginnt mit?
+  s.EndsWith("!")             Endet mit?
+  s.IndexOf("x")              Position (oder -1)
+  s.LastIndexOf("x")          Letzte Position
+  s.Substring(start, len)     Teilstring (veraltet)
+  s[start..end]               Range-Operator (C# 8)
+  s.Replace("alt", "neu")     Ersetzen
+  s.Split(',')                Aufteilen
+  s.Split(',', StringSplitOptions.RemoveEmptyEntries)
+  s.Join(", ", array)         Zusammenfügen (static!)
+  string.Join(", ", new[]{"A","B","C"})
+  s.PadLeft(10) / PadRight(10, '-')    Auffüllen
+  s.Remove(start, len)        Entfernen
+  s.Insert(pos, "text")       Einfügen
+  s.Format("{0} = {1}", key, wert)   (veraltet, lieber $"...")
+  s.IsNullOrEmpty(s)          null oder ""?
+  s.IsNullOrWhiteSpace(s)     null, "" oder nur Leerzeichen?
+  s.CompareTo("other")        Vergleich (-1/0/1)
+  s.Equals("other", StringComparison.OrdinalIgnoreCase)
+
+  // Effizienter Vergleich (kein ToLower/ToUpper!):
+  s.Equals("test", StringComparison.OrdinalIgnoreCase)
+
+  // String → Zahl:
+  int i = int.Parse("42");                    // Exception wenn ungültig
+  int.TryParse("42abc", out int n);           // sicher, false wenn ungültig
+  double d = double.Parse("3.14");
+  
+  // Zahl → String:
+  42.ToString("N0")    "42"
+  42.ToString("N2")    "42.00"
+  42.ToString("C")     "€42,00" (locale-abhängig)
+  42.ToString("X")     "2A" (Hex)
+  42.ToString("B")     "101010" (binär, .NET 8+)
+
+------------------------------------------------------------------------
+1.5  Kontrollfluss
+------------------------------------------------------------------------
+
+if / else:
+  if (alter >= 18) { /* ... */ }
+  else if (alter >= 16) { /* ... */ }
+  else { /* ... */ }
+  
+  // Einzeiler (nur wenn wirklich kurz):
+  int max = a > b ? a : b;
+
+switch (klassisch und modern):
+  // Klassisch:
+  switch (tag) {
+      case DayOfWeek.Monday: Console.WriteLine("Montag"); break;
+      case DayOfWeek.Saturday:
+      case DayOfWeek.Sunday: Console.WriteLine("Wochenende"); break;
+      default: break;
+  }
+  
+  // Switch Expression (C# 8+, bevorzugt!):
+  string name = tag switch {
+      DayOfWeek.Monday    => "Montag",
+      DayOfWeek.Saturday or DayOfWeek.Sunday => "Wochenende",
+      _ => "Werktag"   // default
+  };
+
+Pattern Matching (C# 7–12):
+  // Type Pattern:
+  object obj = "Hallo";
+  if (obj is string s) {   // s ist hier string
+      Console.WriteLine(s.Length);
+  }
+  
+  // Property Pattern (C# 8+):
+  if (person is { Name: "Max", Alter: > 16 }) {
+      Console.WriteLine("Max und über 16");
+  }
+  
+  // Switch mit Patterns:
+  string beschreibe(object obj) => obj switch {
+      int i when i < 0    => "Negative Zahl",
+      int i               => $"Zahl: {i}",
+      string s            => $"String: {s}",
+      null                => "null",
+      _                   => "Unbekannt"
+  };
+  
+  // List Pattern (C# 11+):
+  int[] arr = {1, 2, 3};
+  if (arr is [1, 2, 3]) Console.WriteLine("Genau diese drei");
+  if (arr is [1, ..])   Console.WriteLine("Beginnt mit 1");
+  if (arr is [_, 2, ..]) Console.WriteLine("Zweites Element ist 2");
+
+Schleifen:
+  for (int i = 0; i < 10; i++) { ... }
+  
+  while (bedingung) { ... }
+  
+  do { ... } while (bedingung);
+  
+  foreach (var item in kollektion) {
+      // Kann NICHT i++ oder Liste modifizieren!
+  }
+
+  // foreach auf Range (C# 8+):
+  foreach (var i in 1..10) { }   // NEIN! Range nicht direkt iterierbar
+  for (int i = 1; i < 10; i++) { }
+
+  // Enumerable.Range:
+  foreach (var i in Enumerable.Range(1, 9)) { }
+
+================================================================================
+MODUL 2: Arrays, Collections und Generics
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Arrays
+------------------------------------------------------------------------
+
+  int[] arr = new int[5];         // 5 Nullen
+  int[] arr2 = { 1, 2, 3, 4, 5 }; // Initialisierung
+  int[] arr3 = new int[] { 1, 2 };
+  
+  // Mehrdimensional:
+  int[,] matrix = new int[3, 4];        // 3×4 Matrix
+  matrix[0, 0] = 1;
+  int zeilen = matrix.GetLength(0);
+  int spalten = matrix.GetLength(1);
+  
+  // Jagged Arrays (Arrays von Arrays):
+  int[][] jagged = new int[3][];
+  jagged[0] = new int[] { 1, 2, 3 };
+  jagged[1] = new int[] { 4, 5 };     // unterschiedliche Längen!
+  
+  // Array-Methoden:
+  Array.Sort(arr);
+  Array.Reverse(arr);
+  Array.IndexOf(arr, 3);   // Position von 3
+  Array.Copy(src, dest, len);
+  
+  // Span<T> für performante Teilbereiche (C# 7.2+):
+  Span<int> span = arr.AsSpan(1, 3);   // Teilbereich, KEINE Kopie!
+  
+  // Index und Range (C# 8+):
+  arr[^1]        // letztes Element (wie arr[arr.Length-1])
+  arr[^2]        // vorletztes
+  arr[1..3]      // Index 1 bis 2 (exkl. 3)
+  arr[..3]       // Anfang bis 2
+  arr[2..]       // Index 2 bis Ende
+  arr[..]        // alles
+  
+  // In String auch:
+  string s = "Hallo Welt";
+  string sub = s[6..];    // "Welt"
+
+------------------------------------------------------------------------
+2.2  Generic Collections
+------------------------------------------------------------------------
+
+  using System.Collections.Generic;
+  
+  // List<T> — Dynamic Array:
+  var liste = new List<int> { 1, 2, 3 };
+  liste.Add(4);
+  liste.AddRange(new[] { 5, 6 });
+  liste.Insert(0, 0);        // an Position 0 einfügen
+  liste.Remove(3);           // ersten 3-er entfernen
+  liste.RemoveAt(0);         // Element an Index 0
+  liste.RemoveAll(x => x % 2 == 0);  // alle geraden entfernen
+  liste.Sort();
+  liste.Sort((a, b) => b.CompareTo(a));  // absteigend
+  liste.Contains(5);
+  liste.IndexOf(5);
+  liste.Count;               // Anzahl
+  liste.Capacity;            // allozierter Platz
+  liste[0];                  // Zugriff
+  liste.Find(x => x > 3);   // erstes Element > 3
+  liste.FindAll(x => x > 3); // alle > 3
+  
+  // Dictionary<K,V>:
+  var dict = new Dictionary<string, int> {
+      ["Max"]  = 17,
+      ["Anna"] = 16
+  };
+  dict["Tim"] = 18;
+  dict.TryAdd("Max", 99);   // nur wenn nicht vorhanden
+  
+  int n;
+  if (dict.TryGetValue("Max", out n)) {
+      Console.WriteLine(n);
+  }
+  int alter = dict.GetValueOrDefault("Unbekannt", -1);
+  
+  dict.ContainsKey("Anna");
+  dict.ContainsValue(17);
+  dict.Remove("Tim");
+  
+  foreach (var (key, wert) in dict) {   // Deconstruction
+      Console.WriteLine($"{key}: {wert}");
+  }
+  
+  // HashSet<T> — eindeutige Elemente:
+  var set = new HashSet<int> { 1, 2, 3 };
+  set.Add(2);              // ignoriert Duplikate
+  set.Contains(3);         // O(1)
+  set.UnionWith(other);    // Vereinigung
+  set.IntersectWith(other); // Schnittmenge
+  set.ExceptWith(other);   // Differenz
+  
+  // Queue<T> — FIFO:
+  var queue = new Queue<string>();
+  queue.Enqueue("Erster");
+  queue.Enqueue("Zweiter");
+  string vorderster = queue.Peek();    // anschauen ohne entfernen
+  string heraus = queue.Dequeue();    // herausnehmen
+  
+  // Stack<T> — LIFO:
+  var stack = new Stack<int>();
+  stack.Push(1); stack.Push(2); stack.Push(3);
+  int oben = stack.Peek();    // 3
+  int raus = stack.Pop();     // 3, Stack hat jetzt 1,2
+  
+  // SortedDictionary<K,V> — sortiert:
+  var sorted = new SortedDictionary<string, int>();
+  // Immer sortiert nach Key!
+  
+  // LinkedList<T>:
+  var ll = new LinkedList<int>();
+  ll.AddFirst(1);
+  ll.AddLast(3);
+  ll.AddBefore(ll.Last, 2);  // 2 vor letztem
+  
+  // PriorityQueue<T, TPriority> (.NET 6+):
+  var pq = new PriorityQueue<string, int>();
+  pq.Enqueue("Niedrig", 10);
+  pq.Enqueue("Hoch", 1);
+  pq.Enqueue("Mittel", 5);
+  string naechstes = pq.Dequeue();   // "Hoch" (niedrigste Priorität)
+
+------------------------------------------------------------------------
+2.3  Tuples und Value Tuples
+------------------------------------------------------------------------
+
+  // Tuple:
+  var t = (42, "Hallo", 3.14);
+  Console.WriteLine(t.Item1);   // 42 (unbenannt)
+  
+  // Benannte Tuple (C# 7+):
+  var person = (Name: "Max", Alter: 17);
+  Console.WriteLine(person.Name);   // Max
+  
+  // Als Rückgabewert:
+  (int Quotient, int Rest) dividiere(int a, int b) {
+      return (a / b, a % b);
+  }
+  var (q, r) = dividiere(17, 5);   // Deconstruction!
+  // q = 3, r = 2
+  
+  // Swap ohne temp:
+  (a, b) = (b, a);   // Tuple-Zuweisung!
+
+------------------------------------------------------------------------
+2.4  Generics (vollständig)
+------------------------------------------------------------------------
+
+  // Generische Klasse:
+  class Stapel<T> {
+      private List<T> elemente = new();
+      
+      public void Drauf(T element) => elemente.Add(element);
+      public T Runter() {
+          if (elemente.Count == 0) throw new InvalidOperationException("Leer!");
+          var top = elemente[^1];
+          elemente.RemoveAt(elemente.Count - 1);
+          return top;
+      }
+      public T Oben => elemente[^1];
+      public int Anzahl => elemente.Count;
+  }
+  
+  var intStapel = new Stapel<int>();
+  var strStapel = new Stapel<string>();
+
+Constraints (Einschränkungen):
+  // T muss IComparable implementieren:
+  T Maximum<T>(T a, T b) where T : IComparable<T> {
+      return a.CompareTo(b) >= 0 ? a : b;
+  }
+  
+  // Mehrere Constraints:
+  class Repository<T> where T : class, IEntity, new() {
+      // T muss: Referenztyp, IEntity implementieren, parameterloser Ctor
+  }
+  
+  // Alle möglichen Constraints:
+  where T : struct           T ist Value Type (kein null)
+  where T : class            T ist Reference Type
+  where T : notnull          T ist nicht nullable
+  where T : unmanaged        T enthält kein managed Speicher
+  where T : new()            T hat parameterlose Konstruktor
+  where T : BasisKlasse      T erbt von BasisKlasse
+  where T : IInterface       T implementiert Interface
+  where T : U                T ist U oder erbt davon
+
+Kovarianz und Kontravarianz:
+  // IEnumerable<T> ist kovariant (out T):
+  IEnumerable<string> strings = new List<string>();
+  IEnumerable<object> objects = strings;   // OK! string ist object
+  
+  // IComparer<T> ist kontravariant (in T):
+  IComparer<object> obj_comparer = ...;
+  IComparer<string> str_comparer = obj_comparer;  // OK!
+  
+  // Eigene kovariante Interface:
+  interface ILesbar<out T> { T Lese(); }
+  // Eigene kontravariante:
+  interface ISchreibbar<in T> { void Schreibe(T wert); }
+
+================================================================================
+TEIL 2 — OOP & TYPSYSTEM
+================================================================================
+
+================================================================================
+MODUL 3: Klassen, Structs, Interfaces
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Klassen (vollständig)
+------------------------------------------------------------------------
+
+  public class Person
+  {
+      // FELDER (Fields) — private, mit Unterstrich:
+      private string _name;
+      private int _alter;
+      private static int _anzahl = 0;   // static: gemeinsam für alle Instanzen
+      
+      // EIGENSCHAFTEN (Properties) — der C#-Weg:
+      public string Name
+      {
+          get => _name;
+          set => _name = value ?? throw new ArgumentNullException(nameof(value));
+      }
+      
+      // Auto-Property (kein Backing Field nötig):
+      public string Email { get; set; }
+      
+      // Read-Only Property:
+      public int Alter => _alter;   // nur Getter, Expression Body
+      
+      // Init-Only (C# 9+):
+      public string Geburtsort { get; init; }   // nur im Konstruktor/Init setzen
+      
+      // Computed Property:
+      public bool IstVolljährig => _alter >= 18;
+      
+      // Static Property:
+      public static int Anzahl => _anzahl;
+      
+      // KONSTRUKTOREN:
+      public Person(string name, int alter, string geburtsort = "Unbekannt")
+      {
+          Name = name;
+          _alter = alter;
+          Geburtsort = geburtsort;
+          _anzahl++;
+      }
+      
+      // Konstruktor-Chaining:
+      public Person(string name) : this(name, 0) { }
+      
+      // FINALIZER (Destruktor) — selten nötig!
+      ~Person()
+      {
+          _anzahl--;
+          // NUR für unmanaged Ressourcen!
+      }
+      
+      // METHODEN:
+      public string Vorstellen() => $"Ich bin {Name}, {_alter} Jahre alt.";
+      
+      // STATISCHE METHODE:
+      public static Person Erstelle(string name, int alter) => new(name, alter);
+      
+      // ÜBERSCHREIBEN von object-Methoden:
+      public override string ToString() => $"Person({Name}, {_alter})";
+      
+      public override bool Equals(object? obj) =>
+          obj is Person p && Name == p.Name && _alter == p._alter;
+      
+      public override int GetHashCode() => HashCode.Combine(Name, _alter);
+  }
+  
+  // Object-Initializer:
+  var p = new Person("Max", 17) { Email = "max@example.com" };
+  
+  // Primary Constructor (C# 12+):
+  class Punkt(double x, double y)
+  {
+      public double X { get; } = x;
+      public double Y { get; } = y;
+      public double Abstand => Math.Sqrt(X*X + Y*Y);
+  }
+
+------------------------------------------------------------------------
+3.2  Records (C# 9+)
+------------------------------------------------------------------------
+
+Records sind unveränderliche Daten mit wertbasierter Gleichheit:
+
+  // Record class (Referenztyp):
+  public record Person(string Name, int Alter);
+  
+  // Compiler generiert automatisch:
+  // - Konstruktor mit Parametern
+  // - Readonly Properties
+  // - ToString(), Equals(), GetHashCode() (wertbasiert!)
+  // - Deconstruct()
+  // - IEquatable<Person>
+  
+  var p1 = new Person("Max", 17);
+  var p2 = new Person("Max", 17);
+  
+  Console.WriteLine(p1 == p2);       // TRUE! (wertbasiert, nicht referenzbasiert)
+  Console.WriteLine(p1.Equals(p2));  // TRUE!
+  Console.WriteLine(p1);             // Person { Name = Max, Alter = 17 }
+  
+  // Deconstruction:
+  var (name, alter) = p1;
+  
+  // With-Expressions (Kopie mit Änderung):
+  var p3 = p1 with { Alter = 18 };   // neue Person, Alter geändert
+  
+  // Record Struct (Value Type, C# 10+):
+  public record struct Koordinate(double X, double Y);
+  
+  // Erweiterter Record:
+  public record Fahrzeug(string Marke, int Baujahr)
+  {
+      // Zusätzliche Properties:
+      public int Alter => DateTime.Now.Year - Baujahr;
+      
+      // Überschreiben:
+      public virtual bool Fahren() => true;
+  }
+  
+  public record ElektroFahrzeug(string Marke, int Baujahr, int Akkustand)
+      : Fahrzeug(Marke, Baujahr);
+
+------------------------------------------------------------------------
+3.3  Structs
+------------------------------------------------------------------------
+
+Structs sind VALUE TYPES — auf dem Stack, keine Vererbung:
+
+  public struct Punkt
+  {
+      public double X { get; }
+      public double Y { get; }
+      
+      public Punkt(double x, double y) { X = x; Y = y; }
+      
+      public double Abstand => Math.Sqrt(X*X + Y*Y);
+      
+      public static Punkt operator+(Punkt a, Punkt b) =>
+          new(a.X + b.X, a.Y + b.Y);
+      
+      public override string ToString() => $"({X}, {Y})";
+  }
+  
+  Punkt p = new(3.0, 4.0);
+  Punkt q = new(1.0, 1.0);
+  Punkt r = p + q;   // (4.0, 5.0)
+
+Readonly Struct (C# 7.2+):
+  public readonly struct ImmutablePunkt
+  {
+      public double X { get; init; }
+      public double Y { get; init; }
+      // Alle Methoden sind implizit readonly
+  }
+
+  // ref struct — nur auf Stack (kein Boxing, kein Heap):
+  // Wird für Span<T> benutzt!
+
+Wann Struct statt Klasse?
+  → Klein (≤ 4 Felder, ≤ ~16 Bytes)
+  → Unveränderlich
+  → Wird viel kopiert oder als Stack-Variable benutzt
+  → Beispiele: Punkt, Koordinate, RGB-Farbe, DateTime
+
+------------------------------------------------------------------------
+3.4  Interfaces (vollständig)
+------------------------------------------------------------------------
+
+  // Interface — Vertrag:
+  public interface IFahrzeug
+  {
+      // Abstrakte Members (kein Körper, muss implementiert werden):
+      string Marke { get; }
+      void Fahren();
+      
+      // Default Implementation (C# 8+):
+      virtual void Hupen() => Console.WriteLine("Huuup!");
+      
+      // Statische Members (C# 11+):
+      static string Kategorie => "Fahrzeug";
+  }
+  
+  // Implementierung:
+  public class Auto : IFahrzeug
+  {
+      public string Marke { get; init; }
+      
+      public Auto(string marke) => Marke = marke;
+      
+      public void Fahren() => Console.WriteLine($"{Marke} fährt");
+      
+      // Hupen() wird von Default-Implementierung bereitgestellt
+  }
+  
+  // Explizite Interface-Implementierung (bei Namenskonflikten):
+  public class Seltsam : IFahrzeug, IAnderes
+  {
+      void IFahrzeug.Fahren() => Console.WriteLine("Fahrzeug fahren");
+      void IAnderes.Fahren() => Console.WriteLine("Anderes fahren");
+      // Nur via Interface-Referenz abrufbar!
+  }
+
+Wichtige Standard-Interfaces:
+  IComparable<T>     CompareTo(T other) → Sortierung
+  IEquatable<T>      Equals(T other) → Gleichheit
+  IDisposable        Dispose() → Ressourcen freigeben (using!)
+  IEnumerable<T>     GetEnumerator() → foreach-Unterstützung
+  IEnumerator<T>     MoveNext(), Current, Reset()
+  ICloneable         Clone()
+  IFormattable       ToString(format, provider)
+
+IDisposable und using:
+  public class DateiLeser : IDisposable
+  {
+      private FileStream _stream;
+      private bool _disposed = false;
+      
+      public DateiLeser(string pfad)
+          => _stream = new FileStream(pfad, FileMode.Open);
+      
+      public void Dispose()
+      {
+          Dispose(true);
+          GC.SuppressFinalize(this);
+      }
+      
+      protected virtual void Dispose(bool disposing)
+      {
+          if (!_disposed) {
+              if (disposing) _stream?.Dispose();  // managed Ressourcen
+              // hier: unmanaged Ressourcen
+              _disposed = true;
+          }
+      }
+      
+      ~DateiLeser() => Dispose(false);  // Finalizer als Backup
+  }
+  
+  // using statement — Dispose wird automatisch aufgerufen:
+  using (var leser = new DateiLeser("datei.txt")) {
+      // leser.Dispose() wird am Ende garantiert aufgerufen!
+  }
+  
+  // Moderne using-Deklaration (C# 8+):
+  using var leser = new DateiLeser("datei.txt");
+  // Dispose() am Ende des Scopes
+
+------------------------------------------------------------------------
+3.5  Vererbung (vollständig)
+------------------------------------------------------------------------
+
+  public abstract class Tier
+  {
+      public string Name { get; }
+      
+      protected Tier(string name) => Name = name;
+      
+      // Abstract — MUSS überschrieben werden:
+      public abstract string Laute();
+      
+      // Virtual — KANN überschrieben werden:
+      public virtual void Atmen() => Console.WriteLine($"{Name} atmet");
+      
+      // Versiegelt — verhindert Überschreiben:
+      public sealed void Existieren() => Console.WriteLine($"{Name} existiert");
+  }
+  
+  public class Hund : Tier
+  {
+      public Hund(string name) : base(name) { }   // base() für Basis-Ctor!
+      
+      public override string Laute() => "Wuff!";
+      
+      public override void Atmen() {
+          base.Atmen();   // Basis-Implementierung aufrufen
+          Console.WriteLine("(Hunde schnüffeln dabei)");
+      }
+  }
+  
+  public sealed class Pudel : Hund   // sealed: kein Ableiten mehr!
+  {
+      public Pudel(string name) : base(name) { }
+      public override string Laute() => "Wufwuf!";
+  }
+
+  // Polymorphismus:
+  Tier[] tiere = { new Hund("Rex"), new Pudel("Karl") };
+  foreach (Tier t in tiere)
+      Console.WriteLine(t.Laute());   // "Wuff!" und "Wufwuf!"
+
+  // Type-Prüfung:
+  if (t is Hund h) { h.Holen(); }         // Pattern Matching
+  Hund h2 = t as Hund;                    // null wenn kein Hund
+  Hund h3 = (Hund)t;                      // Exception wenn kein Hund
+
+Boxing und Unboxing:
+  int i = 42;
+  object o = i;       // BOXING: Value Type → Heap-Objekt (Kopie!)
+  int j = (int)o;     // UNBOXING: Heap-Objekt → Value Type
+  
+  // Boxing ist TEUER! In Schleifen vermeiden.
+  // Generics vermeiden Boxing: List<int> statt ArrayList!
+
+================================================================================
+TEIL 3 — DELEGATES, EVENTS, LINQ
+================================================================================
+
+================================================================================
+MODUL 4: Delegates, Events und Lambda-Ausdrücke
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Delegates
+------------------------------------------------------------------------
+
+Delegate = Typsicherer Funktionspointer:
+
+  // Delegate-Typ definieren:
+  delegate int RechenOp(int a, int b);
+  
+  static int Addiere(int a, int b) => a + b;
+  static int Multipliziere(int a, int b) => a * b;
+  
+  RechenOp op = Addiere;
+  Console.WriteLine(op(3, 4));   // 7
+  
+  op = Multipliziere;
+  Console.WriteLine(op(3, 4));   // 12
+  
+  // Delegate ist ein Objekt — kann übergeben werden:
+  void BerechneUndDrucke(RechenOp operation, int x, int y) {
+      Console.WriteLine(operation(x, y));
+  }
+  BerechneUndDrucke(Addiere, 10, 5);
+
+Multicast Delegates:
+  delegate void Benachrichtigung(string msg);
+  
+  void PerEmail(string msg) => Console.WriteLine($"Email: {msg}");
+  void PerSMS(string msg)   => Console.WriteLine($"SMS: {msg}");
+  
+  Benachrichtigung sender = PerEmail;
+  sender += PerSMS;   // BEIDEN werden aufgerufen!
+  sender("Hallo");
+  // Ausgabe: Email: Hallo
+  //          SMS: Hallo
+  
+  sender -= PerEmail;   // entfernen
+  sender("Welt");
+  // Ausgabe: SMS: Welt
+
+Eingebaute Delegate-Typen (IMMER benutzen!):
+  // Func<TResult> — hat Rückgabewert:
+  Func<int> ohneParam = () => 42;
+  Func<int, int> quadrat = x => x * x;
+  Func<int, int, int> addiere = (a, b) => a + b;
+  // Bis zu 16 Eingabeparameter: Func<T1, T2, ..., T16, TResult>
+  
+  // Action — kein Rückgabewert:
+  Action ausgabe = () => Console.WriteLine("Hallo");
+  Action<string> drucke = s => Console.WriteLine(s);
+  Action<int, string> log = (level, msg) => Console.WriteLine($"[{level}] {msg}");
+  
+  // Predicate<T> — gibt bool zurück:
+  Predicate<int> istGerade = n => n % 2 == 0;
+  Predicate<string> istLang = s => s.Length > 10;
+  // Func<T, bool> ist identisch, aber Predicate ist semantisch klarer
+
+------------------------------------------------------------------------
+4.2  Lambda-Ausdrücke
+------------------------------------------------------------------------
+
+  // Expression Lambda (einzelner Ausdruck):
+  Func<int, int> verdopple = x => x * 2;
+  
+  // Statement Lambda (Block):
+  Func<int, int> abs = x => {
+      if (x < 0) return -x;
+      return x;
+  };
+  
+  // Parametertypen explizit:
+  Func<int, double> konvertiere = (int x) => (double)x;
+  
+  // Kein Parameter:
+  Action gruss = () => Console.WriteLine("Hallo!");
+  
+  // Lambda capturing (Closure):
+  int basis = 10;
+  Func<int, int> addBasis = x => x + basis;   // captured 'basis'
+  basis = 20;
+  Console.WriteLine(addBasis(5));   // 25! (captured by reference!)
+  
+  // Static Lambda (C# 9+) — darf nichts caputren:
+  Func<int, int> pure = static x => x * 2;   // compile-error wenn capture
+
+------------------------------------------------------------------------
+4.3  Events
+------------------------------------------------------------------------
+
+Events sind Multicast-Delegates mit Zugriffsbeschränkungen:
+
+  public class Thermostat
+  {
+      private double _temperatur;
+      
+      // Event-Deklaration:
+      public event EventHandler<TemperaturEventArgs>? TemperaturGeaendert;
+      
+      public double Temperatur
+      {
+          get => _temperatur;
+          set
+          {
+              if (Math.Abs(_temperatur - value) > 0.1)
+              {
+                  _temperatur = value;
+                  // Event auslösen (mit null-check):
+                  TemperaturGeaendert?.Invoke(this,
+                      new TemperaturEventArgs { NeueTemperatur = value });
+              }
+          }
+      }
+  }
+  
+  public class TemperaturEventArgs : EventArgs
+  {
+      public double NeueTemperatur { get; init; }
+  }
+  
+  // Event abonnieren:
+  var thermostat = new Thermostat();
+  
+  thermostat.TemperaturGeaendert += (sender, e) => {
+      Console.WriteLine($"Temperatur: {e.NeueTemperatur:F1}°C");
+      if (e.NeueTemperatur > 30)
+          Console.WriteLine("WARNUNG: Zu heiß!");
+  };
+  
+  thermostat.Temperatur = 25.0;   // Event wird ausgelöst
+  thermostat.Temperatur = 35.0;   // Event wieder
+  
+  // Event-Handler als Methode:
+  void TemperaturHandler(object? sender, TemperaturEventArgs e) {
+      // ...
+  }
+  thermostat.TemperaturGeaendert += TemperaturHandler;
+  thermostat.TemperaturGeaendert -= TemperaturHandler;   // abmelden!
+
+------------------------------------------------------------------------
+4.4  Iteratoren mit yield return
+------------------------------------------------------------------------
+
+  // yield return erzeugt lazy sequences:
+  IEnumerable<int> Fibonacci()
+  {
+      int a = 0, b = 1;
+      while (true) {   // unendliche Sequenz!
+          yield return a;   // "pausiert" hier, gibt Wert zurück
+          (a, b) = (b, a + b);
+      }
+  }
+  
+  foreach (int n in Fibonacci().Take(10)) {
+      Console.Write($"{n} ");   // 0 1 1 2 3 5 8 13 21 34
+  }
+  
+  // Eigener Generator:
+  IEnumerable<T> Filter<T>(IEnumerable<T> seq, Predicate<T> pred)
+  {
+      foreach (var item in seq)
+          if (pred(item))
+              yield return item;
+  }
+  
+  // yield break — Sequenz beenden:
+  IEnumerable<int> BisMaximal(IEnumerable<int> seq, int max)
+  {
+      foreach (var item in seq) {
+          if (item > max) yield break;
+          yield return item;
+      }
+  }
+
+================================================================================
+MODUL 5: LINQ — Language Integrated Query
+================================================================================
+
+------------------------------------------------------------------------
+5.1  LINQ-Grundlagen
+------------------------------------------------------------------------
+
+LINQ erlaubt SQL-ähnliche Abfragen auf beliebigen Datenquellen:
+  → Collections (IEnumerable<T>)
+  → Datenbanken (EF Core)
+  → XML (LINQ to XML)
+  → JSON
+
+Zwei Syntaxen (gleichwertig!):
+
+  var zahlen = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  
+  // QUERY SYNTAX (SQL-ähnlich):
+  var gerade = from n in zahlen
+               where n % 2 == 0
+               select n * n;
+  
+  // METHOD SYNTAX (bevorzugt!):
+  var gerade2 = zahlen
+      .Where(n => n % 2 == 0)
+      .Select(n => n * n);
+  
+  // Deferred Execution: LINQ wird NICHT sofort ausgeführt!
+  // Erst bei Iteration (foreach, ToList(), ToArray(), etc.)
+  foreach (var n in gerade) Console.Write($"{n} ");  // 4 16 36 64 100
+
+------------------------------------------------------------------------
+5.2  Alle wichtigen LINQ-Methoden
+------------------------------------------------------------------------
+
+FILTERING:
+  Where(x => x > 5)              Filtert Elemente
+  OfType<T>()                    Nur Elemente vom Typ T
+  Distinct()                     Duplikate entfernen
+  DistinctBy(x => x.Name)        Duplikate nach Key (C# 10)
+
+PROJECTION:
+  Select(x => x.Name)            Transformiert
+  SelectMany(x => x.Kinder)      Flatten verschachtelter Sequences
+  Cast<T>()                      Alle zu T casten (Exception wenn falsch)
+
+ORDERING:
+  OrderBy(x => x.Alter)          Aufsteigend
+  OrderByDescending(x => x.Alter)  Absteigend
+  ThenBy(x => x.Name)            Sekundäre Sortierung
+  ThenByDescending(...)
+  Reverse()                      Umkehren
+
+GROUPING:
+  GroupBy(x => x.Land)           Gruppiert nach Key
+  // Gibt IGrouping<Key, Element> zurück
+  var gruppen = personen.GroupBy(p => p.Land);
+  foreach (var g in gruppen) {
+      Console.WriteLine($"Land: {g.Key}");
+      foreach (var p in g) Console.WriteLine($"  {p.Name}");
+  }
+
+JOINING:
+  Join(andere, x => x.Id, y => y.Id, (x,y) => neue_projektion)
+  GroupJoin(...)   // Left Outer Join
+  Zip(andere, (x, y) => ...)   // Zwei Sequences zusammenzippen
+
+AGGREGATION:
+  Count()                        Anzahl
+  Count(x => x > 5)             Anzahl mit Filter
+  Sum(x => x.Preis)             Summe
+  Average(x => x.Alter)         Durchschnitt
+  Min(x => x.Alter)             Minimum
+  Max(x => x.Alter)             Maximum
+  MinBy(x => x.Alter)           Element mit Minimum (C# 10)
+  MaxBy(x => x.Alter)           Element mit Maximum
+  Aggregate(seed, (acc, x) => ...) Reduce / Fold
+
+ELEMENT:
+  First()                        Erstes (Exception wenn leer)
+  FirstOrDefault()               Erstes oder default (0/null)
+  FirstOrDefault(x => x > 5)    Erstes das Bedingung erfüllt
+  Last()   LastOrDefault()
+  Single()                       Genau eines (Exception wenn 0 oder >1)
+  SingleOrDefault()
+  ElementAt(i)                   Element an Index i
+  
+  // Mit Standardwert (C# 9+):
+  FirstOrDefault(x => x > 5, -1)   // -1 wenn nicht gefunden
+
+QUANTIFIER:
+  Any()                          Mindestens ein Element vorhanden?
+  Any(x => x > 5)               Mindestens eines erfüllt Bedingung?
+  All(x => x > 0)               Alle erfüllen Bedingung?
+  Contains(42)                   Enthält 42?
+
+SET OPERATIONS:
+  Union(andere)                  Vereinigung
+  Intersect(andere)              Schnittmenge
+  Except(andere)                 Differenz
+  Concat(andere)                 Aneinandergehängt
+  UnionBy / IntersectBy / ExceptBy (C# 10)
+
+CONVERSION:
+  ToList()           → List<T>
+  ToArray()          → T[]
+  ToDictionary(x => x.Id)         → Dictionary
+  ToDictionary(x => x.Id, x => x.Name)
+  ToHashSet()        → HashSet<T>
+  ToLookup(x => x.Land)  → ILookup (wie Dictionary mit mehreren Werten)
+  AsEnumerable()     → IEnumerable<T>
+
+PARTITIONING:
+  Take(5)            Erste 5
+  Skip(5)            Erste 5 überspringen
+  TakeWhile(x => x < 10)   Nimmt solange Bedingung erfüllt
+  SkipWhile(x => x < 10)   Überspringt solange Bedingung erfüllt
+  Chunk(size)        In Blöcke aufteilen (C# 10)
+
+GENERIERUNG:
+  Enumerable.Range(1, 10)        {1,2,...,10}
+  Enumerable.Repeat("Hi", 3)    {"Hi","Hi","Hi"}
+  Enumerable.Empty<int>()       leere Sequence
+
+------------------------------------------------------------------------
+5.3  Komplexe LINQ-Abfragen
+------------------------------------------------------------------------
+
+  // Nested Query:
+  var ergebnis = studenten
+      .Where(s => s.Noten.Average() > 2.0)
+      .OrderByDescending(s => s.Noten.Average())
+      .Select(s => new {
+          s.Name,
+          Durchschnitt = s.Noten.Average(),
+          BesteNote = s.Noten.Min()
+      })
+      .Take(5);
+  
+  // GroupBy mit Aggregation:
+  var statistik = verkäufe
+      .GroupBy(v => v.Produkt)
+      .Select(g => new {
+          Produkt = g.Key,
+          Anzahl  = g.Count(),
+          Umsatz  = g.Sum(v => v.Preis),
+          Schnitt = g.Average(v => v.Preis)
+      })
+      .OrderByDescending(x => x.Umsatz);
+  
+  // Join:
+  var auftraege = kunden.Join(
+      bestellungen,
+      k => k.Id,
+      b => b.KundeId,
+      (k, b) => new { k.Name, b.Produkt, b.Preis }
+  );
+  
+  // Linq zu String (Wörter zählen):
+  string text = "Die schnelle braune Katze springt";
+  var wortHäufigkeit = text
+      .ToLower()
+      .Split(' ')
+      .GroupBy(w => w)
+      .OrderByDescending(g => g.Count())
+      .Select(g => (Wort: g.Key, Anzahl: g.Count()));
+
+================================================================================
+TEIL 4 — ASYNC & THREADING
+================================================================================
+
+================================================================================
+MODUL 6: Async/Await und TPL
+================================================================================
+
+------------------------------------------------------------------------
+6.1  async/await Grundlagen
+------------------------------------------------------------------------
+
+  // async Methode gibt Task oder Task<T> zurück:
+  async Task<string> HoleDatenAsync(string url)
+  {
+      using var client = new HttpClient();
+      string inhalt = await client.GetStringAsync(url);   // HIER wartet die Methode
+      return inhalt.ToUpper();
+  }
+  
+  // Aufruf:
+  async Task Main()
+  {
+      string daten = await HoleDatenAsync("https://example.com");
+      Console.WriteLine(daten);
+  }
+  
+  // await gibt Kontrolle zurück bis Ergebnis da ist
+  // Kein Blockieren des Threads!
+
+Wichtige async-Patterns:
+  // WhenAll: alle gleichzeitig starten, auf alle warten:
+  var task1 = HoleDatenAsync("https://api1.com");
+  var task2 = HoleDatenAsync("https://api2.com");
+  var task3 = HoleDatenAsync("https://api3.com");
+  
+  var ergebnisse = await Task.WhenAll(task1, task2, task3);
+  // ergebnisse[0], [1], [2]
+  
+  // WhenAny: warte auf ERSTEN der fertig ist:
+  var erster = await Task.WhenAny(task1, task2, task3);
+  
+  // CancellationToken:
+  async Task LangeAufgabe(CancellationToken ct = default)
+  {
+      for (int i = 0; i < 100; i++) {
+          ct.ThrowIfCancellationRequested();   // wirft OperationCanceledException
+          await Task.Delay(100, ct);
+      }
+  }
+  
+  using var cts = new CancellationTokenSource();
+  cts.CancelAfter(TimeSpan.FromSeconds(3));   // nach 3 Sekunden abbrechen
+  
+  try {
+      await LangeAufgabe(cts.Token);
+  } catch (OperationCanceledException) {
+      Console.WriteLine("Abgebrochen!");
+  }
+
+------------------------------------------------------------------------
+6.2  Task Parallel Library (TPL)
+------------------------------------------------------------------------
+
+  // Task.Run für CPU-intensive Arbeit:
+  int ergebnis = await Task.Run(() => {
+      // Läuft auf ThreadPool-Thread:
+      return BerechneAufwendig(1000000);
+  });
+  
+  // Parallel.For:
+  Parallel.For(0, 100, i => {
+      ErledigenParallel(i);
+  });
+  
+  // Parallel.ForEach:
+  Parallel.ForEach(liste, item => {
+      Verarbeite(item);
+  });
+  
+  // Parallel LINQ (PLINQ):
+  var ergebnisse = zahlen
+      .AsParallel()                // parallele Verarbeitung!
+      .WithDegreeOfParallelism(4)  // max 4 Threads
+      .Where(n => IstPrimzahl(n))
+      .OrderBy(n => n)
+      .ToList();
+
+------------------------------------------------------------------------
+6.3  Channels (Producer-Consumer)
+------------------------------------------------------------------------
+
+  using System.Threading.Channels;
+  
+  // Unbounded Channel:
+  var channel = Channel.CreateUnbounded<string>();
+  
+  // Producer:
+  async Task Produzent(ChannelWriter<string> writer)
+  {
+      for (int i = 0; i < 10; i++) {
+          await writer.WriteAsync($"Nachricht {i}");
+          await Task.Delay(100);
+      }
+      writer.Complete();   // Kanal schließen
+  }
+  
+  // Consumer:
+  async Task Konsument(ChannelReader<string> reader)
+  {
+      await foreach (var msg in reader.ReadAllAsync()) {
+          Console.WriteLine($"Empfangen: {msg}");
+      }
+  }
+  
+  await Task.WhenAll(
+      Produzent(channel.Writer),
+      Konsument(channel.Reader)
+  );
+
+------------------------------------------------------------------------
+6.4  Mutex, SemaphoreSlim, lock
+------------------------------------------------------------------------
+
+  // lock — einfachste Synchronisation:
+  private readonly object _lock = new object();
+  private int _zaehler = 0;
+  
+  void Inkrement() {
+      lock (_lock) {
+          _zaehler++;
+      }
+  }
+  
+  // SemaphoreSlim — begrenzte Parallelität:
+  var semaphore = new SemaphoreSlim(3);   // max 3 gleichzeitig
+  
+  async Task BegrenzteArbeit(int id)
+  {
+      await semaphore.WaitAsync();
+      try {
+          await Task.Delay(1000);   // max 3 gleichzeitig
+          Console.WriteLine($"Task {id} fertig");
+      } finally {
+          semaphore.Release();
+      }
+  }
+  
+  // ConcurrentDictionary (thread-sicher):
+  var dict = new System.Collections.Concurrent.ConcurrentDictionary<string, int>();
+  dict.TryAdd("key", 1);
+  dict.AddOrUpdate("key", 1, (k, old) => old + 1);
+  dict.GetOrAdd("key", 0);
+
+
+================================================================================
+TEIL 5 — FORTGESCHRITTENE FEATURES
+================================================================================
+
+================================================================================
+MODUL 7: Extension Methods, Reflection, Attributes
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Extension Methods
+------------------------------------------------------------------------
+
+Extension Methods erweitern bestehende Typen OHNE Vererbung:
+
+  // MUSS in static class mit static Methode + this-Parameter:
+  public static class StringExtensions
+  {
+      public static bool IstPalindrom(this string s)
+      {
+          string clean = new(s.ToLower().Where(char.IsLetter).ToArray());
+          return clean == new string(clean.Reverse().ToArray());
+      }
+      
+      public static string KapitalisierErstesBuchstabe(this string s)
+          => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
+      
+      public static T? ParsenOder<T>(this string s, T? standard = default)
+      {
+          try { return (T)Convert.ChangeType(s, typeof(T))!; }
+          catch { return standard; }
+      }
+  }
+  
+  // Verwendung (wie eingebaute Methoden!):
+  Console.WriteLine("Racecar".IstPalindrom());   // true
+  Console.WriteLine("hallo".KapitalisierErstesBuchstabe()); // Hallo
+  int n = "42".ParsenOder(0);   // 42
+  
+  // Extension auf IEnumerable<T>:
+  public static class EnumerableExtensions
+  {
+      public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> source)
+      {
+          var list = source.ToList();
+          var rng = new Random();
+          for (int i = list.Count - 1; i > 0; i--) {
+              int j = rng.Next(i + 1);
+              (list[i], list[j]) = (list[j], list[i]);
+          }
+          return list;
+      }
+      
+      public static void ForEach<T>(this IEnumerable<T> source, Action<T> action)
+      {
+          foreach (var item in source) action(item);
+      }
+      
+      public static IEnumerable<IEnumerable<T>> Chunk<T>(
+          this IEnumerable<T> source, int groesse)
+      {
+          var liste = source.ToList();
+          for (int i = 0; i < liste.Count; i += groesse)
+              yield return liste.Skip(i).Take(groesse);
+      }
+  }
+  
+  new[] {1,2,3,4,5,6,7,8,9}.Chunk(3).ForEach(chunk =>
+      Console.WriteLine(string.Join(", ", chunk)));
+
+------------------------------------------------------------------------
+7.2  Attributes (Attribute)
+------------------------------------------------------------------------
+
+Attributes sind Metadaten, die dem Code hinzugefügt werden:
+
+  // Eingebaute Attributes:
+  [Obsolete("Benutze NeueMethode() statt AlteMethode()")]
+  public void AlteMethode() { }
+  
+  [Serializable]
+  public class DatenObjekt { }
+  
+  [Flags]
+  public enum Rechte {
+      Keine     = 0,
+      Lesen     = 1 << 0,
+      Schreiben = 1 << 1,
+      Ausfuehren = 1 << 2,
+      Alle      = Lesen | Schreiben | Ausfuehren
+  }
+  
+  Rechte r = Rechte.Lesen | Rechte.Schreiben;
+  Console.WriteLine(r);   // "Lesen, Schreiben" (dank [Flags]!)
+  
+  // Eigene Attributes:
+  [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method,
+                  AllowMultiple = false, Inherited = true)]
+  public class AutorAttribute : Attribute
+  {
+      public string Name { get; }
+      public string Version { get; set; } = "1.0";
+      
+      public AutorAttribute(string name) => Name = name;
+  }
+  
+  [Autor("Max Muster", Version = "2.0")]
+  public class MeineKlasse { }
+  
+  // Attribute zur Laufzeit lesen (Reflection):
+  var attr = typeof(MeineKlasse).GetCustomAttribute<AutorAttribute>();
+  Console.WriteLine($"Autor: {attr?.Name}, Version: {attr?.Version}");
+
+------------------------------------------------------------------------
+7.3  Reflection
+------------------------------------------------------------------------
+
+Reflection erlaubt Typ-Inspektion und dynamischen Code zur Laufzeit:
+
+  using System.Reflection;
+  
+  Type typ = typeof(Person);           // Compile-Zeit Typ
+  Type typ2 = person.GetType();        // Laufzeit Typ
+  Type typ3 = Type.GetType("System.String")!;
+  
+  // Typen-Info:
+  Console.WriteLine(typ.Name);           // "Person"
+  Console.WriteLine(typ.FullName);       // "Namespace.Person"
+  Console.WriteLine(typ.IsClass);        // true
+  Console.WriteLine(typ.IsInterface);    // false
+  Console.WriteLine(typ.IsAbstract);     // false
+  Console.WriteLine(typ.BaseType?.Name); // "Object"
+  Console.WriteLine(typ.GetInterfaces().Length);
+  
+  // Members aufzählen:
+  foreach (var prop in typ.GetProperties()) {
+      Console.WriteLine($"Property: {prop.Name} ({prop.PropertyType.Name})");
+  }
+  
+  foreach (var method in typ.GetMethods()) {
+      Console.WriteLine($"Methode: {method.Name}");
+  }
+  
+  foreach (var field in typ.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)) {
+      Console.WriteLine($"Feld: {field.Name}");
+  }
+  
+  // Dynamisches Erstellen:
+  object instance = Activator.CreateInstance(typ, "Max", 17)!;
+  
+  // Methode dynamisch aufrufen:
+  var method2 = typ.GetMethod("Vorstellen");
+  string? ergebnis = (string?)method2?.Invoke(instance, null);
+  
+  // Property lesen/setzen:
+  var nameProp = typ.GetProperty("Name");
+  nameProp?.SetValue(instance, "Anna");
+  string? name = (string?)nameProp?.GetValue(instance);
+  
+  // Assembly inspizieren:
+  Assembly assembly = Assembly.GetExecutingAssembly();
+  var typen = assembly.GetTypes()
+      .Where(t => t.IsClass && !t.IsAbstract)
+      .ToList();
+
+  // Generic Typen mit Reflection:
+  Type listType = typeof(List<>).MakeGenericType(typeof(int));
+  var list = (System.Collections.IList)Activator.CreateInstance(listType)!;
+  list.Add(42);
+
+------------------------------------------------------------------------
+7.4  Indexer
+------------------------------------------------------------------------
+
+  public class Matrix
+  {
+      private double[,] _daten;
+      public int Zeilen { get; }
+      public int Spalten { get; }
+      
+      public Matrix(int zeilen, int spalten) {
+          Zeilen = zeilen; Spalten = spalten;
+          _daten = new double[zeilen, spalten];
+      }
+      
+      // Indexer:
+      public double this[int zeile, int spalte]
+      {
+          get => _daten[zeile, spalte];
+          set => _daten[zeile, spalte] = value;
+      }
+      
+      // String-Indexer:
+      public double this[string name]
+      {
+          get => name switch {
+              "sum" => _daten.Cast<double>().Sum(),
+              _ => throw new ArgumentException($"Unbekannt: {name}")
+          };
+      }
+  }
+  
+  var m = new Matrix(3, 3);
+  m[0, 0] = 1.0;
+  m[1, 1] = 2.0;
+  Console.WriteLine(m["sum"]);   // 3.0
+
+------------------------------------------------------------------------
+7.5  Operator-Überladung
+------------------------------------------------------------------------
+
+  public record Geld(decimal Betrag, string Waehrung)
+  {
+      public static Geld operator+(Geld a, Geld b) {
+          if (a.Waehrung != b.Waehrung)
+              throw new InvalidOperationException("Verschiedene Währungen!");
+          return a with { Betrag = a.Betrag + b.Betrag };
+      }
+      
+      public static Geld operator*(Geld g, decimal faktor)
+          => g with { Betrag = g.Betrag * faktor };
+      
+      public static bool operator>(Geld a, Geld b)  => a.Betrag > b.Betrag;
+      public static bool operator<(Geld a, Geld b)  => a.Betrag < b.Betrag;
+      public static bool operator>=(Geld a, Geld b) => a.Betrag >= b.Betrag;
+      public static bool operator<=(Geld a, Geld b) => a.Betrag <= b.Betrag;
+      
+      // Explizite und implizite Konvertierung:
+      public static implicit operator decimal(Geld g) => g.Betrag;
+      public static explicit operator Geld(decimal d) => new(d, "EUR");
+      
+      public override string ToString() => $"{Betrag:F2} {Waehrung}";
+  }
+  
+  var a = new Geld(10.00m, "EUR");
+  var b = new Geld(5.00m, "EUR");
+  Console.WriteLine(a + b);    // 15.00 EUR
+  Console.WriteLine(a * 2.5m); // 25.00 EUR
+  decimal wert = a;            // implicit: 10.00
+
+------------------------------------------------------------------------
+7.6  Expression Trees
+------------------------------------------------------------------------
+
+  using System.Linq.Expressions;
+  
+  // Lambda als Datenstruktur (nicht ausführbar → analysierbar):
+  Expression<Func<int, int>> expr = x => x * x + 2 * x + 1;
+  
+  // Baum analysieren:
+  Console.WriteLine(expr);   // "x => ((x * x) + (2 * x)) + 1"
+  
+  var body = (BinaryExpression)expr.Body;
+  Console.WriteLine(body.NodeType);   // Add
+  
+  // Auführen:
+  var func = expr.Compile();
+  Console.WriteLine(func(5));   // 36
+  
+  // Dynamisch aufbauen:
+  var param = Expression.Parameter(typeof(int), "x");
+  var konst = Expression.Constant(5);
+  var add = Expression.Add(param, konst);
+  var lambda = Expression.Lambda<Func<int, int>>(add, param);
+  var compiled = lambda.Compile();
+  Console.WriteLine(compiled(10));   // 15
+  
+  // Entity Framework nutzt Expression Trees für SQL-Generierung!
+
+------------------------------------------------------------------------
+7.7  Dynamic und ExpandoObject
+------------------------------------------------------------------------
+
+  // dynamic: Typ erst zur Laufzeit geprüft:
+  dynamic d = 42;
+  Console.WriteLine(d + 1);   // 43 (als int)
+  
+  d = "Hallo";
+  Console.WriteLine(d.Length);   // 5 (als string)
+  
+  d = new List<int> { 1, 2, 3 };
+  Console.WriteLine(d.Count);   // 3
+  
+  // KEIN IntelliSense! KEIN Compile-Time-Check! Nur sparsam benutzen.
+  
+  // ExpandoObject — dynamische Properties zur Laufzeit:
+  dynamic expando = new System.Dynamic.ExpandoObject();
+  expando.Name = "Max";
+  expando.Alter = 17;
+  expando.Gruss = new Action(() => Console.WriteLine($"Hallo, {expando.Name}!"));
+  
+  expando.Gruss();   // "Hallo, Max!"
+  
+  // Als Dictionary nutzbar:
+  var dict = (IDictionary<string, object>)expando;
+  dict["Wohnort"] = "Wien";
+
+================================================================================
+MODUL 8: Memory Management, Span<T>, unsafe
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Garbage Collector verstehen
+------------------------------------------------------------------------
+
+.NET GC — Generationen:
+  Gen 0: Kurz lebende Objekte (neu alloziert) — häufig gesammelt (~MB)
+  Gen 1: Überlebende Gen 0 — selten gesammelt
+  Gen 2: Lang lebende Objekte — selten gesammelt (~GB)
+  LOH: Large Object Heap (>85KB) — sehr selten gesammelt
+
+  // GC-Verhalten beobachten:
+  Console.WriteLine($"Gen0: {GC.CollectionCount(0)}");
+  Console.WriteLine($"Gen1: {GC.CollectionCount(1)}");
+  Console.WriteLine($"Total Memory: {GC.GetTotalMemory(false):N0} Bytes");
+  
+  // GC manuell auslösen (SELTEN nötig!):
+  GC.Collect();
+  GC.WaitForPendingFinalizers();
+  
+  // Generationscheck:
+  int gen = GC.GetGeneration(meinObjekt);
+
+  // GC-Optimierung:
+  GC.TryStartNoGCRegion(10 * 1024 * 1024);   // kein GC für 10MB Allokationen
+  GC.EndNoGCRegion();
+  
+  // IDisposable + using: garantierte Ressourcen-Freigabe!
+  // ArrayPool für wiederverwendbare Arrays:
+  using System.Buffers;
+  byte[] buffer = ArrayPool<byte>.Shared.Rent(4096);
+  try { /* buffer benutzen */ }
+  finally { ArrayPool<byte>.Shared.Return(buffer); }
+
+------------------------------------------------------------------------
+8.2  Span<T> und Memory<T>
+------------------------------------------------------------------------
+
+Span<T> ist ein Fenster auf Speicher — kein Kopieren, kein Allozieren:
+
+  using System;
+  
+  int[] arr = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  
+  Span<int> span = arr.AsSpan();
+  Span<int> mitte = arr.AsSpan(2, 5);   // {3,4,5,6,7} — kein Kopieren!
+  
+  // In Funktionen:
+  void Verdopple(Span<int> daten) {
+      for (int i = 0; i < daten.Length; i++) daten[i] *= 2;
+  }
+  Verdopple(arr.AsSpan(1, 3));   // nur Index 1-3 verdoppeln
+  
+  // Stack-Speicher:
+  Span<byte> stack_buf = stackalloc byte[256];  // kein Heap!
+  
+  // String zu Span:
+  ReadOnlySpan<char> text = "Hallo Welt".AsSpan();
+  ReadOnlySpan<char> sub = text[6..];   // "Welt" — kein Kopieren!
+  
+  // Performance-Parsing mit Span:
+  bool IstZahl(ReadOnlySpan<char> s) {
+      foreach (char c in s)
+          if (!char.IsDigit(c)) return false;
+      return s.Length > 0;
+  }
+
+  // Memory<T> — wie Span aber für async (Span nicht async-kompatibel!):
+  Memory<byte> mem = new byte[1024];
+  async Task SchreibeAsync(Memory<byte> buffer) {
+      await stream.WriteAsync(buffer);
+  }
+
+------------------------------------------------------------------------
+8.3  Unsafe Code
+------------------------------------------------------------------------
+
+  // Benötigt: <AllowUnsafeBlocks>true</AllowUnsafeBlocks> in .csproj
+  
+  unsafe void PointerArithmetik()
+  {
+      int[] arr = { 1, 2, 3, 4, 5 };
+      
+      fixed (int* ptr = arr) {   // Array auf Stack pinnen (kein GC-Move)
+          for (int i = 0; i < 5; i++) {
+              Console.WriteLine(*(ptr + i));   // Pointer-Arithmetik!
+          }
+      }
+      
+      // Stack-Speicher:
+      int* stack_arr = stackalloc int[10];
+      for (int i = 0; i < 10; i++) stack_arr[i] = i;
+  }
+  
+  // P/Invoke — native C-Bibliotheken aufrufen:
+  using System.Runtime.InteropServices;
+  
+  [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
+  static extern int printf(string format, ...);
+  
+  [DllImport("kernel32.dll")]
+  static extern bool Beep(uint freq, uint dauer);
+  
+  // Beep(440, 500);   // A440 für 500ms (Windows)
+
+================================================================================
+TEIL 6 — PRAXIS: ASP.NET, EF, TESTING
+================================================================================
+
+================================================================================
+MODUL 9: ASP.NET Core Web API
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Web API Grundlagen
+------------------------------------------------------------------------
+
+  // dotnet new webapi -n MeineApi
+  
+  // Program.cs:
+  var builder = WebApplication.CreateBuilder(args);
+  
+  // Services registrieren:
+  builder.Services.AddControllers();
+  builder.Services.AddEndpointsApiExplorer();
+  builder.Services.AddSwaggerGen();
+  builder.Services.AddScoped<IPersonService, PersonService>();
+  builder.Services.AddDbContext<AppDbContext>(opts =>
+      opts.UseInMemoryDatabase("TestDb"));
+  
+  var app = builder.Build();
+  
+  // Middleware:
+  if (app.Environment.IsDevelopment()) {
+      app.UseSwagger();
+      app.UseSwaggerUI();
+  }
+  app.UseHttpsRedirection();
+  app.UseAuthorization();
+  app.MapControllers();
+  
+  app.Run();
+
+  // Controller:
+  [ApiController]
+  [Route("api/[controller]")]    // → /api/person
+  public class PersonController : ControllerBase
+  {
+      private readonly IPersonService _service;
+      
+      public PersonController(IPersonService service)   // Dependency Injection!
+          => _service = service;
+      
+      // GET /api/person
+      [HttpGet]
+      public async Task<ActionResult<IEnumerable<PersonDto>>> Alle()
+      {
+          var personen = await _service.HoleAlleAsync();
+          return Ok(personen);
+      }
+      
+      // GET /api/person/42
+      [HttpGet("{id:int}")]
+      public async Task<ActionResult<PersonDto>> HoleEine(int id)
+      {
+          var person = await _service.HolePerId(id);
+          return person is null ? NotFound() : Ok(person);
+      }
+      
+      // POST /api/person
+      [HttpPost]
+      public async Task<ActionResult<PersonDto>> Erstelle([FromBody] PersonErstellenDto dto)
+      {
+          if (!ModelState.IsValid) return BadRequest(ModelState);
+          var neu = await _service.ErstelleAsync(dto);
+          return CreatedAtAction(nameof(HoleEine), new { id = neu.Id }, neu);
+      }
+      
+      // PUT /api/person/42
+      [HttpPut("{id:int}")]
+      public async Task<IActionResult> Aktualisiere(int id, [FromBody] PersonErstellenDto dto)
+      {
+          var erfolgreich = await _service.AktualisiereAsync(id, dto);
+          return erfolgreich ? NoContent() : NotFound();
+      }
+      
+      // DELETE /api/person/42
+      [HttpDelete("{id:int}")]
+      public async Task<IActionResult> Loesche(int id)
+      {
+          var erfolgreich = await _service.LoescheAsync(id);
+          return erfolgreich ? NoContent() : NotFound();
+      }
+  }
+
+------------------------------------------------------------------------
+9.2  Minimal API (C# 10+)
+------------------------------------------------------------------------
+
+  // Direkt in Program.cs, kein Controller!
+  var builder = WebApplication.CreateBuilder(args);
+  var app = builder.Build();
+  
+  var personen = new List<Person>();
+  
+  app.MapGet("/personen", () => personen);
+  
+  app.MapGet("/personen/{id}", (int id) =>
+      personen.FirstOrDefault(p => p.Id == id)
+          is Person p ? Results.Ok(p) : Results.NotFound());
+  
+  app.MapPost("/personen", (Person person) => {
+      personen.Add(person);
+      return Results.Created($"/personen/{person.Id}", person);
+  });
+  
+  app.MapDelete("/personen/{id}", (int id) => {
+      int entfernt = personen.RemoveAll(p => p.Id == id);
+      return entfernt > 0 ? Results.NoContent() : Results.NotFound();
+  });
+  
+  app.Run();
+
+------------------------------------------------------------------------
+9.3  Dependency Injection (DI)
+------------------------------------------------------------------------
+
+.NET hat einen eingebauten DI-Container:
+
+  // Service-Interface:
+  public interface IEmailService
+  {
+      Task SendeAsync(string an, string betreff, string inhalt);
+  }
+  
+  // Implementierungen:
+  public class SmtpEmailService : IEmailService { /* ... */ }
+  public class FakeEmailService : IEmailService
+  {
+      public Task SendeAsync(string an, string betreff, string inhalt) {
+          Console.WriteLine($"[FAKE] Email an {an}: {betreff}");
+          return Task.CompletedTask;
+      }
+  }
+  
+  // Registrierung:
+  // Transient: neues Objekt bei JEDER Anfrage
+  builder.Services.AddTransient<IEmailService, SmtpEmailService>();
+  
+  // Scoped: ein Objekt pro HTTP-Request
+  builder.Services.AddScoped<IPersonRepository, DbPersonRepository>();
+  
+  // Singleton: ein Objekt für die gesamte Applikation
+  builder.Services.AddSingleton<ICache, MemoryCache>();
+  
+  // In Tests einfach austauschen:
+  builder.Services.AddTransient<IEmailService, FakeEmailService>();
+
+================================================================================
+MODUL 10: Entity Framework Core
+================================================================================
+
+------------------------------------------------------------------------
+10.1  EF Core Grundlagen
+------------------------------------------------------------------------
+
+  // NuGet: dotnet add package Microsoft.EntityFrameworkCore.Sqlite
+  
+  // Entity:
+  public class Produkt
+  {
+      public int Id { get; set; }         // PK wird automatisch erkannt
+      public string Name { get; set; } = "";
+      public decimal Preis { get; set; }
+      public int KategorieId { get; set; }
+      public Kategorie? Kategorie { get; set; }  // Navigation Property
+  }
+  
+  public class Kategorie
+  {
+      public int Id { get; set; }
+      public string Name { get; set; } = "";
+      public List<Produkt> Produkte { get; set; } = new();  // Navigation
+  }
+  
+  // DbContext:
+  public class AppDbContext : DbContext
+  {
+      public DbSet<Produkt> Produkte => Set<Produkt>();
+      public DbSet<Kategorie> Kategorien => Set<Kategorie>();
+      
+      public AppDbContext(DbContextOptions<AppDbContext> options)
+          : base(options) { }
+      
+      // Fluent API für Konfiguration:
+      protected override void OnModelCreating(ModelBuilder builder)
+      {
+          builder.Entity<Produkt>(p => {
+              p.Property(x => x.Name)
+               .IsRequired()
+               .HasMaxLength(200);
+              p.Property(x => x.Preis)
+               .HasPrecision(18, 2);
+              p.HasOne(x => x.Kategorie)
+               .WithMany(k => k.Produkte)
+               .HasForeignKey(x => x.KategorieId);
+          });
+          
+          // Seed-Daten:
+          builder.Entity<Kategorie>().HasData(
+              new Kategorie { Id = 1, Name = "Elektronik" }
+          );
+      }
+  }
+
+------------------------------------------------------------------------
+10.2  CRUD-Operationen
+------------------------------------------------------------------------
+
+  // Registrierung:
+  builder.Services.AddDbContext<AppDbContext>(opts =>
+      opts.UseSqlite("Data Source=shop.db"));
+  
+  // In einem Service:
+  public class ProduktService
+  {
+      private readonly AppDbContext _db;
+      public ProduktService(AppDbContext db) => _db = db;
+      
+      // LESEN:
+      public async Task<List<Produkt>> AlleProdukte()
+          => await _db.Produkte.ToListAsync();
+      
+      public async Task<Produkt?> HoleById(int id)
+          => await _db.Produkte.FindAsync(id);
+      
+      // Mit Include (Navigation Property laden):
+      public async Task<List<Produkt>> MitKategorie()
+          => await _db.Produkte
+              .Include(p => p.Kategorie)
+              .ToListAsync();
+      
+      // Mit LINQ:
+      public async Task<List<Produkt>> GünstigeProdukte(decimal maxPreis)
+          => await _db.Produkte
+              .Where(p => p.Preis <= maxPreis)
+              .OrderBy(p => p.Preis)
+              .ToListAsync();
+      
+      // ERSTELLEN:
+      public async Task<Produkt> Erstelle(string name, decimal preis, int katId)
+      {
+          var produkt = new Produkt { Name = name, Preis = preis, KategorieId = katId };
+          _db.Produkte.Add(produkt);
+          await _db.SaveChangesAsync();
+          return produkt;
+      }
+      
+      // AKTUALISIEREN:
+      public async Task<bool> Aktualisiere(int id, string name, decimal preis)
+      {
+          var produkt = await _db.Produkte.FindAsync(id);
+          if (produkt is null) return false;
+          produkt.Name = name;
+          produkt.Preis = preis;
+          await _db.SaveChangesAsync();
+          return true;
+      }
+      
+      // LÖSCHEN:
+      public async Task<bool> Loesche(int id)
+      {
+          var produkt = await _db.Produkte.FindAsync(id);
+          if (produkt is null) return false;
+          _db.Produkte.Remove(produkt);
+          await _db.SaveChangesAsync();
+          return true;
+      }
+  }
+
+------------------------------------------------------------------------
+10.3  Migrationen
+------------------------------------------------------------------------
+
+  // NuGet: Microsoft.EntityFrameworkCore.Tools
+  
+  // Migration erstellen:
+  dotnet ef migrations add InitialCreate
+  
+  // Datenbank aktualisieren:
+  dotnet ef database update
+  
+  // Rückgängig machen:
+  dotnet ef migrations remove
+  
+  // Datenbank-Schema anschauen:
+  dotnet ef database drop   // Datenbank löschen
+
+================================================================================
+MODUL 11: Unit Testing mit xUnit
+================================================================================
+
+------------------------------------------------------------------------
+11.1  xUnit Grundlagen
+------------------------------------------------------------------------
+
+  // dotnet new xunit -n MeineTests
+  // NuGet: xunit, xunit.runner.visualstudio, Moq
+  
+  using Xunit;
+  
+  public class RechnerTests
+  {
+      // [Fact] — einfacher Test:
+      [Fact]
+      public void Addieren_ZweiPositiveZahlen_GibtSumme()
+      {
+          // Arrange:
+          var rechner = new Rechner();
+          
+          // Act:
+          int ergebnis = rechner.Addiere(3, 4);
+          
+          // Assert:
+          Assert.Equal(7, ergebnis);
+      }
+      
+      // [Theory] — parametrisierter Test:
+      [Theory]
+      [InlineData(3, 4, 7)]
+      [InlineData(0, 0, 0)]
+      [InlineData(-1, 1, 0)]
+      [InlineData(-5, -3, -8)]
+      public void Addieren_VerschiedeneEingaben_GibtKorrektesSumme(
+          int a, int b, int erwartet)
+      {
+          var rechner = new Rechner();
+          Assert.Equal(erwartet, rechner.Addiere(a, b));
+      }
+      
+      [Fact]
+      public void Dividiere_DurchNull_WirftException()
+      {
+          var rechner = new Rechner();
+          Assert.Throws<DivideByZeroException>(() => rechner.Dividiere(5, 0));
+      }
+      
+      // Async Tests:
+      [Fact]
+      public async Task HoleDaten_GültigeId_GibtDaten()
+      {
+          var service = new DatenService();
+          var ergebnis = await service.HolePerId(1);
+          Assert.NotNull(ergebnis);
+          Assert.Equal(1, ergebnis.Id);
+      }
+  }
+
+------------------------------------------------------------------------
+11.2  Mocking mit Moq
+------------------------------------------------------------------------
+
+  using Moq;
+  
+  public class BestellungServiceTests
+  {
+      [Fact]
+      public async Task Bestellen_GültigesProdukt_SendetEmail()
+      {
+          // Arrange:
+          var emailMock = new Mock<IEmailService>();
+          var repoMock = new Mock<IProduktRepository>();
+          
+          repoMock.Setup(r => r.HolePerId(1))
+                  .ReturnsAsync(new Produkt { Id = 1, Name = "Test", Preis = 10m });
+          
+          var service = new BestellungService(repoMock.Object, emailMock.Object);
+          
+          // Act:
+          await service.BestelleAsync(1, "kunde@example.com");
+          
+          // Assert:
+          emailMock.Verify(e => e.SendeAsync(
+              "kunde@example.com",
+              It.IsAny<string>(),   // beliebiger Betreff
+              It.IsAny<string>()    // beliebiger Inhalt
+          ), Times.Once);
+          
+          repoMock.Verify(r => r.HolePerId(1), Times.Once);
+      }
+      
+      [Fact]
+      public async Task Bestellen_UnbekannteId_WirftException()
+      {
+          var emailMock = new Mock<IEmailService>();
+          var repoMock = new Mock<IProduktRepository>();
+          repoMock.Setup(r => r.HolePerId(It.IsAny<int>()))
+                  .ReturnsAsync((Produkt?)null);
+          
+          var service = new BestellungService(repoMock.Object, emailMock.Object);
+          
+          await Assert.ThrowsAsync<ArgumentException>(
+              () => service.BestelleAsync(99, "x@y.com"));
+      }
+  }
+
+------------------------------------------------------------------------
+11.3  Integration Tests
+------------------------------------------------------------------------
+
+  using Microsoft.AspNetCore.Mvc.Testing;
+  using System.Net.Http.Json;
+  
+  public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+  {
+      private readonly HttpClient _client;
+      
+      public ApiIntegrationTests(WebApplicationFactory<Program> factory)
+          => _client = factory.CreateClient();
+      
+      [Fact]
+      public async Task GetPersonen_ReturnsOk()
+      {
+          var response = await _client.GetAsync("/api/person");
+          response.EnsureSuccessStatusCode();
+          
+          var personen = await response.Content.ReadFromJsonAsync<List<PersonDto>>();
+          Assert.NotNull(personen);
+      }
+      
+      [Fact]
+      public async Task PostPerson_CreatesAndReturns201()
+      {
+          var dto = new PersonErstellenDto { Name = "Test", Alter = 20 };
+          var response = await _client.PostAsJsonAsync("/api/person", dto);
+          
+          Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+      }
+  }
+
+================================================================================
+MODUL 12: Modernes C# — Alle Features auf einen Blick
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Null-Safety (C# 8+)
+------------------------------------------------------------------------
+
+  // In .csproj aktivieren:
+  // <Nullable>enable</Nullable>
+  
+  string? nullable = null;         // darf null sein (mit ?)
+  string nonNull = "Hallo";        // darf NICHT null sein
+  
+  // Null-bedingte Operatoren:
+  int? laenge = nullable?.Length;   // null wenn nullable null
+  string text = nullable ?? "default";   // "default" wenn null
+  nullable ??= "initialisiert";    // zuweisen wenn null (C# 8)
+  
+  // Null-Forgiving Operator (! — sagt: "ich weiß es ist nicht null"):
+  string wert = nullable!;   // Compiler-Warnung unterdrücken (VORSICHT!)
+
+------------------------------------------------------------------------
+12.2  Pattern Matching (vollständig)
+------------------------------------------------------------------------
+
+  // C# 7: Type Pattern, const pattern, var pattern
+  // C# 8: switch expression, property pattern, positional pattern
+  // C# 9: logical patterns (and, or, not), relational patterns
+  // C# 10: extended property patterns
+  // C# 11: list patterns
+  
+  // Alle Patterns in einer switch expression:
+  string KlassifiziereSteuer(object obj) => obj switch
+  {
+      null               => "null",
+      int n when n < 0   => "negative Zahl",
+      int n and > 100    => "große Zahl",   // C# 9: and
+      int n              => $"Zahl: {n}",
+      double d           => $"Double: {d:F2}",
+      string { Length: 0 } => "leerer String",   // Property Pattern
+      string s and { Length: > 10 } => "langer String",
+      not string         => "kein String",   // C# 9: not
+      _                  => "unbekannt"
+  };
+  
+  // Tupel Pattern:
+  string Ampel(bool rot, bool gelb, bool gruen) => (rot, gelb, gruen) switch
+  {
+      (true, false, false) => "Stopp",
+      (true, true, false)  => "Gleich fahren",
+      (false, false, true) => "Fahren",
+      (false, true, false) => "Bremsen",
+      _                    => "Defekt"
+  };
+  
+  // List Pattern (C# 11):
+  string BeschreibeListe(int[] arr) => arr switch
+  {
+      []           => "leer",
+      [var x]      => $"ein Element: {x}",
+      [var x, var y] => $"zwei: {x}, {y}",
+      [1, 2, ..]   => "beginnt mit 1, 2",
+      [.., 99]     => "endet mit 99",
+      [var first, .. var rest] => $"Kopf: {first}, Rest: {rest.Length} Elemente"
+  };
+
+------------------------------------------------------------------------
+12.3  Required Members (C# 11)
+------------------------------------------------------------------------
+
+  public class Konfiguration
+  {
+      public required string ServerAdresse { get; init; }   // MUSS gesetzt werden!
+      public required int Port { get; init; }
+      public string Protokoll { get; init; } = "https";     // optional
+  }
+  
+  // Compile-Error wenn nicht gesetzt:
+  // var k = new Konfiguration();   → FEHLER: ServerAdresse und Port fehlen!
+  var k = new Konfiguration { ServerAdresse = "example.com", Port = 443 };
+
+------------------------------------------------------------------------
+12.4  Collection Expressions (C# 12)
+------------------------------------------------------------------------
+
+  // Einheitliche Syntax für alle Collections:
+  int[] arr = [1, 2, 3, 4, 5];
+  List<int> list = [1, 2, 3];
+  Span<int> span = [1, 2, 3];
+  
+  // Spread Operator:
+  int[] a = [1, 2, 3];
+  int[] b = [4, 5, 6];
+  int[] c = [..a, ..b, 7, 8];   // {1,2,3,4,5,6,7,8}
+
+------------------------------------------------------------------------
+12.5  Primary Constructors (C# 12)
+------------------------------------------------------------------------
+
+  // Konstruktorparameter direkt in der Klassendeklaration:
+  public class Service(IRepository repo, ILogger logger)
+  {
+      // repo und logger direkt verwendbar!
+      
+      public async Task<Data> HoleDaten(int id)
+      {
+          logger.LogInformation("Lade {Id}", id);
+          return await repo.FindAsync(id);
+      }
+  }
+  
+  // Records hatten das schon immer, jetzt auch Klassen!
+
+================================================================================
+SCHNELLREFERENZ C# — ProfiKurs v2
+================================================================================
+
+PROJEKT ERSTELLEN:
+  dotnet new console -n Projekt   → Console-App
+  dotnet new webapi  -n API       → Web API
+  dotnet new xunit   -n Tests     → Test-Projekt
+  dotnet run                       → kompilieren + starten
+  dotnet test                      → Tests ausführen
+
+TYPEN:
+  int, long, double, decimal, bool, char, string
+  int? nullable = null;            → nullable value type
+  string? nullable_ref = null;     → nullable reference type (C# 8, enable in .csproj)
+  var x = 42;                      → type inference
+  dynamic d = "...";               → runtime type
+
+STRINGS:
+  $"Name: {name}, Alter: {alter}"  String-Interpolation
+  $"{zahl:F2}"                     Formatierung (2 Nachkommastellen)
+  """multi-line raw string"""      Raw Literal (C# 11)
+  string.IsNullOrEmpty(s)
+  s?.Length ?? 0                   Null-sicher
+
+COLLECTIONS:
+  List<T>           dynamic array
+  Dictionary<K,V>   hash map
+  HashSet<T>        unique elements
+  Queue<T>          FIFO
+  Stack<T>          LIFO
+  PriorityQueue<T,P> priority queue
+
+KLASSEN:
+  Properties statt public Felder!
+  { get; set; }      auto-property
+  { get; init; }     init-only (C# 9)
+  required           muss gesetzt werden (C# 11)
+  record             unveränderlich, wertbasierte Gleichheit (C# 9)
+  struct             value type
+
+VERERBUNG:
+  : Basis              erbt von
+  : IInterface         implementiert
+  override             überschreibt
+  virtual              überschreibbar
+  abstract             muss überschrieben werden
+  sealed               kein Erben/Überschreiben
+  base.Methode()       Basis aufrufen
+
+DELEGATES / EVENTS:
+  Func<int, int>       hat Rückgabewert
+  Action<string>       kein Rückgabewert
+  Predicate<int>       gibt bool zurück
+  event EventHandler   publish-subscribe
+  x => x * 2          Lambda-Ausdruck
+
+LINQ:
+  .Where(x => x > 5)    Filtern
+  .Select(x => x * 2)   Transformieren
+  .OrderBy(x => x.Name) Sortieren
+  .GroupBy(x => x.Land) Gruppieren
+  .First() / .Any()     Einzelne / Existenz
+  .Sum() / .Average()   Aggregat
+  .ToList() / .ToArray() Materialisieren
+
+ASYNC:
+  async Task<T> Methode()    async definieren
+  await Aufgabe              auf Ergebnis warten
+  Task.WhenAll(t1, t2, t3)   alle parallel
+  CancellationToken ct       Abbruch-Support
+  using var cts = new CancellationTokenSource()
+
+PATTERN MATCHING:
+  obj is string s          Type-Check + cast
+  obj is { Name: "Max" }   Property Pattern
+  switch expression        →  mit =>
+  and / or / not           Logische Patterns (C# 9)
+  [1, 2, ..]               List Pattern (C# 11)
+
+MEMORY:
+  IDisposable + using      garantiertes Aufräumen
+  Span<T>                  Fenster auf Speicher, kein Kopieren
+  ArrayPool<T>.Shared      Array-Wiederverwendung
+  GC.Collect()             SELTEN nötig, meist falsch
+
+TESTING (xUnit):
+  [Fact]                   einfacher Test
+  [Theory] + [InlineData]  parametrisierter Test
+  Assert.Equal(erwartet, tatsächlich)
+  Assert.Throws<T>(() => ...)
+  Mock<IService>().Setup().ReturnsAsync()
+
+ASP.NET CORE:
+  builder.Services.Add*()  DI registrieren
+  [ApiController]          Controller-Attribut
+  [HttpGet("{id}")]        Route + HTTP-Methode
+  [FromBody] dto           Request-Body
+  Ok(data) / NotFound()    Response-Ergebnisse
+  app.MapGet("/", ...)     Minimal API
+
+ENTITY FRAMEWORK:
+  DbContext + DbSet<T>     Datenkontext
+  LINQ → SQL               automatisch!
+  .Include(x => x.Nav)    Navigation Properties laden
+  await _db.SaveChangesAsync()  Änderungen speichern
+  dotnet ef migrations add  Migration erstellen
+  dotnet ef database update  DB aktualisieren
+
+DEPENDENCY INJECTION:
+  AddTransient    neues Objekt pro Anfrage
+  AddScoped       ein Objekt pro HTTP-Request
+  AddSingleton    ein Objekt für die gesamte App
+
+================================================================================
+LITERATUR & RESSOURCEN
+================================================================================
+  https://docs.microsoft.com/dotnet/csharp   Offizielle Doku
+  https://learn.microsoft.com/de-de/dotnet   .NET-Lernpfade
+  "C# in Depth" von Jon Skeet                DAS C#-Buch
+  "CLR via C#" von Jeffrey Richter           .NET-Internals
+  https://sharplab.io                         IL-Code anschauen
+  https://dotnetfiddle.net                    C# online ausprobieren
+  https://github.com/dotnet/csharplang       C#-Sprachdesign-Repo
+  https://learn.microsoft.com/aspnet/core    ASP.NET Core Doku
+  https://learn.microsoft.com/ef/core        EF Core Doku
+
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+================================================================================

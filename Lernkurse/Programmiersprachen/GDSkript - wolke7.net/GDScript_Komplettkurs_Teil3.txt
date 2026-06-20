@@ -1,0 +1,1092 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 3 von 4)
+================================================================================
+
+Voraussetzung: Teil 1 und 2 abgeschlossen. Du hast einen funktionalen
+Spieler mit Bewegung, Physik und Animationen.
+
+In diesem Teil baust du echte Spielsysteme: Inventar, Speichern/Laden,
+Signals für lose Kopplung, Ressourcen-basierte Datenstrukturen, und
+prozedurale Generierung — das Fundament für Minecraft-Klone und Open-World-RPGs.
+
+
+################################################################################
+TEIL 3 — SPIELSYSTEME UND DATEN
+################################################################################
+
+
+================================================================================
+MODUL 11: Signals — das Event-System von Godot
+================================================================================
+
+Signals sind Godots zentrales Kommunikationssystem zwischen Nodes. Statt
+direkte Referenzen zu halten ("der HP-Bar muss den Spieler kennen"), senden
+Nodes Signale aus — und jeder der es braucht, verbindet sich damit.
+
+Das ist keine Kleinigkeit: Signals machen dein Spiel modular. Der Spieler
+kennt die UI nicht. Die UI kennt den Spieler nicht. Aber wenn der Spieler
+"hp_changed" aussendet, kann sich die HP-Bar damit verbinden.
+
+------------------------------------------------------------------------
+11.1  Eigene Signals definieren und aussenden
+------------------------------------------------------------------------
+
+  extends CharacterBody2D
+
+  # Signal definieren (mit optionalen Parametern):
+  signal hp_geaendert(neues_hp: int, max_hp: int)
+  signal gestorben
+  signal item_eingesammelt(item_name: String, menge: int)
+  signal level_geschafft(level_nummer: int, zeit: float)
+
+  var hp: int = 100
+  var max_hp: int = 100
+
+  func schaden_nehmen(menge: int) -> void:
+      hp = max(0, hp - menge)
+      hp_geaendert.emit(hp, max_hp)    # Signal aussenden!
+      if hp <= 0:
+          gestorben.emit()              # Parameterlos
+
+  func item_aufheben(name: String, anzahl: int = 1) -> void:
+      # ... item zum inventar hinzufügen ...
+      item_eingesammelt.emit(name, anzahl)
+
+------------------------------------------------------------------------
+11.2  Signals verbinden — connect()
+------------------------------------------------------------------------
+
+Von einem anderen Node (z.B. UI-Manager):
+  extends CanvasLayer
+
+  @onready var hp_bar: ProgressBar = $HPBar
+  @onready var hp_label: Label = $HPLabel
+
+  func _ready() -> void:
+      # Spieler-Node holen und Signal verbinden:
+      var spieler: CharacterBody2D = get_tree().get_first_node_in_group("spieler")
+      spieler.hp_geaendert.connect(_on_hp_geaendert)
+      spieler.gestorben.connect(_on_spieler_gestorben)
+
+  func _on_hp_geaendert(neues_hp: int, max_hp: int) -> void:
+      hp_bar.max_value = max_hp
+      hp_bar.value = neues_hp
+      hp_label.text = "%d / %d" % [neues_hp, max_hp]
+
+  func _on_spieler_gestorben() -> void:
+      $GameOverScreen.visible = true
+
+Mit Lambda (kurz, für einfache Fälle):
+  spieler.gestorben.connect(func(): get_tree().change_scene_to_file("res://scenes/GameOver.tscn"))
+
+Mit Callable (Funktion als Objekt übergeben):
+  var callback := Callable(self, "_on_hp_geaendert")
+  spieler.hp_geaendert.connect(callback)
+  # Später trennen:
+  spieler.hp_geaendert.disconnect(callback)
+
+Einmalige Verbindung (Signal trennt sich nach erstem Auslösen):
+  timer.timeout.connect(naechstes_level_laden, CONNECT_ONE_SHOT)
+
+------------------------------------------------------------------------
+11.3  Signals im Editor verbinden
+------------------------------------------------------------------------
+
+Im Editor: Node auswählen → "Node"-Tab (neben Inspector) → "Signale"-Abschnitt
+→ Signal per Doppelklick verbinden → Methoden-Name eingeben → "Verbinden".
+
+Das ist oft einfacher für einmalige Verbindungen. Godot generiert dann
+automatisch die Methode in deinem Skript (leere Funktion).
+
+Wann Editor, wann Code?
+  Editor:  Einfache, statische Verbindungen (Knopf → Methode in gleichem Skript)
+  Code:    Dynamische Verbindungen (Instanzierte Nodes, zur Laufzeit erstellt)
+
+------------------------------------------------------------------------
+11.4  Eingebaute Godot-Signals
+------------------------------------------------------------------------
+
+Jeder Node-Typ hat eigene Signale. Die wichtigsten:
+
+Node:
+  tree_entered    → Node in Szenenbaum eingetreten
+  tree_exiting    → Node verlässt Baum (vor queue_free)
+  ready           → _ready() wurde aufgerufen
+
+Timer:
+  timeout         → Timer abgelaufen
+
+Button/BaseButton:
+  pressed         → Gedrückt (einmalig)
+  button_down     → Gedrückt (gehalten)
+  button_up       → Losgelassen
+  toggled(bool)   → Toggle-Status geändert
+
+LineEdit/TextEdit:
+  text_changed(text)    → Text geändert
+  text_submitted(text)  → Enter gedrückt
+
+Area2D/3D:
+  body_entered(body)  → Body tritt ein
+  body_exited(body)   → Body tritt aus
+
+AnimationPlayer:
+  animation_finished(name)  → Animation beendet
+  animation_started(name)   → Animation gestartet
+
+SceneTree:
+  get_tree().process_frame  → Nach jedem Frame (await nutzbar)
+  get_tree().physics_frame  → Nach jedem Physik-Frame
+
+------------------------------------------------------------------------
+11.5  Await — auf Signals warten
+------------------------------------------------------------------------
+
+await macht aus asynchronem Code lesbaren linearen Code:
+
+  func angriff_sequenz() -> void:
+      # Warte auf Ende der Angriffs-Animation:
+      animations.play("angriff")
+      await animations.animation_finished
+
+      # Jetzt erst: Schaden austeilen
+      nahkampf_schaden_austeilen()
+
+      # Kurz warten, dann zurück zu idle:
+      await get_tree().create_timer(0.3).timeout
+      animations.play("idle")
+
+  # Auf nächsten Frame warten (für Initialisierungen):
+  func _ready() -> void:
+      await get_tree().process_frame  # Einen Frame überspringen
+      # Jetzt sind ALLE Nodes initialisiert
+
+  # Auf Input warten:
+  func warte_auf_bestaetigung() -> bool:
+      await $BestaetigenButton.pressed
+      return true
+
+WICHTIG: await macht die aktuelle Funktion zu einer Coroutine. Sie pausiert
+an der await-Stelle und gibt die Kontrolle zurück — das Spiel läuft weiter.
+Die Funktion wird fortgesetzt wenn das Signal ausgelöst wird.
+
+Das ist NICHT dasselbe wie Thread-Schlaf — keine Blockierung!
+
+------------------------------------------------------------------------
+11.6  Signal-Bus (Autoload) — globale Signale
+------------------------------------------------------------------------
+
+Für Signale die viele Systeme gleichzeitig interessieren (z.B. "Spieler
+ist gestorben" → GameOver-Screen, Save-System, Analytics):
+
+Erstelle ein Autoload-Singleton (Modul 13) namens "Events":
+  # Events.gd (als Autoload registriert)
+  extends Node
+
+  signal spieler_gestorben
+  signal level_gestartet(level_id: int)
+  signal gold_geaendert(neues_gold: int)
+  signal quest_abgeschlossen(quest_name: String)
+  signal gegner_getötet(gegner_typ: String, position: Vector2)
+
+Irgendwo im Spieler-Skript:
+  Events.spieler_gestorben.emit()
+
+Irgendwo im UI-Skript:
+  Events.spieler_gestorben.connect(_on_spieler_gestorben)
+
+Irgendwo im Analytics-Skript:
+  Events.gegner_getötet.connect(func(typ, pos): track_event("kill", typ))
+
+So kennt niemand niemanden — maximale Entkopplung!
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+1. Erstelle einen Spieler mit signals: hp_geaendert, gestorben, erfahrung_gewonnen.
+2. Erstelle eine separate UI-Node die auf alle drei Signale reagiert:
+     HP-Bar aktualisieren, Game-Over-Panel zeigen, Erfahrungs-Label.
+3. Implementiere eine angriff_sequenz() mit await:
+     Animation abspielen → warten bis fertig → Schaden austeilen → Cooldown.
+4. Erstelle einen globalen Event-Bus als Autoload mit 5 Spiel-Events.
+     Verbinde mindestens 3 verschiedene Nodes mit je einem Event.
+5. Bonus: Erstelle einen "Quest-Manager" der nur per Signals kommuniziert:
+     quest_angenommen, quest_fortschritt_geaendert, quest_abgeschlossen.
+     Er kennt weder Spieler noch UI direkt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Resources — Daten sauber strukturieren
+================================================================================
+
+Resources sind Godots System für Daten-Objekte. Alles in Godot ist eine
+Resource: Texturen, Sounds, Materials, Skripte — aber auch deine eigenen
+Spieler-Statistiken, Items, Quests, Dialoge.
+
+------------------------------------------------------------------------
+12.1  Eigene Resources erstellen
+------------------------------------------------------------------------
+
+  class_name ItemData   # Namen registrieren! Dann im Inspector wählbar.
+  extends Resource
+
+  @export var name: String = "Unbekanntes Item"
+  @export var beschreibung: String = ""
+  @export var icon: Texture2D
+  @export var wert: int = 0
+  @export var gewicht: float = 0.1
+
+  enum Typ { WAFFE, RUESTUNG, TRANK, MATERIAL, SCHLUESSEL }
+  @export var typ: Typ = Typ.MATERIAL
+
+  @export var stapelbar: bool = true
+  @export var max_stapel: int = 99
+
+  # Methoden auf Resources:
+  func beschreibung_kurz() -> String:
+      return "%s (%d Gold)" % [name, wert]
+
+Im Editor:
+  Rechtsklick im Dateisystem → "Neue Resource" → "ItemData"
+  → Inspector zeigt alle @export-Felder → ausfüllen → speichern als .tres
+
+Komplexes Beispiel — Charakter-Klassen:
+  class_name KlassenData
+  extends Resource
+
+  @export var klassen_name: String = "Krieger"
+  @export var basis_hp: int = 100
+  @export var basis_mana: int = 30
+  @export var staerke: int = 15
+  @export var geschick: int = 8
+  @export var magie: int = 5
+  @export var wachstum_hp: int = 12      # HP pro Level
+  @export var startwaffe: ItemData        # Eine andere Resource!
+  @export var startausruestung: Array[ItemData]  # Array von Resources!
+  @export var faehigkeiten: Array[FaehigkeitData]
+
+------------------------------------------------------------------------
+12.2  Resources zur Laufzeit laden
+------------------------------------------------------------------------
+
+  # Vorab geladen (blockierend):
+  var schwert: ItemData = load("res://data/items/schwert.tres")
+
+  # Lazy load (erst beim ersten Zugriff, gecacht):
+  var schwert: ItemData = preload("res://data/items/schwert.tres")
+  # preload ist für Ressourcen die IMMER gebraucht werden — Compiler-Zeit
+
+  # Per Code aus Ordner laden:
+  func alle_items_laden() -> Array[ItemData]:
+      var items: Array[ItemData] = []
+      var pfade: PackedStringArray = DirAccess.get_files_at("res://data/items/")
+      for pfad in pfade:
+          if pfad.ends_with(".tres"):
+              items.append(load("res://data/items/" + pfad) as ItemData)
+      return items
+
+Für große Projekte: ResourceLoader (nicht-blockierend):
+  func item_laden_async(pfad: String) -> void:
+      ResourceLoader.load_threaded_request(pfad)
+      await get_tree().create_timer(0.01).timeout  # Kurz warten
+      var resource: Resource = ResourceLoader.load_threaded_get(pfad)
+
+------------------------------------------------------------------------
+12.3  Resources duplizieren — WICHTIG
+------------------------------------------------------------------------
+
+Resources sind per Default GETEILT. Wenn du eine Resource änderst,
+siehst du es überall wo sie benutzt wird.
+
+  # GEFÄHRLICH — alle Spieler teilen dieselben Stats!
+  var stats: SpielerStats = preload("res://data/standard_stats.tres")
+  stats.hp = 50   # Modifiziert die ORIGINAL-Resource!
+
+  # KORREKT — jeder Spieler bekommt eine Kopie:
+  var stats: SpielerStats = preload("res://data/standard_stats.tres").duplicate()
+  stats.hp = 50   # Nur diese Instanz
+
+  # TIEF kopieren (auch verschachtelte Resources duplizieren):
+  var stats: SpielerStats = original.duplicate(true)
+
+------------------------------------------------------------------------
+12.4  Speichern als .tres (Textformat)
+------------------------------------------------------------------------
+
+Resources können als .tres gespeichert werden — lesbar, versionierbar, editierbar:
+  ResourceSaver.save(meine_resource, "user://spielstand.tres")
+
+  var geladen: MeinSpeicherdaten = load("user://spielstand.tres")
+
+HINWEIS: .tres speichert den Zustand ALLER @export-Variablen. Perfekt für
+Spielstände, Konfigurationen, Gegner-Templates.
+
+Unterschied res:// vs user://:
+  res://  → Spielordner (read-only im Export, nur für Game-Assets)
+  user//  → Nutzerdaten-Ordner (schreibbar, für Spielstände, Config)
+
+------------------------------------------------------------------------
+12.5  Praktische Resource-Typen für Spiele
+------------------------------------------------------------------------
+
+Für Quests:
+  class_name QuestData
+  extends Resource
+
+  @export var quest_id: StringName
+  @export var titel: String
+  @export var beschreibung: String
+  @export var belohnungen: Array[ItemData]
+  @export var erfahrung_belohnung: int
+  @export var voraussetzungen: Array[StringName]  # andere Quest-IDs
+  @export var schritte: Array[QuestSchrittData]
+
+Für Dialog:
+  class_name DialogData
+  extends Resource
+
+  class_name DialogZeile
+  extends Resource
+  @export var sprecher: String
+  @export var text: String
+  @export var portrait: Texture2D
+  @export var naechste: Array[DialogZeile]     # Verzweigungen möglich
+
+Für prozedurale Generierung (Biome, Levels):
+  class_name BiomData
+  extends Resource
+  @export var name: String
+  @export var boden_textur: Texture2D
+  @export var baeume: Array[PackedScene]
+  @export var gegner: Array[GegnerData]
+  @export var musik: AudioStream
+  @export var nebelfarbe: Color
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+1. Erstelle eine ItemData-Resource mit allen Feldern (Name, Typ, Wert, Icon).
+     Erstelle 5 verschiedene Items (.tres) im Editor.
+2. Schreibe ein "Inventar-System" (Node) das:
+     - Eine Array[ItemData] verwaltet
+     - Items hinzufügen/entfernen kann
+     - Ein Signal "inventar_geaendert" aussendet
+3. Erstelle eine KlassenData für 3 Klassen (Krieger, Magier, Schurke).
+     Der Spieler startet mit einer @export var klasse: KlassenData.
+4. Demonstriere den Duplicate-Bug: Erstelle eine Resource, teile sie,
+     ändere sie und zeige dass beide Instanzen betroffen sind.
+     Dann fixe es mit .duplicate().
+5. Bonus: Erstelle eine QuestData-Resource und einen einfachen QuestManager.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: Gruppen, Szenen-Wechsel und Autoloads
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Gruppen — Nodes kategorisieren
+------------------------------------------------------------------------
+
+Gruppen sind das einfachste Kategorisierungs-System. Kein Skript nötig:
+Im Editor: Node auswählen → Node-Tab → Gruppen → Gruppe hinzufügen.
+
+Per Code:
+  add_to_group("feinde")
+  add_to_group("interagierbar")
+  remove_from_group("feinde")
+  is_in_group("feinde")   → bool
+
+Alle Nodes einer Gruppe bekommen:
+  get_tree().get_nodes_in_group("feinde")    # Array[Node]
+
+Methode auf allen Nodes einer Gruppe aufrufen:
+  get_tree().call_group("feinde", "alarm_schlagen")
+  # Ruft alarm_schlagen() auf JEDEM Node in der Gruppe "feinde" auf
+
+  # Mit Sicherheitsnetz (Methode muss nicht existieren):
+  get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, "feinde", "alarm_schlagen")
+
+Signal an alle in Gruppe senden:
+  for node in get_tree().get_nodes_in_group("saveable"):
+      node.speichern(spielstand_data)
+
+Typische Gruppen in Spielen:
+  "spieler"         → Der/die Spieler
+  "feinde"          → Alle Gegner
+  "interagierbar"   → Objekte mit Interaktions-Funktion
+  "saveable"        → Objekte die ihren Zustand speichern
+  "projektile"      → Aktive Geschosse
+  "checkpoints"     → Checkpoint-Nodes
+  "audio_sources"   → Alle Audioquellen (für Lautstärke-Kontrolle)
+  "paused_on_menu"  → Nodes die im Menü pausieren sollen
+
+------------------------------------------------------------------------
+13.2  Autoloads / Singletons
+------------------------------------------------------------------------
+
+Autoloads sind Nodes/Skripte die beim Spielstart geladen werden und
+während des gesamten Spiels existieren — auch beim Szenen-Wechsel!
+
+Einrichten: Projekteinstellungen → Autoloads → Skript hinzufügen → Name vergeben.
+
+Zugriff im Code: Einfach den Namen benutzen:
+  GameManager.score += 100
+  AudioManager.musik_abspielen("boss_theme")
+  SaveSystem.spielstand_laden()
+
+Typische Autoloads:
+
+  GameManager.gd — Globaler Spielzustand:
+    extends Node
+
+    signal score_geaendert(neuer_score: int)
+    signal spiel_pausiert(ist_pausiert: bool)
+
+    var score: int = 0:
+        set(wert):
+            score = wert
+            score_geaendert.emit(score)
+
+    var ist_pausiert: bool = false:
+        set(wert):
+            ist_pausiert = wert
+            get_tree().paused = wert
+            spiel_pausiert.emit(wert)
+
+    var aktuelles_level: int = 1
+    var spieler_leben: int = 3
+
+    func spiel_neu_starten() -> void:
+        score = 0
+        aktuelles_level = 1
+        spieler_leben = 3
+        get_tree().change_scene_to_file("res://scenes/Level1.tscn")
+
+  AudioManager.gd — Musik und Sounds:
+    extends Node
+
+    @onready var musik_spieler: AudioStreamPlayer = $MusikSpieler
+    @onready var sound_spieler: AudioStreamPlayer = $SoundSpieler
+
+    var musik_lautstaerke: float = 1.0:
+        set(wert):
+            musik_lautstaerke = clamp(wert, 0.0, 1.0)
+            musik_spieler.volume_db = linear_to_db(musik_lautstaerke)
+
+    func musik_abspielen(stream_pfad: String, fade_in: float = 0.5) -> void:
+        var neue_musik: AudioStream = load(stream_pfad)
+        if musik_spieler.stream == neue_musik:
+            return   # Bereits dieselbe Musik
+        var tween := create_tween()
+        tween.tween_property(musik_spieler, "volume_db", -80.0, fade_in)
+        tween.tween_callback(func():
+            musik_spieler.stream = neue_musik
+            musik_spieler.play()
+        )
+        tween.tween_property(musik_spieler, "volume_db", linear_to_db(musik_lautstaerke), fade_in)
+
+    func sound_abspielen(sound: AudioStream, lautstaerke: float = 1.0) -> void:
+        var player := AudioStreamPlayer.new()
+        player.stream = sound
+        player.volume_db = linear_to_db(lautstaerke)
+        add_child(player)
+        player.play()
+        player.finished.connect(player.queue_free)  # Auto-cleanup
+
+------------------------------------------------------------------------
+13.3  Szenen-Management
+------------------------------------------------------------------------
+
+Einfacher Szenen-Wechsel:
+  get_tree().change_scene_to_file("res://scenes/Level2.tscn")
+  get_tree().change_scene_to_packed(level2_scene)
+
+Szenen-Wechsel mit Ladebildschirm:
+  func level_laden(pfad: String) -> void:
+      # 1. Ladebildschirm einblenden
+      $Ladebildschirm.visible = true
+      var tween := create_tween()
+      tween.tween_property($Ladebildschirm, "modulate:a", 1.0, 0.5)
+      await tween.finished
+
+      # 2. Szene laden (nicht-blockierend):
+      ResourceLoader.load_threaded_request(pfad)
+      while true:
+          var fortschritt: Array = []
+          var status := ResourceLoader.load_threaded_get_status(pfad, fortschritt)
+          $Ladebildschirm/ProgressBar.value = fortschritt[0] * 100
+
+          if status == ResourceLoader.THREAD_LOAD_LOADED:
+              break
+          await get_tree().process_frame
+
+      # 3. Szene wechseln:
+      var neue_szene: PackedScene = ResourceLoader.load_threaded_get(pfad)
+      get_tree().change_scene_to_packed(neue_szene)
+
+Additive Szenen (mehrere Szenen gleichzeitig):
+  # Hilfsszene laden (Popup, Overlay):
+  var overlay_szene: PackedScene = load("res://scenes/PauseMenu.tscn")
+  var overlay: Node = overlay_szene.instantiate()
+  get_tree().root.add_child(overlay)
+
+  # Hilfsszene entfernen:
+  overlay.queue_free()
+
+Pause-System:
+  get_tree().paused = true   # Alle Nodes mit process_mode=PAUSABLE stoppen
+
+  # Nodes die auch im Pause laufen sollen:
+  process_mode = Node.PROCESS_MODE_ALWAYS   # Läuft immer
+  process_mode = Node.PROCESS_MODE_PAUSABLE  # Stoppt bei Pause (Standard)
+  process_mode = Node.PROCESS_MODE_WHEN_PAUSED # Läuft NUR bei Pause
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+1. Erstelle 3 Gruppen: "feinde", "interagierbar", "saveable".
+   Füge verschiedene Nodes hinzu. Rufe eine Methode auf allen auf:
+   get_tree().call_group("feinde", "einfrieren")
+2. Erstelle einen GameManager Autoload mit: score, leben, ist_pausiert.
+3. Verbinde Pause mit Escape-Taste (Toggle).
+4. Baue einen einfachen Level-Wechsel: Zwei Szenen, jede mit einem "Portal".
+   Portal berühren → nächste Szene laden (mit kurzem Fade-Übergang).
+5. Bonus: Implementiere einen vollständigen AudioManager mit
+   Musik-Fadeout/-Fadein beim Szenen-Wechsel.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: Inventory, Stats und Spieler-Daten (Speichern/Laden)
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Spielstand-Daten strukturieren
+------------------------------------------------------------------------
+
+  class_name SpielstandDaten
+  extends Resource
+
+  # Spieler
+  @export var spieler_name: String = "Held"
+  @export var level: int = 1
+  @export var erfahrung: int = 0
+  @export var hp: int = 100
+  @export var max_hp: int = 100
+  @export var gold: int = 0
+
+  # Welt
+  @export var aktuelles_level: String = "res://scenes/Level1.tscn"
+  @export var spieler_position: Vector2 = Vector2.ZERO
+  @export var spielzeit_sekunden: float = 0.0
+
+  # Inventar und Quests
+  @export var inventar_items: Array[String] = []  # Item-IDs
+  @export var inventar_mengen: Array[int] = []
+  @export var abgeschlossene_quests: Array[String] = []
+  @export var aktive_quests: Array[String] = []
+  @export var entdeckte_gebiete: Array[String] = []
+
+  # Einstellungen
+  @export var musik_lautstaerke: float = 1.0
+  @export var sound_lautstaerke: float = 1.0
+  @export var keybindings: Dictionary = {}
+
+------------------------------------------------------------------------
+14.2  Speichern und Laden
+------------------------------------------------------------------------
+
+SaveSystem.gd (als Autoload):
+  extends Node
+
+  const SPEICHER_PFAD: String = "user://spielstand_%d.tres"
+  const MAX_SLOTS: int = 3
+
+  var aktueller_slot: int = 0
+  var aktueller_spielstand: SpielstandDaten = null
+
+  func speichern(slot: int = aktueller_slot) -> bool:
+      var daten := SpielstandDaten.new()
+
+      # Daten vom Spieler holen:
+      var spieler: Node = get_tree().get_first_node_in_group("spieler")
+      if spieler:
+          daten.spieler_position = spieler.global_position
+          daten.hp = spieler.hp
+          daten.gold = spieler.gold
+          # ... alle anderen Felder
+
+      daten.spielzeit_sekunden = Time.get_unix_time_from_system()
+      daten.aktuelles_level = get_tree().current_scene.scene_file_path
+
+      var pfad := SPEICHER_PFAD % slot
+      var fehler := ResourceSaver.save(daten, pfad)
+      if fehler == OK:
+          print("Spielstand gespeichert: ", pfad)
+          return true
+      else:
+          push_error("Speicherfehler: ", fehler)
+          return false
+
+  func laden(slot: int = 0) -> SpielstandDaten:
+      var pfad := SPEICHER_PFAD % slot
+      if not FileAccess.file_exists(pfad):
+          return null
+      var daten := load(pfad) as SpielstandDaten
+      aktueller_spielstand = daten
+      return daten
+
+  func spielstand_anwenden(daten: SpielstandDaten) -> void:
+      # Szene laden:
+      get_tree().change_scene_to_file(daten.aktuelles_level)
+      # Nach dem Laden Spieler positionieren:
+      await get_tree().process_frame
+      var spieler: Node = get_tree().get_first_node_in_group("spieler")
+      if spieler:
+          spieler.global_position = daten.spieler_position
+          spieler.hp = daten.hp
+
+  func slot_existiert(slot: int) -> bool:
+      return FileAccess.file_exists(SPEICHER_PFAD % slot)
+
+  func slot_loeschen(slot: int) -> void:
+      DirAccess.remove_absolute(SPEICHER_PFAD % slot)
+
+------------------------------------------------------------------------
+14.3  Inventar-System
+------------------------------------------------------------------------
+
+  class_name Inventar
+  extends Node
+
+  signal inventar_geaendert
+  signal item_hinzugefuegt(item: ItemData, menge: int)
+  signal item_entfernt(item: ItemData, menge: int)
+
+  # Dictionary: item_id → {item: ItemData, menge: int}
+  var items: Dictionary = {}
+  @export var max_gewicht: float = 50.0
+
+  func aktuelles_gewicht() -> float:
+      var gesamt: float = 0.0
+      for id in items:
+          gesamt += items[id]["item"].gewicht * items[id]["menge"]
+      return gesamt
+
+  func hinzufuegen(item: ItemData, menge: int = 1) -> bool:
+      if aktuelles_gewicht() + item.gewicht * menge > max_gewicht:
+          return false   # Zu schwer
+
+      var id: String = item.resource_path
+      if items.has(id):
+          if item.stapelbar:
+              items[id]["menge"] = min(items[id]["menge"] + menge, item.max_stapel)
+          else:
+              return false   # Nicht stapelbar und schon vorhanden
+      else:
+          items[id] = {"item": item, "menge": menge}
+
+      item_hinzugefuegt.emit(item, menge)
+      inventar_geaendert.emit()
+      return true
+
+  func entfernen(item: ItemData, menge: int = 1) -> bool:
+      var id: String = item.resource_path
+      if not items.has(id) or items[id]["menge"] < menge:
+          return false
+
+      items[id]["menge"] -= menge
+      if items[id]["menge"] <= 0:
+          items.erase(id)
+
+      item_entfernt.emit(item, menge)
+      inventar_geaendert.emit()
+      return true
+
+  func hat_item(item: ItemData, menge: int = 1) -> bool:
+      var id: String = item.resource_path
+      return items.has(id) and items[id]["menge"] >= menge
+
+  # Für Speichern/Laden:
+  func zu_dictionary() -> Dictionary:
+      var d: Dictionary = {}
+      for id in items:
+          d[id] = items[id]["menge"]
+      return d
+
+  func von_dictionary(d: Dictionary) -> void:
+      items.clear()
+      for id in d:
+          var item: ItemData = load(id) as ItemData
+          if item:
+              items[id] = {"item": item, "menge": d[id]}
+
+------------------------------------------------------------------------
+14.4  JSON als Speicherformat (Alternative zu .tres)
+------------------------------------------------------------------------
+
+.tres ist Godot-spezifisch. Für portierbare Daten oder Mod-Unterstützung: JSON.
+
+Speichern:
+  func json_speichern(daten: Dictionary, pfad: String) -> void:
+      var json_string := JSON.stringify(daten, "\t")   # Eingerückt lesbar
+      var datei := FileAccess.open(pfad, FileAccess.WRITE)
+      if datei:
+          datei.store_string(json_string)
+          datei.close()
+
+Laden:
+  func json_laden(pfad: String) -> Dictionary:
+      if not FileAccess.file_exists(pfad):
+          return {}
+      var datei := FileAccess.open(pfad, FileAccess.READ)
+      if not datei:
+          return {}
+      var json_string := datei.get_as_text()
+      datei.close()
+      var ergebnis := JSON.parse_string(json_string)
+      return ergebnis if ergebnis is Dictionary else {}
+
+Spielstand als JSON:
+  func spielstand_zu_json() -> Dictionary:
+      return {
+          "spieler": {
+              "name": spieler_name,
+              "hp": hp,
+              "level": level,
+              "position": {"x": position.x, "y": position.y}
+          },
+          "inventar": inventar.zu_dictionary(),
+          "quests": abgeschlossene_quests
+      }
+
+  func spielstand_von_json(d: Dictionary) -> void:
+      spieler_name = d["spieler"]["name"]
+      hp = d["spieler"]["hp"]
+      var pos: Dictionary = d["spieler"]["position"]
+      position = Vector2(pos["x"], pos["y"])
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+1. Implementiere das komplette Inventar-System (hinzufügen, entfernen, hat_item).
+2. Baue eine simple Inventar-UI: Grid mit Item-Icons und Mengen.
+     Reagiert auf inventar_geaendert Signal.
+3. Implementiere Speichern/Laden mit ResourceSaver/.tres:
+     Spieler-Position, HP, Gold, Inventar-Inhalt.
+4. Baue ein Speicher-Auswahl-Menü: 3 Slots, zeigt Spielzeit und Level.
+5. Bonus: Implementiere Auto-Save (alle 5 Minuten + bei Level-Wechsel).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Prozedurale Generierung — Welten erschaffen
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Noise und Heightmaps — Terrain generieren
+------------------------------------------------------------------------
+
+Godot hat eingebaute Noise-Algorithmen. Der wichtigste: FastNoiseLite.
+
+  var noise := FastNoiseLite.new()
+  noise.noise_type = FastNoiseLite.TYPE_PERLIN    # oder SIMPLEX, CELLULAR
+  noise.seed = 42        # Für reproduzierbare Ergebnisse
+  noise.frequency = 0.01  # Kleiner = sanftere Hügel
+  noise.fractal_octaves = 5   # Mehr Oktaven = mehr Detail
+
+  # Höhenwert an Position (x,y):
+  var hoehe: float = noise.get_noise_2d(x, y)   # -1.0 bis 1.0
+
+  # Für 3D-Terrain:
+  var hoehe3d: float = noise.get_noise_3d(x, y, z)
+
+Einfaches 2D-Tilemap-Terrain:
+  extends Node2D
+
+  @onready var tilemap: TileMap = $TileMap
+  const WELT_BREITE: int = 100
+  const WELT_HOEHE: int = 50
+
+  var noise := FastNoiseLite.new()
+
+  func _ready() -> void:
+      noise.seed = randi()
+      noise.frequency = 0.05
+      welt_generieren()
+
+  func welt_generieren() -> void:
+      for x in range(WELT_BREITE):
+          var oberflaechenwert := noise.get_noise_1d(x)     # 1D für 2D-Platformer!
+          var oberflaeche: int = int((oberflaechenwert + 1.0) * 0.5 * WELT_HOEHE * 0.3 + WELT_HOEHE * 0.4)
+
+          for y in range(WELT_HOEHE):
+              if y > oberflaeche:
+                  if y < oberflaeche + 3:
+                      tilemap.set_cell(0, Vector2i(x, y), 0, Vector2i(0, 0))  # Erde
+                  else:
+                      tilemap.set_cell(0, Vector2i(x, y), 0, Vector2i(1, 0))  # Stein
+              elif y == oberflaeche:
+                  tilemap.set_cell(0, Vector2i(x, y), 0, Vector2i(2, 0))  # Gras
+
+------------------------------------------------------------------------
+15.2  Chunk-System — Infinite Worlds (Minecraft-Style)
+------------------------------------------------------------------------
+
+Für unendliche Welten lädst du nur Chunks in der Nähe des Spielers.
+
+  extends Node
+
+  const CHUNK_GROESSE: int = 16      # 16x16 Tiles pro Chunk
+  const SICHTWEITE: int = 3          # 3 Chunks in jede Richtung
+
+  var geladene_chunks: Dictionary = {}   # chunk_pos → ChunkNode
+  var spieler_chunk: Vector2i = Vector2i.ZERO
+
+  @export var chunk_szene: PackedScene
+
+  func _process(_delta: float) -> void:
+      var spieler_pos: Vector2 = get_tree().get_first_node_in_group("spieler").global_position
+      var neuer_chunk := Vector2i(
+          int(spieler_pos.x / (CHUNK_GROESSE * 16)),   # 16px pro Tile
+          int(spieler_pos.y / (CHUNK_GROESSE * 16))
+      )
+
+      if neuer_chunk != spieler_chunk:
+          spieler_chunk = neuer_chunk
+          chunks_aktualisieren()
+
+  func chunks_aktualisieren() -> void:
+      # Chunks im Bereich laden
+      for dx in range(-SICHTWEITE, SICHTWEITE + 1):
+          for dy in range(-SICHTWEITE, SICHTWEITE + 1):
+              var chunk_pos := spieler_chunk + Vector2i(dx, dy)
+              if not geladene_chunks.has(chunk_pos):
+                  chunk_laden(chunk_pos)
+
+      # Chunks außerhalb entladen
+      var zu_entladen: Array = []
+      for pos in geladene_chunks.keys():
+          if abs(pos.x - spieler_chunk.x) > SICHTWEITE + 1 or \
+             abs(pos.y - spieler_chunk.y) > SICHTWEITE + 1:
+              zu_entladen.append(pos)
+
+      for pos in zu_entladen:
+          chunk_entladen(pos)
+
+  func chunk_laden(chunk_pos: Vector2i) -> void:
+      var chunk: Node = chunk_szene.instantiate()
+      add_child(chunk)
+      chunk.position = Vector2(chunk_pos) * CHUNK_GROESSE * 16
+      chunk.generieren(chunk_pos, noise)
+      geladene_chunks[chunk_pos] = chunk
+
+  func chunk_entladen(chunk_pos: Vector2i) -> void:
+      geladene_chunks[chunk_pos].queue_free()
+      geladene_chunks.erase(chunk_pos)
+
+------------------------------------------------------------------------
+15.3  Prozedurale Dungeons — Room-Based Generation
+------------------------------------------------------------------------
+
+  extends Node2D
+
+  const DUNGEON_BREITE: int = 50
+  const DUNGEON_HOEHE: int = 50
+  const MIN_RAUMGROESSE: int = 4
+  const MAX_RAUMGROESSE: int = 10
+  const ANZAHL_RAEUME: int = 15
+
+  # Gitter: 0=Wand, 1=Boden, 2=Gang
+  var gitter: Array = []
+  var raeume: Array = []  # Array von Rect2i
+
+  func _ready() -> void:
+      gitter_initialisieren()
+      raeume_platzieren()
+      gaenge_verbinden()
+      tilemap_aufbauen()
+
+  func gitter_initialisieren() -> void:
+      gitter.resize(DUNGEON_HOEHE)
+      for y in range(DUNGEON_HOEHE):
+          gitter[y] = []
+          gitter[y].resize(DUNGEON_BREITE)
+          gitter[y].fill(0)   # Alles Wand
+
+  func raeume_platzieren() -> void:
+      for i in range(ANZAHL_RAEUME * 3):   # 3x versuchen
+          if raeume.size() >= ANZAHL_RAEUME:
+              break
+          var breite := randi_range(MIN_RAUMGROESSE, MAX_RAUMGROESSE)
+          var hoehe := randi_range(MIN_RAUMGROESSE, MAX_RAUMGROESSE)
+          var x := randi_range(1, DUNGEON_BREITE - breite - 1)
+          var y := randi_range(1, DUNGEON_HOEHE - hoehe - 1)
+          var neuer_raum := Rect2i(x, y, breite, hoehe)
+
+          # Überschneidung prüfen:
+          var ueberschneidung := false
+          for raum in raeume:
+              if neuer_raum.grow(1).intersects(raum):
+                  ueberschneidung = true
+                  break
+
+          if not ueberschneidung:
+              raeume.append(neuer_raum)
+              raum_zeichnen(neuer_raum)
+
+  func raum_zeichnen(raum: Rect2i) -> void:
+      for y in range(raum.position.y, raum.end.y):
+          for x in range(raum.position.x, raum.end.x):
+              gitter[y][x] = 1   # Boden
+
+  func gaenge_verbinden() -> void:
+      for i in range(raeume.size() - 1):
+          var a_mitte := raeume[i].get_center()
+          var b_mitte := raeume[i + 1].get_center()
+          # L-förmiger Gang:
+          var x := a_mitte.x
+          while x != b_mitte.x:
+              gitter[a_mitte.y][x] = 2
+              x += sign(b_mitte.x - x)
+          var y := a_mitte.y
+          while y != b_mitte.y:
+              gitter[y][b_mitte.x] = 2
+              y += sign(b_mitte.y - y)
+
+------------------------------------------------------------------------
+15.4  Gegner-Spawning und Loot-Tabellen
+------------------------------------------------------------------------
+
+Gewichtetes Zufalls-System:
+  class_name LootTabelle
+  extends Resource
+
+  class_name LootEintrag
+  extends Resource
+  @export var item: ItemData
+  @export var gewicht: float = 1.0
+  @export var min_menge: int = 1
+  @export var max_menge: int = 1
+
+  @export var eintraege: Array[LootEintrag] = []
+
+  func rollen() -> Dictionary:   # Gibt {"item": ItemData, "menge": int} zurück
+      var gesamt_gewicht: float = 0.0
+      for eintrag in eintraege:
+          gesamt_gewicht += eintrag.gewicht
+
+      var wuerfel := randf() * gesamt_gewicht
+      var aktuell: float = 0.0
+
+      for eintrag in eintraege:
+          aktuell += eintrag.gewicht
+          if wuerfel <= aktuell:
+              return {
+                  "item": eintrag.item,
+                  "menge": randi_range(eintrag.min_menge, eintrag.max_menge)
+              }
+
+      return {}   # Sollte nicht passieren
+
+Gegner-Spawner:
+  extends Node2D
+
+  @export var gegner_typen: Array[PackedScene] = []
+  @export var gewichte: Array[float] = []
+  @export var max_gleichzeitig: int = 5
+  @export var spawn_radius: float = 500.0
+
+  func _ready() -> void:
+      var timer := $SpawnTimer
+      timer.timeout.connect(spawn_versuch)
+      timer.start()
+
+  func spawn_versuch() -> void:
+      var aktive_gegner := get_tree().get_nodes_in_group("feinde").size()
+      if aktive_gegner >= max_gleichzeitig:
+          return
+
+      var spieler_pos: Vector2 = get_tree().get_first_node_in_group("spieler").global_position
+      var spawn_pos: Vector2 = spieler_pos + Vector2.from_angle(randf() * TAU) * spawn_radius
+
+      var gegner_szene := gewichteter_zufalls_pick()
+      if gegner_szene:
+          var gegner: Node = gegner_szene.instantiate()
+          get_tree().current_scene.add_child(gegner)
+          gegner.global_position = spawn_pos
+
+  func gewichteter_zufalls_pick() -> PackedScene:
+      if gegner_typen.is_empty():
+          return null
+      var gesamt: float = 0.0
+      for w in gewichte:
+          gesamt += w
+      var wuerfel := randf() * gesamt
+      var aktuell: float = 0.0
+      for i in range(gegner_typen.size()):
+          aktuell += gewichte[i]
+          if wuerfel <= aktuell:
+              return gegner_typen[i]
+      return gegner_typen[-1]
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+1. Erstelle eine prozedurale 2D-Platformer-Welt mit FastNoiseLite.
+     Verschiedene Tile-Typen: Gras oben, Erde darunter, Stein tief.
+2. Implementiere ein Chunk-System: Wenn der Spieler sich bewegt,
+     werden Chunks geladen/entladen. Zeige die Chunk-Grenzen als Debug-Linien.
+3. Generiere einen prozeduralen Dungeon (Room-Based Generation).
+4. Implementiere eine Loot-Tabelle mit 5 Items und verschiedenen Gewichten.
+     Simuliere 1000 "Rolls" und gib die Häufigkeit jedes Items aus.
+5. Bonus: Füge dem Dungeon-Generator Inhalte hinzu:
+     - Im ersten Raum: Spawn-Punkt
+     - Im letzten Raum: Boss + Truhe mit Loot-Tabelle
+     - In allen anderen: zufällige Gegner basierend auf Tiefe
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 3
+################################################################################
+
+SIGNALS:
+  signal name(param: Typ)          → Signal deklarieren
+  signal_name.emit(wert)           → Signal aussenden
+  signal_name.connect(funktion)    → Signal verbinden
+  signal_name.disconnect(funktion) → Trennen
+  await signal_name                → Auf Signal warten (Coroutine)
+  CONNECT_ONE_SHOT                 → Einmalig verbinden
+
+RESOURCES:
+  class_name MeinName              → Im Editor wählbar machen
+  extends Resource
+  @export var feld: Typ
+  load("res://pfad.tres")          → Laden
+  ResourceSaver.save(res, pfad)    → Speichern
+  res.duplicate(true)              → Tiefe Kopie!
+
+GRUPPEN:
+  add_to_group("name")
+  get_tree().get_nodes_in_group("name")    → Array[Node]
+  get_tree().call_group("name", "methode") → Alle aufrufen
+  is_in_group("name")                      → bool
+
+AUTOLOADS:
+  Projekteinstellungen → Autoloads → global verfügbar
+  MeinAutoload.methode()           → Überall zugreifbar
+
+DATEIZUGRIFF:
+  "res://"    → Spielordner (read-only im Export)
+  "user://"   → Nutzerdaten (immer schreibbar)
+  FileAccess.file_exists(pfad)
+  FileAccess.open(pfad, FileAccess.READ/WRITE)
+  JSON.stringify(dict) / JSON.parse_string(string)
+  ResourceSaver.save(res, pfad) / load(pfad)
+
+NOISE:
+  var noise := FastNoiseLite.new()
+  noise.seed = 42; noise.frequency = 0.05
+  noise.get_noise_2d(x, y)        → -1.0 bis 1.0
+
+================================================================================
+ENDE TEIL 3 — Weiter mit Teil 4: Fortgeschritten & Projektreif
+================================================================================

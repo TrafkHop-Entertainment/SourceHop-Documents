@@ -1,0 +1,1166 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 4 von 9)
+================================================================================
+
+AKTUALISIERTE KURSÜBERSICHT (Gesamtplan)
+================================================================================
+
+  TEIL 1  — GDScript Grundlagen (Nodes, Variablen, Kontrollfluss, Funktionen)
+  TEIL 2  — Bewegung, Physik und Input (CharacterBody, RigidBody, Animationen)
+  TEIL 3  — Spielsysteme und Daten (Signals, Resources, Speichern/Laden, ProGen)
+  TEIL 4  — Fortgeschrittener Code (Navigation/KI, Cutscenes, Modularer Aufbau,
+              Shader-Anbindung aus GDScript, LOD, Instancing)             ← JETZT
+  TEIL 5  — Multiplayer Grundlagen (Peers, Lobbys, RPCs, State-Synchronisation)
+  TEIL 6  — Advanced Multiplayer (Server-Architektur, Anti-Cheat, P2P, Steam)
+  TEIL 7  — Performance & Multithreading (Profiler, Occlusion, Threading für
+              blockbasierte Welten, Voxel-Optimierung)
+  TEIL 8  — Simulation & Physik-Tiefe (Ragdoll, Flug/Aerodynamik, Wetter,
+              Fluid, Splitscreen, Advanced Physics Interactions)
+  TEIL 9  — Werkzeuge & Workflows (Level-Editor in-Game, Geile Menüs,
+              Plugin-Skripte, Ein-Asset-für-alle-Projekte-Architektur,
+              Export, Plattformen, Abschlussprojekte)
+
+Hinweis zum Arbeitsfluss: Ab Modul 18 wird auf eine Arbeitsweise eingegangen
+bei der du ein einziges "Master-Asset"-Projekt pflegst und daraus für
+verschiedene Spiele schöpfst. Das ist keine Godot-Funktion — das ist ein
+Workflow, den wir Schritt für Schritt aufbauen.
+
+
+################################################################################
+TEIL 4 — FORTGESCHRITTENER CODE
+################################################################################
+
+
+================================================================================
+MODUL 16: Navigation und KI
+================================================================================
+
+------------------------------------------------------------------------
+16.1  NavigationServer und NavigationAgent — das Grundprinzip
+------------------------------------------------------------------------
+
+Godots Navigation funktioniert in zwei Schichten:
+
+  NavigationRegion2D / NavigationRegion3D
+    → Definiert begehbares Gebiet (baked aus Geometrie oder Polygon).
+      Muss einmal gebaked werden (im Editor oder per Code).
+
+  NavigationAgent2D / NavigationAgent3D
+    → Hängt am Feind/NPC. Berechnet Pfad zum Ziel, liefert den
+      nächsten Punkt auf dem Pfad.
+
+Szene für einen 2D-NPC:
+  CharacterBody2D           ← NPC-Skript hier
+  ├── Sprite2D
+  ├── CollisionShape2D
+  └── NavigationAgent2D     ← Pfadfindung
+
+Szene für die Welt:
+  Node2D
+  ├── NavigationRegion2D    ← begehbares Gebiet
+  │   ├── NavigationPolygon  ← im Editor zeichnen
+  │   └── TileMap (oder StaticBody2D) ← aus dem Hindernisse berechnet werden
+  └── NPC (CharacterBody2D)
+
+Das NavigationPolygon (2D) oder NavigationMesh (3D) kann im Editor gezeichnet
+oder automatisch aus der Szenen-Geometrie gebaked werden.
+
+------------------------------------------------------------------------
+16.2  Einfacher Patrol-NPC
+------------------------------------------------------------------------
+
+  extends CharacterBody2D
+
+  @export var geschwindigkeit: float = 80.0
+  @export var patrol_punkte: Array[Marker2D] = []
+
+  @onready var nav_agent: NavigationAgent2D = $NavigationAgent2D
+
+  var aktueller_patrol_index: int = 0
+  var naechstes_ziel: Vector2
+
+  func _ready() -> void:
+      naechsten_punkt_setzen()
+
+  func naechsten_punkt_setzen() -> void:
+      if patrol_punkte.is_empty():
+          return
+      naechstes_ziel = patrol_punkte[aktueller_patrol_index].global_position
+      nav_agent.target_position = naechstes_ziel
+
+  func _physics_process(delta: float) -> void:
+      if nav_agent.is_navigation_finished():
+          # Nächsten Punkt ansteuern:
+          aktueller_patrol_index = (aktueller_patrol_index + 1) % patrol_punkte.size()
+          naechsten_punkt_setzen()
+          return
+
+      var naechster_punkt: Vector2 = nav_agent.get_next_path_position()
+      var richtung: Vector2 = global_position.direction_to(naechster_punkt)
+      velocity = richtung * geschwindigkeit
+      move_and_slide()
+
+------------------------------------------------------------------------
+16.3  Sichtlinie und Verfolgung
+------------------------------------------------------------------------
+
+  extends CharacterBody2D
+
+  enum Zustand { PATROL, VERFOLGUNG, ANGRIFF, ZURUECK }
+
+  @export var sichtweite: float = 300.0
+  @export var angriffs_reichweite: float = 50.0
+  @export var sichtwinkel: float = 70.0   # Grad, je Seite
+
+  @onready var nav_agent: NavigationAgent2D = $NavigationAgent2D
+  @onready var sicht_raycast: RayCast2D = $SichtRayCast
+
+  var aktueller_zustand: Zustand = Zustand.PATROL
+  var ziel: CharacterBody2D = null
+  var start_position: Vector2
+
+  func _ready() -> void:
+      start_position = global_position
+
+  func _physics_process(delta: float) -> void:
+      match aktueller_zustand:
+          Zustand.PATROL:
+              patrol_verhalten(delta)
+              if spieler_in_sicht():
+                  aktueller_zustand = Zustand.VERFOLGUNG
+          Zustand.VERFOLGUNG:
+              if not ziel or not is_instance_valid(ziel):
+                  aktueller_zustand = Zustand.ZURUECK
+              elif global_position.distance_to(ziel.global_position) <= angriffs_reichweite:
+                  aktueller_zustand = Zustand.ANGRIFF
+              elif not spieler_in_sicht():
+                  aktueller_zustand = Zustand.ZURUECK
+              else:
+                  verfolge(delta)
+          Zustand.ANGRIFF:
+              angreifen()
+              if global_position.distance_to(ziel.global_position) > angriffs_reichweite:
+                  aktueller_zustand = Zustand.VERFOLGUNG
+          Zustand.ZURUECK:
+              zurueck_zur_basis(delta)
+
+  func spieler_in_sicht() -> bool:
+      var spieler_nodes := get_tree().get_nodes_in_group("spieler")
+      if spieler_nodes.is_empty():
+          return false
+
+      var spieler: Node2D = spieler_nodes[0]
+      var abstand: float = global_position.distance_to(spieler.global_position)
+      if abstand > sichtweite:
+          return false
+
+      # Winkel prüfen:
+      var richtung_zu_spieler := global_position.direction_to(spieler.global_position)
+      var blick_richtung := Vector2.from_angle(rotation)
+      var winkel := rad_to_deg(blick_richtung.angle_to(richtung_zu_spieler))
+      if abs(winkel) > sichtwinkel:
+          return false
+
+      # Raycast für Sichtlinie:
+      sicht_raycast.target_position = to_local(spieler.global_position)
+      sicht_raycast.force_raycast_update()
+      if sicht_raycast.is_colliding():
+          var getroffen := sicht_raycast.get_collider()
+          if getroffen == spieler:
+              ziel = spieler
+              return true
+          return false  # Wand im Weg
+
+      ziel = spieler
+      return true
+
+  func verfolge(delta: float) -> void:
+      nav_agent.target_position = ziel.global_position
+      var naechster := nav_agent.get_next_path_position()
+      velocity = global_position.direction_to(naechster) * geschwindigkeit * 1.5
+      move_and_slide()
+
+  func zurueck_zur_basis(delta: float) -> void:
+      nav_agent.target_position = start_position
+      if nav_agent.is_navigation_finished():
+          aktueller_zustand = Zustand.PATROL
+      var naechster := nav_agent.get_next_path_position()
+      velocity = global_position.direction_to(naechster) * geschwindigkeit
+      move_and_slide()
+
+------------------------------------------------------------------------
+16.4  NavigationRegion3D — Baked Navmesh
+------------------------------------------------------------------------
+
+Für 3D-Spiele baked Godot einen NavigationMesh aus der Szenen-Geometrie.
+
+Per Code neu backen (z.B. nach dynamischer Level-Änderung):
+  @onready var nav_region: NavigationRegion3D = $NavigationRegion3D
+
+  func navmesh_neu_backen() -> void:
+      NavigationServer3D.bake_from_source_geometry_data(
+          nav_region.navigation_mesh,
+          NavigationMeshSourceGeometryData3D.new()
+      )
+      nav_region.bake_navigation_mesh()
+
+NavigationAgent3D konfigurieren:
+  nav_agent.path_desired_distance = 1.0       # Wie nah = "angekommen"
+  nav_agent.target_desired_distance = 1.5     # Wie nah am Ziel = fertig
+  nav_agent.max_speed = geschwindigkeit
+  nav_agent.path_postprocessing = NavigationPathQueryParameters3D.PATH_POSTPROCESSING_CORRIDORFUNNEL
+
+------------------------------------------------------------------------
+16.5  Behavior Trees — Skalierbare KI-Architektur
+------------------------------------------------------------------------
+
+Für komplexe KI (Boss-Kämpfe, RPG-NPCs) reicht eine einfache State Machine
+nicht mehr. Behavior Trees sind die Industrie-Lösung.
+
+Godot hat keinen eingebauten Behavior Tree — wir bauen einen minimalen:
+
+  class_name BTNode
+  extends RefCounted
+
+  enum Status { SUCCESS, FAILURE, RUNNING }
+
+  func tick(agent: Node, delta: float) -> Status:
+      return Status.FAILURE  # Überschreiben in Unterklassen
+
+  # Sequenz: alle Kinder müssen SUCCESS zurückgeben
+  class_name BTSequence
+  extends BTNode
+  var kinder: Array[BTNode] = []
+
+  func tick(agent: Node, delta: float) -> Status:
+      for kind in kinder:
+          var result := kind.tick(agent, delta)
+          if result != Status.SUCCESS:
+              return result   # FAILURE oder RUNNING
+      return Status.SUCCESS
+
+  # Selektor: erstes Kind das SUCCESS zurückgibt gewinnt
+  class_name BTSelector
+  extends BTNode
+  var kinder: Array[BTNode] = []
+
+  func tick(agent: Node, delta: float) -> Status:
+      for kind in kinder:
+          var result := kind.tick(agent, delta)
+          if result != Status.FAILURE:
+              return result
+      return Status.FAILURE
+
+  # Beispiel-Blatt: Spieler angreifen
+  class_name BTAngreifen
+  extends BTNode
+
+  func tick(agent: Node, delta: float) -> Status:
+      if not agent.ziel or not is_instance_valid(agent.ziel):
+          return Status.FAILURE
+      if agent.global_position.distance_to(agent.ziel.global_position) > agent.angriffs_reichweite:
+          return Status.FAILURE
+      agent.angreifen()
+      return Status.SUCCESS
+
+Behavior Tree im NPC aufbauen:
+  func _ready() -> void:
+      var baum := BTSelector.new()
+      var angriff_sequenz := BTSequence.new()
+      angriff_sequenz.kinder = [BTInSichtweite.new(), BTAngreifen.new()]
+      var verfolge_sequenz := BTSequence.new()
+      verfolge_sequenz.kinder = [BTHatZiel.new(), BTVerfolge.new()]
+      baum.kinder = [angriff_sequenz, verfolge_sequenz, BTPatrol.new()]
+      behavior_tree = baum
+
+  func _physics_process(delta: float) -> void:
+      behavior_tree.tick(self, delta)
+
+--------------------------------------------------------------------------------
+ÜBUNG 16:
+1. Baue eine 2D-Szene mit NavigationRegion2D und mindestens einem NPC.
+   Der NPC patrouilliert zwischen 3 Marker2D-Punkten.
+2. Implementiere Sichtlinie: NPC verfolgt den Spieler wenn er ihn sieht.
+3. Füge "Zustand: Zurück zur Basis" hinzu wenn Spieler außer Sicht ist.
+4. Bonus 3D: Erstelle eine 3D-Szene, backe einen NavigationMesh.
+   Implementiere einen 3D-NPC der zum Spieler-Klick-Ziel navigiert (wie in RPGs).
+5. Extra-Bonus: Implementiere 2 Behavior-Tree-Blätter und baue damit
+   einen NPC der zwischen Patrol/Suchen/Angriff wechselt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 17: Ingame Cutscenes mit dem AnimationPlayer
+================================================================================
+
+Cutscenes in Godot: du brauchst kein externes Tool — der AnimationPlayer
+kann Kamera-Bewegungen, Dialog, Spieler-Freeze, Audio und visuelle Effekte
+keyframen. Für aufwendigere Cinematic-Szenen importierst du aus Blender
+(dazu am Ende des Moduls).
+
+------------------------------------------------------------------------
+17.1  Die Cutscene-Architektur
+------------------------------------------------------------------------
+
+Aufbau einer Cutscene-Szene:
+  CutsceneManager (Node)        ← das Skript läuft hier
+  ├── AnimationPlayer            ← keyframt alles
+  ├── CinematicCamera (Camera3D) ← Cutscene-Kamera
+  ├── DialogUI (CanvasLayer)     ← Dialogboxen
+  │   ├── Hintergrund (Panel)
+  │   ├── Sprechertext (Label)
+  │   └── Dialogtext (RichTextLabel)
+  └── SkipButton (Button)
+
+Das Prinzip: Der AnimationPlayer keyframt ALLE Eigenschaften aller Nodes
+in der Szene — inklusive Kamera-Position, NPC-Position, Dialog-Sichtbarkeit,
+Audio. Eine Animation = eine Cutscene.
+
+------------------------------------------------------------------------
+17.2  Spieler-Kontrolle übergeben und zurücknehmen
+------------------------------------------------------------------------
+
+  extends Node
+
+  signal cutscene_gestartet
+  signal cutscene_beendet
+
+  var spieler_hatte_kontrolle: bool = false
+
+  @onready var anim: AnimationPlayer = $AnimationPlayer
+  @onready var cinematic_cam: Camera3D = $CinematicCamera
+
+  func cutscene_starten(animations_name: String) -> void:
+      # Spieler einfrieren:
+      var spieler := get_tree().get_first_node_in_group("spieler")
+      if spieler:
+          spieler_hatte_kontrolle = true
+          spieler.set_physics_process(false)
+          spieler.set_process_unhandled_input(false)
+
+      # Cutscene-Kamera aktivieren:
+      cinematic_cam.make_current()
+
+      # Schwarze Balken (Letterbox-Effekt):
+      letterbox_einblenden()
+
+      # Animation abspielen:
+      anim.play(animations_name)
+      cutscene_gestartet.emit()
+
+      # Auf Ende warten:
+      await anim.animation_finished
+      cutscene_beenden()
+
+  func cutscene_beenden() -> void:
+      var spieler := get_tree().get_first_node_in_group("spieler")
+      if spieler and spieler_hatte_kontrolle:
+          spieler.set_physics_process(true)
+          spieler.set_process_unhandled_input(true)
+          spieler.get_viewport().get_camera_3d().make_current()
+
+      letterbox_ausblenden()
+      cutscene_beendet.emit()
+
+  func _unhandled_input(event: InputEvent) -> void:
+      # Skip mit Taste:
+      if event.is_action_just_pressed("ui_cancel") and anim.is_playing():
+          anim.seek(anim.current_animation_length, true)  # Ans Ende springen
+
+------------------------------------------------------------------------
+17.3  Dialog-System in Cutscenes
+------------------------------------------------------------------------
+
+  # Methode die per AnimationPlayer-Keyframe aufgerufen wird:
+  func dialog_zeigen(sprecher: String, text: String) -> void:
+      $DialogUI.visible = true
+      $DialogUI/Sprechertext.text = sprecher
+      $DialogUI/Dialogtext.text = ""
+
+      # Typewriter-Effekt:
+      for zeichen in text:
+          $DialogUI/Dialogtext.text += zeichen
+          await get_tree().create_timer(0.03).timeout
+
+  func dialog_verstecken() -> void:
+      var tween := create_tween()
+      tween.tween_property($DialogUI, "modulate:a", 0.0, 0.3)
+      await tween.finished
+      $DialogUI.visible = false
+      $DialogUI.modulate.a = 1.0
+
+Im AnimationPlayer: Erstelle eine "Methoden-Track" (Call Method Track) und
+rufe dialog_zeigen("Aria", "Wir müssen diesen Dungeon betreten...") auf.
+Das ist ein Keyframe der eine Funktion aufruft!
+
+------------------------------------------------------------------------
+17.4  Kamera-Bewegungen keyframen
+------------------------------------------------------------------------
+
+Im AnimationPlayer eine neue Animation erstellen. Dann:
+
+  1. CinematicCamera auswählen
+  2. Transform-Eigenschaft → Schloss-Symbol → wird getrackt
+  3. Frame 0: Kamera-Position A → Keyframe setzen
+  4. Frame 2.0 (2 Sekunden): Kamera-Position B → Keyframe setzen
+  5. Interpolations-Typ: CUBIC für sanfte Kamerabewegung
+
+Für "Camera Shake" (bei Explosionen etc.):
+  func kamera_wackeln(staerke: float, dauer: float) -> void:
+      var original_pos := cinematic_cam.position
+      var tween := create_tween().set_loops(int(dauer * 30))
+      tween.tween_property(cinematic_cam, "position",
+          original_pos + Vector3(randf_range(-staerke, staerke), randf_range(-staerke, staerke), 0),
+          1.0 / 30.0)
+      await get_tree().create_timer(dauer).timeout
+      cinematic_cam.position = original_pos
+
+------------------------------------------------------------------------
+17.5  Cutscenes aus Blender importieren
+------------------------------------------------------------------------
+
+Voraussetzung: Du kannst Blender und weißt wie NLA-Animationen funktionieren.
+
+Workflow:
+  1. In Blender: Kamera, Objekte und Armatures animieren.
+     Jede Cutscene = eine NLA-Action mit eigenem Namen.
+  2. Exportieren als .glb (empfohlen) oder .gltf:
+     File → Export → glTF 2.0 → "Include" → Animations → "NLA Tracks"
+  3. In Godot importieren:
+     .glb-Datei in das Projekt ziehen → Import-Einstellungen:
+     - "Import" Tab → Animation → "Import" ✓
+     - Animationsnamen entsprechen den NLA-Action-Namen
+  4. Szene instanzieren:
+     Die .glb-Datei hat automatisch einen AnimationPlayer.
+     Skript dranhängen und play() aufrufen.
+
+Kamera aus Blender nutzen:
+  # Die importierte Szene hat eine Camera3D:
+  @onready var blender_cam: Camera3D = $MeineGLBSzene/Camera
+  blender_cam.make_current()
+  $MeineGLBSzene/AnimationPlayer.play("intro_cutscene")
+
+HINWEIS: Godots Y-oben und Blenders Z-oben unterscheiden sich. Beim .glb-Export
+ist die Konvertierung automatisch. Dreh-Offsets (±90°) können trotzdem auftreten —
+einfach ein Node3D als Wrapper mit rotation_degrees.x = -90 setzen.
+
+Blender-Rig-Animationen nutzen (für Charaktere):
+  Das .glb enthält Skeleton3D + AnimationPlayer. Diese Animationen kannst du
+  im AnimationTree (Modul 10) genau wie eigene Godot-Animationen benutzen.
+
+------------------------------------------------------------------------
+17.6  CutsceneManager als wiederverwendbares Autoload-System
+------------------------------------------------------------------------
+
+  # CutsceneManager.gd (Autoload)
+  extends Node
+
+  signal cutscene_gestartet(name: String)
+  signal cutscene_beendet(name: String)
+
+  var aktive_cutscene: String = ""
+  var cutscene_szenen: Dictionary = {
+      "intro":      "res://cutscenes/Intro.tscn",
+      "boss_intro": "res://cutscenes/BossIntro.tscn",
+      "ende":       "res://cutscenes/Abspann.tscn",
+  }
+
+  func abspielen(cutscene_name: String) -> void:
+      if aktive_cutscene != "":
+          return   # Noch eine läuft
+      if not cutscene_szenen.has(cutscene_name):
+          push_error("Unbekannte Cutscene: " + cutscene_name)
+          return
+
+      aktive_cutscene = cutscene_name
+      var szene: PackedScene = load(cutscene_szenen[cutscene_name])
+      var instanz: Node = szene.instantiate()
+      get_tree().root.add_child(instanz)
+      cutscene_gestartet.emit(cutscene_name)
+
+      # Auf Ende warten:
+      await instanz.cutscene_beendet
+      instanz.queue_free()
+      aktive_cutscene = ""
+      cutscene_beendet.emit(cutscene_name)
+
+Überall im Spiel aufrufbar:
+  CutsceneManager.abspielen("boss_intro")
+  await CutsceneManager.cutscene_beendet
+  boss.kampf_starten()
+
+--------------------------------------------------------------------------------
+ÜBUNG 17:
+1. Erstelle eine 30-Sekunden-Cutscene mit AnimationPlayer:
+   - Kamera bewegt sich von Punkt A nach B (CUBIC interpoliert)
+   - Bei Sekunde 5: Dialog "Willkommen, Held!" erscheint (Typewriter-Effekt)
+   - Bei Sekunde 10: Kamera-Shake (Explosion im Hintergrund)
+   - Spieler hat während der ganzen Zeit keine Kontrolle
+2. Implementiere Skip-Funktion (Escape → Animation endet sofort).
+3. Letterbox-Effekt (schwarze Balken oben und unten, 1:2.35 Seitenverhältnis).
+4. Baue den CutsceneManager als Autoload. Rufe ihn aus einem Trigger-Node auf.
+5. Bonus Blender: Exportiere eine einfache Kamerafahrt aus Blender (.glb),
+   importiere sie und spiele sie im CutsceneManager ab.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: Modularer Code-Aufbau — Ein Asset für alle Projekte
+================================================================================
+
+Das ist das Modul das deinen Workflow fundamental verändert. Statt für jedes
+Spiel alles neu zu schreiben, baust du ein "Core"-System das du immer mitbringst.
+
+------------------------------------------------------------------------
+18.1  Das Problem: Copy-Paste-Entwicklung
+------------------------------------------------------------------------
+
+Typische Anfänger-Situation:
+  Spiel 1: Inventar-System schreiben → funktioniert
+  Spiel 2: Inventar-System für neues Spiel... von vorne schreiben
+  Spiel 3: Noch ein Inventar... mit Bugs aus Spiel 2...
+
+Das richtige Ziel:
+  Ein "CoreLib"-Verzeichnis das du in JEDES Projekt kopierst (oder per Symlink einbindest).
+  Darin: alles was spielunabhängig ist und IMMER gebraucht wird.
+
+------------------------------------------------------------------------
+18.2  Die Addon-Struktur — dein persönliches Plugin
+------------------------------------------------------------------------
+
+Godot-Addons sind im Ordner addons/ und können per Knopfdruck aktiviert werden.
+Dein Core-Addon geht so:
+
+  mein_projekt/
+  └── addons/
+      └── mein_core/
+          ├── plugin.cfg           ← Addon-Metadaten
+          ├── plugin.gd            ← Initialisierungs-Skript
+          ├── core/
+          │   ├── EventBus.gd      ← Globaler Signal-Bus
+          │   ├── AudioManager.gd
+          │   ├── SaveSystem.gd
+          │   ├── SceneLoader.gd
+          │   └── InputManager.gd
+          ├── ui/
+          │   ├── DialogBox.tscn
+          │   ├── InventarUI.tscn
+          │   ├── PauseMenu.tscn
+          │   └── FadeOverlay.tscn
+          ├── systems/
+          │   ├── Inventar.gd
+          │   ├── QuestManager.gd
+          │   └── StatSystem.gd
+          └── utils/
+              ├── MathUtils.gd
+              ├── VectorUtils.gd
+              └── DebugDraw.gd
+
+plugin.cfg:
+  [plugin]
+  name="MeinCore"
+  description="Wiederverwendbare Systeme für alle meine Spiele"
+  author="Dein Name"
+  version="1.0"
+  script="plugin.gd"
+
+plugin.gd:
+  @tool
+  extends EditorPlugin
+
+  func _enter_tree() -> void:
+      # Autoloads registrieren:
+      add_autoload_singleton("Events", "res://addons/mein_core/core/EventBus.gd")
+      add_autoload_singleton("Audio", "res://addons/mein_core/core/AudioManager.gd")
+      add_autoload_singleton("Save", "res://addons/mein_core/core/SaveSystem.gd")
+      add_autoload_singleton("Scenes", "res://addons/mein_core/core/SceneLoader.gd")
+      print("MeinCore geladen!")
+
+  func _exit_tree() -> void:
+      remove_autoload_singleton("Events")
+      remove_autoload_singleton("Audio")
+      remove_autoload_singleton("Save")
+      remove_autoload_singleton("Scenes")
+
+Einbinden in neues Projekt:
+  → addons/mein_core/ per Datei-Explorer kopieren
+  → Projekt → Projekteinstellungen → Plugins → "MeinCore" aktivieren
+  → Sofort: Events.xy_signal, Audio.abspielen(), Save.speichern() verfügbar
+
+------------------------------------------------------------------------
+18.3  Spielunabhängige vs. Spielspezifische Systeme
+------------------------------------------------------------------------
+
+  IN DEN CORE (immer gleich, spielunabhängig):
+    ✓ EventBus (Signale die alle nutzen: spieler_gestorben, level_gestartet)
+    ✓ AudioManager (Musik, Sound-Effects, Lautstärke, Fade)
+    ✓ SceneLoader (Szenen-Wechsel mit Ladescreen, Übergänge)
+    ✓ SaveSystem (generisch: schreibt/liest Dictionaries in JSON/Resource)
+    ✓ InputManager (Keybindings laden/speichern)
+    ✓ DebugDraw (Linien, Texte, Boxen als Gizmos zur Laufzeit zeichnen)
+    ✓ MathUtils (Noise-Helfer, Interpolation, Bezier, Geometrie)
+    ✓ FadeOverlay (Schwarze Blende für Szenen-Übergänge)
+    ✓ PauseMenu (generisch, Spiel-Inhalt austauschbar)
+    ✓ DialogSystem (Text + Portrait + Choices — spielunabhängige Engine)
+    ✓ ObjectPooling (Modul 20 — für Projektile, Partikel)
+
+  SPIELSPEZIFISCH (bleibt im Spiel-Projekt):
+    ✗ Spieler-Klassen, Skills, Magie-System (das RPG braucht, der MC-Klon nicht)
+    ✗ Inventar-Inhalt (Items, Rezepte, Crafting)
+    ✗ Quest-Inhalte
+    ✗ Level-Design
+    ✗ Grafik/Sprites/Sounds
+
+------------------------------------------------------------------------
+18.4  Generisches SaveSystem für alle Projekte
+------------------------------------------------------------------------
+
+  # SaveSystem.gd (Core-Addon)
+  extends Node
+
+  # Spiel-Projekte registrieren ihre eigenen Saver:
+  var _saver: Array[Callable] = []
+  var _loader: Array[Callable] = []
+
+  func register_saver(callable: Callable) -> void:
+      _saver.append(callable)
+
+  func register_loader(callable: Callable) -> void:
+      _loader.append(callable)
+
+  func speichern(slot: int = 0) -> void:
+      var daten: Dictionary = {}
+      for saver in _saver:
+          var teil: Dictionary = saver.call()
+          daten.merge(teil)
+      _auf_disk_schreiben(daten, slot)
+
+  func laden(slot: int = 0) -> void:
+      var daten: Dictionary = _von_disk_lesen(slot)
+      if daten.is_empty():
+          return
+      for loader in _loader:
+          loader.call(daten)
+
+Spieler registriert sich selbst:
+  # Im Spieler-Skript (spielspezifisch):
+  func _ready() -> void:
+      Save.register_saver(meine_daten_speichern)
+      Save.register_loader(meine_daten_laden)
+
+  func meine_daten_speichern() -> Dictionary:
+      return {"spieler_hp": hp, "spieler_pos_x": position.x, "spieler_pos_y": position.y}
+
+  func meine_daten_laden(daten: Dictionary) -> void:
+      hp = daten.get("spieler_hp", 100)
+      position.x = daten.get("spieler_pos_x", 0)
+      position.y = daten.get("spieler_pos_y", 0)
+
+Das SaveSystem weiß nichts über den Spieler. Der Spieler weiß nichts über das
+SaveSystem. Beide kommunizieren nur über Callables. Perfekte Entkopplung.
+
+------------------------------------------------------------------------
+18.5  Generisches Dialog-System
+------------------------------------------------------------------------
+
+  # DialogSystem.gd (Core)
+  extends Node
+
+  signal dialog_gestartet
+  signal dialog_zeile_gezeigt(sprecher: String, text: String)
+  signal auswahl_getroffen(index: int, text: String)
+  signal dialog_beendet
+
+  class_name DialogSequenz
+  extends RefCounted
+
+  var zeilen: Array[Dictionary] = []
+  # Jede Zeile: {"sprecher": "Aria", "text": "Hallo!", "portrait": Texture2D}
+  # Oder: {"auswahl": ["Ja", "Nein"], "callback": Callable}
+
+  func abspielen(sequenz: DialogSequenz) -> void:
+      dialog_gestartet.emit()
+      for zeile in sequenz.zeilen:
+          if zeile.has("text"):
+              dialog_zeile_gezeigt.emit(zeile.get("sprecher", ""), zeile["text"])
+              await naechste_zeile_getriggert()
+          elif zeile.has("auswahl"):
+              var gewaehlter_index := await auswahl_zeigen(zeile["auswahl"])
+              auswahl_getroffen.emit(gewaehlter_index, zeile["auswahl"][gewaehlter_index])
+              if zeile.has("callback"):
+                  zeile["callback"].call(gewaehlter_index)
+      dialog_beendet.emit()
+
+In jedem Spiel: Baue eine DialogUI die auf diese Signale reagiert —
+die UI ist spielspezifisch, aber die Engine ist Core.
+
+------------------------------------------------------------------------
+18.6  Versionierung deines Core-Addons mit Git
+------------------------------------------------------------------------
+
+Das Core-Addon lebt in einem EIGENEN Git-Repository.
+In jedem Spiel-Projekt einbinden per Git-Subtree oder Symlink:
+
+Option A: Git Submodule (sauber aber komplex):
+  cd mein_spiel
+  git submodule add https://github.com/mein_user/mein_core.git addons/mein_core
+  git submodule update --init
+
+Update in allen Projekten:
+  git submodule update --remote
+
+Option B: Manuelles Kopieren + Version-Datei:
+  # In addons/mein_core/VERSION:
+  1.3.2
+
+  # Beim Projektstart prüfen:
+  func _ready() -> void:
+      var version := FileAccess.open("res://addons/mein_core/VERSION", FileAccess.READ).get_as_text()
+      if version.strip_edges() != "1.3.2":
+          push_warning("Core-Addon veraltet! Bitte auf 1.3.2 updaten.")
+
+Option C: Symlink (nur lokal, nicht für Teams):
+  # Terminal (Linux/Mac):
+  ln -s /pfad/zu/mein_core /pfad/zu/spiel/addons/mein_core
+  # Windows (als Admin):
+  mklink /J C:\spiel\addons\mein_core C:\mein_core
+
+--------------------------------------------------------------------------------
+ÜBUNG 18:
+1. Erstelle dein erstes Core-Addon:
+   - plugin.cfg und plugin.gd
+   - EventBus.gd mit 5 globalen Signalen
+   - AudioManager.gd (Musik + 1 Sound abspielen)
+2. Implementiere das generische SaveSystem mit register_saver/register_loader.
+   Erstelle zwei unabhängige "Module" (Spieler und Inventar) die sich registrieren.
+3. Teste: Speichere, starte Godot neu, lade → alles wiederhergestellt?
+4. Baue ein generisches DialogSystem das Zeilen anzeigt und auf "Weiter"-Klick wartet.
+   Teste es mit einer 3-zeiligen Sequenz.
+5. Bonus: Mache deinen EventBus, AudioManager und DialogSystem zu einem echten
+   aktivierbaren Addon. Aktiviere es in einem zweiten, frischen Projekt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 19: LOD, Instancing und Instanced Meshes — Performance durch Skalierung
+================================================================================
+
+------------------------------------------------------------------------
+19.1  LOD — Level of Detail
+------------------------------------------------------------------------
+
+LOD tauscht hochauflösende Meshes gegen einfache aus wenn sie weit weg sind.
+Unverzichtbar für Open-World und Voxel-Spiele.
+
+Godot 4 hat eingebautes automatisches LOD:
+  Im MeshInstance3D Inspector:
+    Visibility Range Begin / End    → Ab/bis welcher Distanz sichtbar
+    Visibility Range Fade Mode      → DISABLED, SELF, DEPENDENCIES
+
+Manuelles LOD per Code:
+  extends MeshInstance3D
+
+  @export var lod_0_mesh: Mesh   # Hochauflösend (nah)
+  @export var lod_1_mesh: Mesh   # Medium
+  @export var lod_2_mesh: Mesh   # Niedrig (weit)
+  @export var billboard_mesh: Mesh  # Nur Quad (sehr weit)
+
+  const DISTANZ_LOD1: float = 50.0
+  const DISTANZ_LOD2: float = 150.0
+  const DISTANZ_BILLBOARD: float = 400.0
+
+  var kamera: Camera3D
+  var aktuelles_lod: int = 0
+
+  func _ready() -> void:
+      kamera = get_viewport().get_camera_3d()
+
+  func _process(_delta: float) -> void:
+      var distanz := global_position.distance_to(kamera.global_position)
+      var neues_lod: int
+
+      if distanz < DISTANZ_LOD1:
+          neues_lod = 0
+      elif distanz < DISTANZ_LOD2:
+          neues_lod = 1
+      elif distanz < DISTANZ_BILLBOARD:
+          neues_lod = 2
+      else:
+          neues_lod = 3
+
+      if neues_lod != aktuelles_lod:
+          aktuelles_lod = neues_lod
+          match neues_lod:
+              0: mesh = lod_0_mesh
+              1: mesh = lod_1_mesh
+              2: mesh = lod_2_mesh
+              3: mesh = billboard_mesh
+
+TIPP: Den LOD-Check nicht jedes Frame, sondern alle 10 Frames:
+  func _process(_delta: float) -> void:
+      if Engine.get_process_frames() % 10 != 0:
+          return
+      # LOD-Berechnung...
+
+------------------------------------------------------------------------
+19.2  VisibilityNotifier — Culling
+------------------------------------------------------------------------
+
+VisibilityNotifier3D (auch VisibleOnScreenNotifier3D) meldet wenn ein Node
+die Kamera verlässt. Dann kannst du _process stoppen:
+
+  @onready var vis: VisibleOnScreenNotifier3D = $VisibleOnScreenNotifier3D
+
+  func _ready() -> void:
+      vis.screen_entered.connect(func(): set_process(true))
+      vis.screen_exited.connect(func(): set_process(false))
+      set_process(false)   # Start: ausgeschaltet
+
+------------------------------------------------------------------------
+19.3  MultiMeshInstance3D — Tausende Objekte mit einer Draw-Call
+------------------------------------------------------------------------
+
+Für Gras, Bäume, Steine, Blöcke — alles was sich wiederholt:
+Normales Instancing: 10.000 Bäume = 10.000 Draw Calls. Zu langsam.
+MultiMeshInstance3D: 10.000 Bäume = 1 Draw Call. Das ist der Unterschied.
+
+  extends MultiMeshInstance3D
+
+  @export var anzahl: int = 10000
+  @export var bereich: float = 500.0
+
+  func _ready() -> void:
+      var mm := MultiMesh.new()
+      mm.transform_format = MultiMesh.TRANSFORM_3D
+      mm.instance_count = anzahl
+      mm.mesh = $MeshInstance3D.mesh   # Basis-Mesh
+      multimesh = mm
+
+      baum_felder_generieren()
+
+  func baum_felder_generieren() -> void:
+      var noise := FastNoiseLite.new()
+      noise.seed = 42
+
+      var instanz_index: int = 0
+      var versuche: int = 0
+
+      while instanz_index < anzahl and versuche < anzahl * 3:
+          versuche += 1
+          var x := randf_range(-bereich, bereich)
+          var z := randf_range(-bereich, bereich)
+
+          # Nur auf "grünen" Bereichen spawnen (z.B. Noise-Threshold):
+          var noise_wert := noise.get_noise_2d(x, z)
+          if noise_wert < 0.1:
+              continue   # Zu felsig, kein Baum
+
+          var basis_transform := Transform3D()
+          basis_transform.origin = Vector3(x, 0, z)
+          # Zufällige Rotation und Skalierung:
+          basis_transform = basis_transform.rotated_local(Vector3.UP, randf() * TAU)
+          var skalierung := randf_range(0.8, 1.4)
+          basis_transform = basis_transform.scaled_local(Vector3(skalierung, skalierung, skalierung))
+
+          multimesh.set_instance_transform(instanz_index, basis_transform)
+          instanz_index += 1
+
+      multimesh.instance_count = instanz_index  # Auf tatsächliche Anzahl setzen
+
+Farbe pro Instanz (z.B. für Gras-Variation):
+  mm.use_colors = true
+  mm.set_instance_color(i, Color(randf_range(0.3, 0.6), randf_range(0.5, 0.9), 0.2))
+
+Custom Data pro Instanz (z.B. für Shader):
+  mm.use_custom_data = true
+  mm.set_instance_custom_data(i, Color(windstaerke, phase_offset, 0, 0))
+
+------------------------------------------------------------------------
+19.4  Instancing von Szenen — der Godot-Weg
+------------------------------------------------------------------------
+
+Szenen-Instancing ist Godots Antwort auf Prefabs (Unity) und Blueprint-Instanzen.
+
+Eine Szene (z.B. Goblin.tscn) erstellen und beliebig oft instanzieren:
+  var goblin_szene: PackedScene = preload("res://scenes/Goblin.tscn")
+
+  func spawn(ort: Vector3) -> CharacterBody3D:
+      var goblin := goblin_szene.instantiate() as CharacterBody3D
+      add_child(goblin)
+      goblin.global_position = ort
+      return goblin
+
+Wichtig: Jede Instanz hat EIGENE Daten. Änderst du eine Instanz, beeinflusst
+das keine andere — außer du modifizierst shared Resources (Modul 12: duplicate()!).
+
+Szenen-Overrides (Inspector-Properties überschreiben):
+  Wenn eine Szene als Kind-Instanz in einer anderen Szene liegt,
+  kannst du im Inspector Eigenschaften der Instanz LOKAL überschreiben.
+  Das Original bleibt unverändert. Perfekt für Varianten (schwerer Goblin, etc.).
+
+------------------------------------------------------------------------
+19.5  Object Pooling — Instanzen wiederverwenden
+------------------------------------------------------------------------
+
+Für Projektile, Partikel, Schadens-Zahlen: Ständiges instantiate() + queue_free()
+ist teuer. Besser: Objekte "recyceln".
+
+  class_name ObjectPool
+  extends Node
+
+  @export var szene: PackedScene
+  @export var pool_groesse: int = 50
+
+  var verfuegbar: Array[Node] = []
+  var in_benutzung: Array[Node] = []
+
+  func _ready() -> void:
+      for i in range(pool_groesse):
+          var obj: Node = szene.instantiate()
+          add_child(obj)
+          obj.visible = false
+          verfuegbar.append(obj)
+
+  func holen() -> Node:
+      if verfuegbar.is_empty():
+          # Pool erschöpft — neues erstellen (sollte selten passieren):
+          var obj: Node = szene.instantiate()
+          add_child(obj)
+          in_benutzung.append(obj)
+          return obj
+
+      var obj: Node = verfuegbar.pop_back()
+      in_benutzung.append(obj)
+      obj.visible = true
+      return obj
+
+  func zurueckgeben(obj: Node) -> void:
+      if obj in in_benutzung:
+          in_benutzung.erase(obj)
+      obj.visible = false
+      # Zurücksetzen (Position, Velocity...):
+      if obj.has_method("zuruecksetzen"):
+          obj.zuruecksetzen()
+      verfuegbar.append(obj)
+
+Projektil-Nutzung:
+  @onready var kugel_pool: ObjectPool = $KugelPool
+
+  func schiessen() -> void:
+      var kugel: Node = kugel_pool.holen()
+      kugel.global_position = lauf.global_position
+      kugel.richtung = ziel_richtung
+      # Kugel gibt sich nach Treffer/Timeout selbst zurück:
+      # kugel_pool.zurueckgeben(self)
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+1. Erstelle ein LOD-System für einen Baum (3 Mesh-Stufen + Billboard).
+   Visualisiere per Label welches LOD gerade aktiv ist.
+2. Nutze VisibleOnScreenNotifier3D: NPC-KI soll nur laufen wenn sichtbar.
+3. Spawnne 5.000 Bäume mit MultiMeshInstance3D. Miss die FPS.
+   Vergleiche mit 100 normalen MeshInstance3D-Nodes (Profiler nutzen!).
+4. Implementiere einen ObjectPool für Projektile (Größe 20).
+   Schieße 100 Kugeln ab — Pool sollte nie erschöpft sein.
+5. Bonus: Kombiniere MultiMesh mit Noise: Bäume nur auf "Wald"-Noise-Bereichen,
+   Steine auf "Fels"-Bereichen, keine Objekte auf "Wasser"-Bereichen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Shader aus GDScript ansteuern
+================================================================================
+
+Shader selbst schreiben lernt man im separaten Shader-Kurs.
+Hier lernst du: wie du fertige Shader parametrisiert aus GDScript steuerst —
+weil das für Spiellogik (Treffer-Flash, Unsichtbarkeit, Wetter-Effekte) täglich vorkommt.
+
+------------------------------------------------------------------------
+20.1  ShaderMaterial — Properties aus Code setzen
+------------------------------------------------------------------------
+
+  @onready var mesh: MeshInstance3D = $MeshInstance3D
+
+  func _ready() -> void:
+      # ShaderMaterial holen:
+      var mat: ShaderMaterial = mesh.get_active_material(0) as ShaderMaterial
+
+      # Parameter setzen:
+      mat.set_shader_parameter("helligkeit", 1.5)
+      mat.set_shader_parameter("farbe", Color.RED)
+      mat.set_shader_parameter("ist_unsichtbar", false)
+
+      # Uniform-Typ hängt vom Shader ab:
+      mat.set_shader_parameter("textur", load("res://textures/noise.png"))
+      mat.set_shader_parameter("wert_array", PackedFloat32Array([1.0, 0.5, 0.2]))
+
+------------------------------------------------------------------------
+20.2  Treffer-Flash (Damage-Flash-Effekt)
+------------------------------------------------------------------------
+
+  extends MeshInstance3D
+
+  var shader_mat: ShaderMaterial
+
+  func _ready() -> void:
+      # Material DUPLIZIEREN — sonst teilen alle Instanzen den gleichen Zustand!
+      shader_mat = get_active_material(0).duplicate() as ShaderMaterial
+      set_surface_override_material(0, shader_mat)
+
+  func treffer_flash(dauer: float = 0.15) -> void:
+      shader_mat.set_shader_parameter("flash_aktiv", 1.0)
+      var tween := create_tween()
+      tween.tween_property(shader_mat, "shader_parameter/flash_staerke", 1.0, 0.0)
+      tween.tween_property(shader_mat, "shader_parameter/flash_staerke", 0.0, dauer)
+      tween.tween_callback(func(): shader_mat.set_shader_parameter("flash_aktiv", 0.0))
+
+  # Der Shader (in einer .gdshader-Datei):
+  # uniform float flash_aktiv = 0.0;
+  # uniform float flash_staerke = 0.0;
+  # uniform vec4 flash_farbe : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+  # ALBEDO = mix(ALBEDO, flash_farbe.rgb, flash_aktiv * flash_staerke);
+
+------------------------------------------------------------------------
+20.3  Wasser und Atmosphären-Parameter zur Laufzeit
+------------------------------------------------------------------------
+
+  # Wasser-Node mit Shader (Open-World-RPG):
+  @onready var wasser: MeshInstance3D = $Wasser
+  var wasser_mat: ShaderMaterial
+
+  var wetter_intensitaet: float = 0.0:   # 0=sonnig, 1=sturm
+      set(wert):
+          wetter_intensitaet = wert
+          wasser_mat.set_shader_parameter("wellen_hoehe", lerp(0.1, 2.5, wert))
+          wasser_mat.set_shader_parameter("wellen_speed", lerp(0.5, 3.0, wert))
+          wasser_mat.set_shader_parameter("schaum_staerke", lerp(0.1, 0.8, wert))
+
+  func _ready() -> void:
+      wasser_mat = wasser.get_active_material(0).duplicate() as ShaderMaterial
+
+------------------------------------------------------------------------
+20.4  WorldEnvironment aus GDScript steuern
+------------------------------------------------------------------------
+
+  @onready var umgebung: WorldEnvironment = $WorldEnvironment
+  var env: Environment   # Godot-Environment Resource
+
+  func _ready() -> void:
+      env = umgebung.environment.duplicate()   # DUPLIZIEREN!
+      umgebung.environment = env
+
+  func sonnenuntergang_uebergang(t: float) -> void:
+      # t: 0.0 = Tag, 1.0 = Nacht
+      env.background_color = Color.CORNFLOWER_BLUE.lerp(Color.BLACK, t)
+      env.fog_enabled = t > 0.3
+      env.fog_density = lerp(0.0, 0.05, t)
+      env.glow_intensity = lerp(0.5, 2.0, t)   # Sterne leuchten nachts stärker
+      $DirectionalLight3D.light_energy = lerp(1.0, 0.05, t)
+      $DirectionalLight3D.light_color = Color.ORANGE_RED.lerp(Color.DARK_BLUE, t * 0.5)
+
+------------------------------------------------------------------------
+20.5  Tageszeit-System (Tag/Nacht-Zyklus)
+------------------------------------------------------------------------
+
+  extends Node
+
+  @export var tages_dauer_minuten: float = 20.0   # 20 Minuten = 1 Spieltag
+
+  var tageszeit: float = 0.5   # 0=Mitternacht, 0.5=Mittag, 1.0=wieder Mitternacht
+  @onready var sonne: DirectionalLight3D = $Sonne
+  @onready var mond: DirectionalLight3D = $Mond
+  @onready var umgebung: WorldEnvironment = $WorldEnvironment
+
+  func _process(delta: float) -> void:
+      tageszeit = fmod(tageszeit + delta / (tages_dauer_minuten * 60.0), 1.0)
+      tageszeit_anwenden()
+
+  func tageszeit_anwenden() -> void:
+      # Sonnen-Rotation: 0=Nacht (unten), 0.5=Mittag (oben)
+      var sonnen_winkel := tageszeit * 360.0 - 90.0
+      sonne.rotation_degrees.x = sonnen_winkel
+
+      # Helligkeit:
+      var hell := smoothstep(0.2, 0.3, tageszeit) - smoothstep(0.7, 0.8, tageszeit)
+      sonne.light_energy = hell * 1.5
+      mond.light_energy = (1.0 - hell) * 0.3
+
+      # Himmelfarbe:
+      var env := umgebung.environment
+      var tages_farbe := Color(0.4, 0.6, 1.0)
+      var nacht_farbe := Color(0.02, 0.02, 0.08)
+      var sonnen_aufgang := Color(1.0, 0.4, 0.1)
+
+      var farbe: Color
+      if tageszeit < 0.3 or tageszeit > 0.7:
+          farbe = nacht_farbe
+      elif tageszeit < 0.35:
+          farbe = nacht_farbe.lerp(sonnen_aufgang, (tageszeit - 0.3) / 0.05)
+      elif tageszeit < 0.4:
+          farbe = sonnen_aufgang.lerp(tages_farbe, (tageszeit - 0.35) / 0.05)
+      else:
+          farbe = tages_farbe
+      env.background_color = farbe
+
+--------------------------------------------------------------------------------
+ÜBUNG 20:
+1. Erstelle einen Treffer-Flash: Wenn ein Feind getroffen wird, blinkt er
+   kurz weiß. Shader und GDScript-Steuerung.
+2. Implementiere einen Tag/Nacht-Zyklus (20 Minuten Echtzeit = 1 Tag).
+   Mindestens: Licht-Energie, Himmelfarbe, Fog-Dichte.
+3. Implementiere einen Unsichtbarkeits-Effekt (Spieler wird transparent
+   und leicht verfärbt wenn "schleichen" aktiv ist).
+4. Bonus: Füge dem Tag/Nacht-System eine Uhr-UI hinzu.
+   Gegner-Spawn-Raten ändern sich je nach Tageszeit.
+5. Extra-Bonus: Regen-Effekt: GPUParticles + Shader-Parameter der
+   "Nässe" auf allen Oberflächen simuliert (roughness erhöhen, leichte
+   Reflections).
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 4
+################################################################################
+
+NAVIGATION:
+  NavigationAgent2D/3D an CharacterBody hängen
+  nav_agent.target_position = ziel_pos
+  nav_agent.get_next_path_position()   → nächster Schritt
+  nav_agent.is_navigation_finished()   → bool
+  NavigationRegion: bake_navigation_mesh() für Dynamik
+
+KI-ZUSTÄNDE:
+  enum Zustand {PATROL, VERFOLGUNG, ANGRIFF, ZURUECK}
+  match aktueller_zustand: ...
+  Sichtlinie: RayCast2D + Winkel-Check
+
+CUTSCENES:
+  AnimationPlayer keyframt alles (Kamera, Dialog, Audio, Signals)
+  spieler.set_physics_process(false)   → Spieler einfrieren
+  cinematic_cam.make_current()         → Kamera wechseln
+  await anim.animation_finished        → Ende abwarten
+  .glb aus Blender importieren → AnimationPlayer enthalten
+
+MODULARER CODE:
+  addons/mein_core/            → Persönliches Addon
+  plugin.cfg + plugin.gd       → Addon-Definition
+  add_autoload_singleton(...)  → Im Plugin registrieren
+  KERN: Events, Audio, Save, Scenes, Dialog, Input
+  SPIEL: Inhalt, Klassen, Levels
+
+LOD UND PERFORMANCE:
+  MeshInstance3D: Visibility Range Begin/End   → Auto-LOD
+  VisibleOnScreenNotifier3D: screen_entered/exited → Culling
+  MultiMeshInstance3D: 10k Objekte = 1 Draw Call
+  multimesh.set_instance_transform(i, transform)
+  ObjectPool: vorerstellen, recyceln, nie free()
+
+SHADER-STEUERUNG:
+  mat.set_shader_parameter("name", wert)
+  mat.duplicate()           → PFLICHT für Instanz-spezifische Parameter
+  Werte: float, Color, Vector2/3/4, Texture2D, bool (als float 0/1)
+  umgebung.environment.duplicate()   → Environment ändern
+
+================================================================================
+ENDE TEIL 4 — Weiter mit Teil 5: Multiplayer Grundlagen
+================================================================================

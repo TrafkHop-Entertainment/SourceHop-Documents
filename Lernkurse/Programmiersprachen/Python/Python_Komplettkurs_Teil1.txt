@@ -1,0 +1,1307 @@
+================================================================================
+PYTHON KOMPLETTKURS — TEIL 1 von 4
+Grundlagen · Datentypen · Kontrollfluss · Funktionen
+================================================================================
+
+Dieser Kurs wurde speziell für TrafkHop Entertainment erstellt, basierend
+auf deinen eigenen Python-Dateien (calendar-popup.py, volume-popup.py,
+network-popup.py, bluetooth-popup.py, brightness-popup.py,
+rofi-menu-editor.py, smGen.py) sowie dem bewährten Format der anderen Kurse.
+
+Teil 1: Grundlagen, Datentypen, Strings, Listen, Dicts, Schleifen, Funktionen
+Teil 2: OOP, Module, Dateien, Fehlerbehandlung, Regex, JSON
+Teil 3: GTK/GLib, subprocess, threading, cairo, gi.repository (aus deinen Popups)
+Teil 4: Fortgeschrittenes — Dekoratoren, Generatoren, async, Type Hints, Packaging
+
+================================================================================
+MODUL 1: Python verstehen — Grundprinzipien
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Was ist Python und warum ist es anders
+------------------------------------------------------------------------
+
+Python ist eine interpretierte, dynamisch typisierte, objektorientierte
+Sprache. Was das konkret bedeutet:
+
+  Interpretiert:
+    Dein Code wird nicht zu Maschinencode kompiliert bevor er läuft.
+    Der Python-Interpreter liest Zeile für Zeile und führt sie aus.
+    Vorteil: Kein Build-Schritt, sofort testbar.
+    Nachteil: Langsamer als C/C++ (aber für die meisten Aufgaben irrelevant).
+
+  Dynamisch typisiert:
+    Variablen haben keinen festen Typ. Eine Variable kann heute eine Zahl
+    sein und morgen ein String — der Interpreter kümmert sich darum.
+    Das ist anders als in C oder Java, wo du den Typ explizit angibst.
+
+  Einrückung ist Syntax:
+    Das ist der größte Unterschied zu fast allen anderen Sprachen.
+    In C/JS benutzt du geschweifte Klammern {} für Blöcke.
+    In Python sind EINRÜCKUNGEN die Blöcke. Das ist nicht optional.
+
+    # JavaScript:
+    if (x > 5) {
+        console.log("groß");
+    }
+
+    # Python — KEINE geschweiften Klammern, Einrückung ist alles:
+    if x > 5:
+        print("groß")
+
+    Standard sind 4 Leerzeichen. Niemals Tabs und Leerzeichen mischen.
+    Deine Popups benutzen alle konsequent 4 Leerzeichen — sehr gut.
+
+------------------------------------------------------------------------
+1.2  Python starten — die Grundbefehle
+------------------------------------------------------------------------
+
+Interaktive Shell (REPL — Read-Eval-Print Loop):
+  python3
+  >>> 2 + 2
+  4
+  >>> exit()
+
+Skript ausführen:
+  python3 mein_skript.py
+
+Mit Shebang (wie in deinen Popups):
+  #!/usr/bin/env python3
+  → Macht die Datei direkt ausführbar: ./mein_skript.py
+  → /usr/bin/env sucht python3 im PATH (portabler als /usr/bin/python3)
+  → Danach: chmod +x mein_skript.py
+
+Version prüfen:
+  python3 --version
+
+Python-Pakete installieren:
+  pip install paketname
+  pip install paketname --break-system-packages   ← manchmal nötig unter Linux
+
+Virtuelle Umgebung (empfohlen für Projekte):
+  python3 -m venv meinenv
+  source meinenv/bin/activate
+  pip install was-auch-immer
+  deactivate
+
+------------------------------------------------------------------------
+1.3  Kommentare und Docstrings
+------------------------------------------------------------------------
+
+Einzeiliger Kommentar — mit #:
+  # Das ist ein Kommentar
+  x = 5  # Kommentar am Zeilenende
+
+Mehrzeilige Kommentare — es gibt sie nicht offiziell. Benutze # mehrfach:
+  # Zeile 1
+  # Zeile 2
+  # Zeile 3
+
+Docstrings — für Funktionen, Klassen, Module:
+  def hallo():
+      """Diese Funktion gibt Hallo aus.
+
+      Kann auch mehrzeilig sein. Konvention: erste Zeile kurz,
+      dann Leerzeile, dann Details.
+      """
+      print("Hallo")
+
+  # Docstring abrufen:
+  print(hallo.__doc__)
+
+Aus deinem calendar-popup.py:
+  """TrafkHop Kalender + Wetter Popup  —  gtk-layer-shell edition"""
+  ← Das ist der Modul-Docstring. Steht ganz oben in der Datei.
+  ← Beschreibt kurz, was das Modul macht.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle eine Datei popup_test.py mit:
+- Shebang-Zeile
+- Modul-Docstring: "Mein erster Python-Test für TrafkHop"
+- Einem Kommentar, der erklärt, was du vorhast
+- Einem print("Hallo TrafkHop!")
+Führe die Datei mit python3 popup_test.py aus.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Variablen und Datentypen
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Variablen — Zuweisung und Namensregeln
+------------------------------------------------------------------------
+
+In Python gibt es KEIN var, let, const, int, string oder ähnliches.
+Du weist einfach zu:
+
+  name = "TrafkHop"
+  alter = 17
+  pi = 3.14159
+  ist_aktiv = True
+
+Mehrfachzuweisung:
+  x = y = z = 0           # alle drei auf 0
+  a, b, c = 1, 2, 3       # Tuple Unpacking — sehr häufig in Python
+  a, b = b, a              # Tausch ohne Hilfsvariable — geht in Python!
+
+Konventionen (PEP 8 — der offizielle Python-Styleguide):
+  variablen_namen   → snake_case (Wörter mit _ getrennt, alles klein)
+  KONSTANTEN        → GROSSBUCHSTABEN
+  KlassenNamen      → PascalCase / CamelCase
+  _privat           → ein Unterstrich = "intern, bitte nicht direkt benutzen"
+  __sehr_privat     → zwei Unterstriche = Name Mangling (später erklärt)
+
+Aus deinen Dateien:
+  ROFI_DIR      = os.path.expanduser("~/.config/rofi")    ← Konstante
+  BUBBLE_URI    = f"file://{ROFI_DIR}/TrafkBubble.png"    ← Konstante
+  WAYBAR_OFFSET = 55                                       ← Konstante
+  HAS_LAYER_SHELL = True                                   ← Variable (bool)
+
+Typen prüfen:
+  type(name)      → <class 'str'>
+  type(42)        → <class 'int'>
+  type(3.14)      → <class 'float'>
+  isinstance(42, int)   → True
+
+------------------------------------------------------------------------
+2.2  Die wichtigsten Datentypen im Überblick
+------------------------------------------------------------------------
+
+  int         ganze Zahlen ohne Größenlimit: 42, -7, 1_000_000
+  float       Gleitkommazahl: 3.14, -0.5, 1.5e10
+  str         Text: "Hallo", 'Welt', """mehrzeilig"""
+  bool        Wahrheitswert: True, False
+  None        Kein Wert / Null / nichts (eigener Typ: NoneType)
+  list        veränderliche, geordnete Sammlung: [1, 2, 3]
+  tuple       unveränderliche, geordnete Sammlung: (1, 2, 3)
+  dict        Schlüssel-Wert-Paare: {"name": "TrafkHop", "version": 2}
+  set         einzigartige Werte, ungeordnet: {1, 2, 3}
+  bytes       rohe Bytes: b"Hallo"
+
+Konvertierung zwischen Typen:
+  int("42")       → 42
+  float("3.14")   → 3.14
+  str(42)         → "42"
+  bool(0)         → False
+  bool(1)         → True
+  bool("")        → False      ← leerer String ist falsy
+  bool("Hallo")   → True
+  list((1,2,3))   → [1, 2, 3]
+  tuple([1,2,3])  → (1, 2, 3)
+
+------------------------------------------------------------------------
+2.3  int und float — Zahlen
+------------------------------------------------------------------------
+
+Ganzzahl-Operationen:
+  17 + 3       → 20
+  17 - 3       → 14
+  17 * 3       → 51
+  17 / 3       → 5.666...   ← gibt immer float zurück!
+  17 // 3      → 5          ← Ganzzahldivision (Floor Division)
+  17 % 3       → 2          ← Modulo (Rest)
+  2 ** 10      → 1024       ← Potenz
+
+Wichtig: In Python 3 ist 5/2 == 2.5. In Python 2 war es 2.
+Das ist ein häufiger Fehler beim Lesen alter Code-Beispiele.
+
+Float-Tücken (gilt in fast allen Sprachen):
+  0.1 + 0.2            → 0.30000000000000004   ← Gleitkomma-Ungenauigkeit!
+  round(0.1 + 0.2, 10) → 0.3                   ← runden hilft
+  from decimal import Decimal
+  Decimal("0.1") + Decimal("0.2")  → 0.3       ← für exakte Berechnungen
+
+Nützliche eingebaute Funktionen:
+  abs(-5)         → 5
+  round(3.7)      → 4
+  round(3.14159, 2) → 3.14
+  min(3, 1, 4)    → 1
+  max(3, 1, 4)    → 4
+  sum([1,2,3])    → 6
+
+Zahlen mit Underscores (bessere Lesbarkeit):
+  1_000_000       → 1000000
+  0xFF            → 255  (Hexadezimal)
+  0b1010          → 10   (Binär)
+  0o17            → 15   (Oktal)
+
+------------------------------------------------------------------------
+2.4  bool — Wahrheitswerte
+------------------------------------------------------------------------
+
+True und False müssen großgeschrieben werden (im Gegensatz zu JS).
+
+Vergleichsoperatoren — geben bool zurück:
+  x == y      gleich
+  x != y      ungleich
+  x < y       kleiner
+  x > y       größer
+  x <= y      kleiner oder gleich
+  x >= y      größer oder gleich
+  x is y      identisches Objekt (nicht nur gleicher Wert!)
+  x is not y  nicht identisches Objekt
+  x in y      x kommt in y vor (für Listen, Strings, Dicts...)
+  x not in y  x kommt nicht in y vor
+
+Logische Operatoren:
+  True and False   → False
+  True or False    → True
+  not True         → False
+
+Wichtig: In Python heißen die Operatoren and, or, not — NICHT &&, ||, !
+Das sind Wörter, keine Symbole wie in JS oder C.
+
+Truthy und Falsy — was gilt als True/False ohne expliziten bool:
+  Falsy:   0, 0.0, "", [], {}, set(), None, False
+  Truthy:  alles andere
+
+  # Deshalb funktioniert das:
+  daten = []
+  if daten:       # statt: if len(daten) > 0:
+      print("Hat Daten")
+
+Aus deinem calendar-popup.py:
+  if visual and screen.is_composited():
+  ← Kurzschreibweise: beide Bedingungen müssen wahr sein
+
+  if HAS_LAYER_SHELL:
+  ← bool direkt als Bedingung
+
+------------------------------------------------------------------------
+2.5  None — das Nichts
+------------------------------------------------------------------------
+
+None ist Pythons "kein Wert". Es ist ein eigenes Objekt, nicht 0 oder "".
+
+  x = None
+  print(x)        → None
+  print(type(x))  → <class 'NoneType'>
+
+Vergleich immer mit is, nicht ==:
+  if x is None:       ← richtig
+      print("nichts")
+  if x is not None:   ← auch richtig
+      print("was")
+  if x == None:       ← funktioniert auch, aber schlechter Stil
+
+Wann benutzt du None?
+  - Rückgabewert einer Funktion, die nichts zurückgibt (Default)
+  - Platzhalter für "noch nicht gesetzt"
+  - Optional-Parameter in Funktionen
+
+  def fetch_weather():    # aus deinem calendar-popup.py
+      ...
+      except Exception:
+          return None     ← bei Fehler: kein Wert
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Erstelle Variablen für:
+- Deinen Namen (str)
+- Dein Alter (int)
+- Pi auf 5 Stellen (float)
+- Ob du Lust auf Python hast (bool)
+- Eine leere Variable für später (None)
+Gib alle Variablen mit ihrem Typ aus: print(f"{name}: {type(name)}")
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Strings — Text in Python
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Strings erstellen
+------------------------------------------------------------------------
+
+  s1 = "Doppelte Anführungszeichen"
+  s2 = 'Einfache Anführungszeichen'
+  s3 = """Mehrzeiliger
+  String mit drei doppelten"""
+  s4 = '''Auch mehrzeilig
+  mit einfachen'''
+
+Unterschied: Kein inhaltlicher Unterschied. Wähle eine Konvention.
+Vorteil von ": Du kannst ' im Text benutzen ohne Escape:
+  s = "It's a trap"      ← kein Backslash nötig
+  s = 'It\'s a trap'     ← Escape nötig
+
+Roh-Strings (für Pfade, Regex):
+  pfad = r"C:\Users\Trafk\Desktop"
+  ← Das r vor dem String verhindert, dass \U als Unicode-Escape behandelt wird.
+  ← In Python-Regex benutzt man fast immer r"...".
+
+Byte-Strings:
+  b = b"Hallo"           ← bytes, nicht str
+  ← Wichtig für CSS.encode() in deinen Popups:
+  provider.load_from_data(CSS.encode())
+  ← CSS ist ein str, encode() macht daraus bytes.
+
+------------------------------------------------------------------------
+3.2  f-Strings — die modernen Strings (Python 3.6+)
+------------------------------------------------------------------------
+
+f-Strings sind der bevorzugte Weg um Variablen in Strings einzubauen.
+Du benutzt sie sehr viel in deinen Dateien — richtig so!
+
+  name = "TrafkHop"
+  version = 2
+
+  # Alt (benutze das NICHT mehr):
+  print("Hallo " + name + "!")
+  print("Hallo %s!" % name)
+  print("Hallo {}!".format(name))
+
+  # Modern — f-String:
+  print(f"Hallo {name}!")
+  print(f"Version: {version}")
+  print(f"2 + 2 = {2 + 2}")      ← Ausdrücke direkt im String
+  print(f"{name.upper()}")        ← Methoden aufrufen
+
+Formatierung in f-Strings:
+  pi = 3.14159
+  print(f"{pi:.2f}")      → 3.14       (2 Dezimalstellen)
+  print(f"{pi:8.2f}")     → "    3.14" (8 Zeichen breit, rechtsbündig)
+  print(f"{42:04d}")      → 0042       (4 Stellen, mit Nullen auffüllen)
+  print(f"{1000000:,}")   → 1,000,000  (Tausender-Trennzeichen)
+  print(f"{'Hallo':^20}") → "       Hallo        " (zentriert in 20 Zeichen)
+
+Aus deinen Dateien:
+  BUBBLE_URI = f"file://{ROFI_DIR}/TrafkBubble.png"
+  url = (f"https://api.open-meteo.com/v1/forecast"
+         f"?latitude={lat}&longitude={lon}"
+         f"&current=temperature_2m,weathercode")
+  ← Mehrzeilige f-Strings mit Klammern zusammengefasst — sehr lesbar!
+
+  self._w_temp.set_text(f"{cur['temperature_2m']:.0f}°C")
+  ← :.0f bedeutet: float ohne Dezimalstellen (also gerundet als ganze Zahl)
+
+------------------------------------------------------------------------
+3.3  String-Methoden — die wichtigsten
+------------------------------------------------------------------------
+
+s = "  Hallo TrafkHop!  "
+
+# Groß/Kleinschreibung
+s.upper()         → "  HALLO TRAFKHOP!  "
+s.lower()         → "  hallo trafkhop!  "
+s.capitalize()    → "  hallo trafkhop!  ".capitalize() → "  hallo..."
+"hallo".capitalize() → "Hallo"
+s.title()         → "  Hallo Trafkhop!  "
+s.swapcase()      → Groß↔Klein tauschen
+
+# Whitespace
+s.strip()         → "Hallo TrafkHop!"    (links und rechts)
+s.lstrip()        → "Hallo TrafkHop!  "  (nur links)
+s.rstrip()        → "  Hallo TrafkHop!"  (nur rechts)
+
+# Suchen und Prüfen
+s.find("Trafk")   → 7     (Index des ersten Vorkommens, -1 wenn nicht gefunden)
+s.index("Trafk")  → 7     (wie find, aber Exception wenn nicht gefunden)
+s.count("l")      → 2
+s.startswith("  Hallo")  → True
+s.endswith("!  ")        → True
+"Trafk" in s             → True    (in-Operator, bevorzugt!)
+s.replace("TrafkHop", "Welt")  → "  Hallo Welt!  "
+
+# Aufteilen
+"a,b,c".split(",")       → ["a", "b", "c"]
+"a b c".split()          → ["a", "b", "c"]   (split ohne Arg: alle Whitespace)
+"a\nb\nc".splitlines()   → ["a", "b", "c"]
+",".join(["a","b","c"])  → "a,b,c"   ← join ist "split rückwärts"
+
+# Testen (geben bool zurück)
+"42".isdigit()           → True
+"abc".isalpha()          → True
+"abc123".isalnum()       → True
+"   ".isspace()          → True
+"Hallo".islower()        → False
+"HALLO".isupper()        → True
+
+Aus deinem smGen.py:
+  ext.lower() in allowed_extensions
+  ← lower() macht die Dateiendung kleingeschrieben, dann in-Check
+
+  url_path.replace("\\", "/")
+  ← replace für Backslash-Umwandlung (Windows→Unix Pfad)
+
+  if p.endswith(ext) for ext in code_exts
+  ← endswith für Dateiendungs-Check
+
+------------------------------------------------------------------------
+3.4  String-Slicing und Indexierung
+------------------------------------------------------------------------
+
+Strings sind geordnete Sequenzen. Du kannst einzelne Zeichen oder
+Teilstrings (Slices) herausschneiden:
+
+  s = "TrafkHop"
+         0123456789...
+        -7654321... (negative Indizes von rechts)
+
+  s[0]      → "T"          (erstes Zeichen)
+  s[5]      → "H"
+  s[-1]     → "p"          (letztes Zeichen)
+  s[-3]     → "H"
+
+  # Slicing: s[start:stop:step]
+  # stop ist EXKLUSIV (nicht enthalten)
+  s[0:5]    → "Trafk"
+  s[:5]     → "Trafk"      (start fehlt = 0)
+  s[5:]     → "Hop"        (stop fehlt = Ende)
+  s[:]      → "TrafkHop"   (Kopie des gesamten Strings)
+  s[::2]    → "TakHp"      (jeden zweiten Buchstaben)
+  s[::-1]   → "poHkfarT"   (umgekehrt!)
+
+  len(s)    → 8            (Länge)
+
+Strings sind UNVERÄNDERLICH (immutable):
+  s[0] = "t"    ← FEHLER! TypeError: 'str' does not support item assignment
+  ← Wenn du einen String ändern willst, musst du einen neuen erstellen:
+  s = "t" + s[1:]   → "trafkHop"
+
+------------------------------------------------------------------------
+3.5  Nützliche String-Funktionen
+------------------------------------------------------------------------
+
+Aus der Standardbibliothek:
+  ord("A")        → 65      (Unicode-Codepoint)
+  chr(65)         → "A"     (Zeichen aus Codepoint)
+  hex(255)        → "0xff"
+  bin(10)         → "0b1010"
+
+  # String mit Auffüllen:
+  "42".zfill(5)     → "00042"
+  "Hi".ljust(10)    → "Hi        "
+  "Hi".rjust(10)    → "        Hi"
+  "Hi".center(10)   → "    Hi    "
+
+Aus deinem smGen.py:
+  loc = (base + file_path).replace("&", "&amp;")
+  ← String-Konkatenation mit + und replace für XML-Escaping
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Gegeben: url = "https://api.open-meteo.com/v1/forecast?latitude=48.05"
+Schreibe Code der:
+1. Den Domain-Teil extrahiert (bis zum ersten /)
+2. Den Protokoll-Teil (vor dem ://) herausholt
+3. Prüft ob "meteo" im URL vorkommt
+4. Den URL zu Großbuchstaben macht
+5. Den URL an "?" aufteilt und die Basis-URL ausgibt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Listen, Tupel, Sets — Sequenzen
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Listen — die Schweizer Taschenmesser
+------------------------------------------------------------------------
+
+Listen sind geordnet, veränderlich, können gemischte Typen enthalten:
+
+  leer = []
+  zahlen = [1, 2, 3, 4, 5]
+  gemischt = [1, "zwei", 3.0, True, None]
+  verschachtelt = [[1, 2], [3, 4], [5, 6]]
+
+Zugriff und Slicing — genau wie Strings:
+  zahlen[0]      → 1
+  zahlen[-1]     → 5
+  zahlen[1:3]    → [2, 3]
+  zahlen[::-1]   → [5, 4, 3, 2, 1]
+
+Elemente hinzufügen:
+  zahlen.append(6)          → [..., 5, 6]     (ans Ende)
+  zahlen.insert(0, 0)       → [0, 1, ...]     (an Position einfügen)
+  zahlen.extend([7, 8, 9])  → [..., 7, 8, 9]  (andere Liste anhängen)
+  zahlen += [10]            → [..., 10]        (wie extend)
+
+Elemente entfernen:
+  zahlen.remove(3)     → entfernt ersten Wert 3 (Fehler wenn nicht vorhanden)
+  zahlen.pop()         → entfernt und gibt letztes Element zurück
+  zahlen.pop(0)        → entfernt und gibt Element an Index 0 zurück
+  del zahlen[2]        → entfernt Element an Index 2
+  del zahlen[1:3]      → entfernt Slice
+  zahlen.clear()       → leert die gesamte Liste
+
+Suchen und Prüfen:
+  3 in zahlen             → True / False
+  zahlen.index(3)         → Index des ersten 3 (Fehler wenn nicht vorhanden)
+  zahlen.count(3)         → Anzahl der 3er
+
+Sortieren:
+  zahlen.sort()             → In-Place sortieren (ändert die Liste!)
+  zahlen.sort(reverse=True) → Umgekehrt sortieren
+  sorted(zahlen)            → Neue sortierte Liste (Original bleibt)
+  zahlen.reverse()          → In-Place umkehren
+
+Nützliche Operationen:
+  len(zahlen)               → Anzahl Elemente
+  min(zahlen)               → Kleinster Wert
+  max(zahlen)               → Größter Wert
+  sum(zahlen)               → Summe (nur Zahlen)
+  list(range(5))            → [0, 1, 2, 3, 4]
+
+Listen kopieren — WICHTIG:
+  a = [1, 2, 3]
+  b = a           ← KEIN Kopie! b zeigt auf dasselbe Objekt!
+  b.append(4)     → a ist jetzt auch [1, 2, 3, 4]!
+
+  b = a.copy()    ← Flache Kopie (shallow copy)
+  b = a[:]        ← Auch flache Kopie
+  b = list(a)     ← Auch flache Kopie
+  import copy
+  b = copy.deepcopy(a)  ← Tiefe Kopie (auch verschachtelte Listen)
+
+------------------------------------------------------------------------
+4.2  List Comprehensions — Python-typische Abkürzung
+------------------------------------------------------------------------
+
+Das ist eine der schönsten Features von Python. Statt einer for-Schleife:
+
+  # Ohne Comprehension:
+  quadrate = []
+  for x in range(10):
+      quadrate.append(x ** 2)
+
+  # Mit List Comprehension:
+  quadrate = [x ** 2 for x in range(10)]
+  # → [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
+
+  # Mit Bedingung:
+  gerade = [x for x in range(10) if x % 2 == 0]
+  # → [0, 2, 4, 6, 8]
+
+  # Mit Transformation:
+  gross = [s.upper() for s in ["hallo", "welt"]]
+  # → ["HALLO", "WELT"]
+
+  # Aus deinem smGen.py (ähnliches Muster):
+  found_files = []
+  for root, dirs, files in os.walk(directory):
+      for filename in files:
+          found_files.append(...)
+  # Das wäre als Comprehension möglich, aber verschachtelte Comprehensions
+  # werden schnell unleserlich — hier ist die explizite Schleife besser!
+
+------------------------------------------------------------------------
+4.3  Tupel — unveränderliche Listen
+------------------------------------------------------------------------
+
+Tupel sind wie Listen, aber nach der Erstellung nicht mehr änderbar:
+
+  t = (1, 2, 3)
+  t = 1, 2, 3         ← Klammern sind optional!
+  t = (42,)           ← Einzel-Tupel BRAUCHT das Komma!
+  t = ()              ← Leeres Tupel
+
+  t[0]         → 1
+  t[1:3]       → (2, 3)
+  len(t)       → 3
+  3 in t       → True
+
+  # Das geht NICHT:
+  t[0] = 99   ← TypeError!
+
+Wann Tupel statt Liste?
+  - Wenn die Daten sich nicht ändern sollen (Koordinaten, Farben, ...)
+  - Als Rückgabewert von Funktionen (mehrere Werte):
+    def position():
+        return 48.05, 14.13    ← gibt ein Tupel zurück
+
+  - Als Dictionary-Keys (Listen gehen nicht!):
+    d = {(1, 2): "Punkt"}      ← Tupel als Key: ok
+    d = {[1, 2]: "Punkt"}      ← Liste als Key: FEHLER!
+
+Tuple Unpacking:
+  lat, lon = 48.05, 14.13     ← sehr häufig in Python
+  a, b, c = (1, 2, 3)
+  first, *rest = [1, 2, 3, 4, 5]   → first=1, rest=[2,3,4,5]
+  *anfang, last = [1, 2, 3, 4, 5]  → anfang=[1,2,3,4], last=5
+
+Aus deinem calendar-popup.py:
+  lat, lon = 48.0533, 14.1291
+  ← Klassisches Tuple Unpacking für Koordinaten!
+
+------------------------------------------------------------------------
+4.4  Sets — Mengen ohne Duplikate
+------------------------------------------------------------------------
+
+  s = {1, 2, 3, 3, 2}    → {1, 2, 3}   (Duplikate werden entfernt!)
+  s = set()              ← Leeres Set (NICHT {} — das ist ein leeres Dict!)
+  s = set([1, 2, 2, 3])  → {1, 2, 3}
+
+  1 in s              → True
+  s.add(4)            → {1, 2, 3, 4}
+  s.remove(2)         → entfernt 2 (Fehler wenn nicht vorhanden)
+  s.discard(99)       → entfernt 99 wenn vorhanden, sonst nichts
+  len(s)              → Anzahl
+
+Mengenoperationen:
+  a = {1, 2, 3, 4}
+  b = {3, 4, 5, 6}
+
+  a | b               → {1, 2, 3, 4, 5, 6}   (Vereinigung)
+  a & b               → {3, 4}                (Schnittmenge)
+  a - b               → {1, 2}                (Differenz: in a, nicht in b)
+  a ^ b               → {1, 2, 5, 6}          (Symmetrische Differenz)
+
+Wann Sets?
+  - Duplikate entfernen: list(set(liste_mit_duplikaten))
+  - Schnelle Existenzprüfung (viel schneller als Listen bei großen Daten)
+  - Mengenoperationen
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Gegeben: wochentage = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+1. Gib alle Wochentage nummeriert aus: "1. Mo", "2. Di", ...
+2. Erstelle eine Liste nur der Werktage (Mo-Fr) mit List Comprehension
+3. Erstelle ein Set der Anfangsbuchstaben aller Wochentage
+4. Sortiere die Wochentage alphabetisch (ohne Original zu ändern)
+5. Füge "Fe" am Anfang ein und entferne "Sa" und "So"
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Dictionaries — Schlüssel-Wert-Paare
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Dictionaries erstellen und benutzen
+------------------------------------------------------------------------
+
+Dicts sind das wichtigste Werkzeug in Python nach Listen.
+Alles in Python ist eigentlich ein Dict unter der Haube.
+
+  # Erstellen
+  leer = {}
+  leer = dict()
+
+  wetter = {
+      "temperatur": 21.5,
+      "beschreibung": "Teilbewölkt",
+      "code": 2,
+      "regen": False
+  }
+
+  # Zugriff
+  wetter["temperatur"]        → 21.5
+  wetter["code"]              → 2
+
+  # Sicherer Zugriff (kein Fehler wenn Key nicht vorhanden):
+  wetter.get("wind")          → None
+  wetter.get("wind", 0)       → 0    (Default-Wert wenn nicht vorhanden)
+
+  # Existenz prüfen
+  "temperatur" in wetter      → True
+  "wind" in wetter            → False
+
+  # Wert setzen / überschreiben
+  wetter["wind"] = 15
+  wetter["beschreibung"] = "Sonnig"
+
+  # Löschen
+  del wetter["wind"]
+  wetter.pop("code")          → gibt gelöschten Wert zurück
+  wetter.pop("x", None)       → gibt None statt Fehler wenn "x" nicht da
+
+------------------------------------------------------------------------
+5.2  Dict-Methoden
+------------------------------------------------------------------------
+
+  # Alle Keys, Values, Items (Key-Value-Paare)
+  wetter.keys()        → dict_keys(["temperatur", "beschreibung", ...])
+  wetter.values()      → dict_values([21.5, "Sonnig", ...])
+  wetter.items()       → dict_items([("temperatur", 21.5), ...])
+
+  # Als Liste:
+  list(wetter.keys())
+
+  # Zusammenführen (Python 3.9+):
+  dict1 = {"a": 1}
+  dict2 = {"b": 2}
+  zusammen = dict1 | dict2     → {"a": 1, "b": 2}
+
+  # Ältere Methode:
+  dict1.update(dict2)          → dict1 wird erweitert (In-Place!)
+
+  # Kopieren (gleiche Problematik wie Listen):
+  kopie = wetter.copy()        ← Flache Kopie
+  import copy
+  tief = copy.deepcopy(wetter) ← Tiefe Kopie
+
+  # Löschen und Zurücksetzen:
+  wetter.clear()               ← Alle Einträge entfernen
+
+------------------------------------------------------------------------
+5.3  Über Dicts iterieren
+------------------------------------------------------------------------
+
+  for key in wetter:              ← Iteriert über Keys
+      print(key)
+
+  for key in wetter.keys():       ← Expliziter, aber gleich
+      print(key)
+
+  for value in wetter.values():   ← Nur Werte
+      print(value)
+
+  for key, value in wetter.items():  ← Key UND Value gleichzeitig
+      print(f"{key}: {value}")
+
+Aus deinen Dateien:
+  WMO_ICONS = {0:"☀️",1:"🌤",2:"⛅",3:"☁️",...}   ← in calendar-popup.py
+  WMO_DESC  = {0:"Klar",1:"Überwiegend klar",...}
+
+  WMO_ICONS.get(code, "❓")
+  ← .get() mit Fallback-Wert — wenn code nicht im Dict, gib "❓" zurück
+  ← Sehr eleganter Weg um fehlende Keys zu behandeln!
+
+  # Aus rofi-menu-editor.py:
+  for k, v in d.items():
+      if isinstance(v, dict):    ← rekursives Dict-Durchsuchen
+
+------------------------------------------------------------------------
+5.4  Dict Comprehensions und verschachtelte Dicts
+------------------------------------------------------------------------
+
+  # Wie List Comprehension, aber mit {}:
+  quadrate = {x: x**2 for x in range(5)}
+  # → {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}
+
+  # Nur bestimmte Keys:
+  gefiltert = {k: v for k, v in wetter.items() if v is not None}
+
+  # Verschachtelte Dicts:
+  projekt = {
+      "name": "TrafkHop",
+      "version": "2.0",
+      "einstellungen": {
+          "sprache": "de",
+          "design": {
+              "farbe": "#8456dd",
+              "font": "Noto Sans"
+          }
+      }
+  }
+
+  # Zugriff auf verschachtelte Werte:
+  projekt["einstellungen"]["design"]["farbe"]   → "#8456dd"
+
+  # Sicherer Zugriff auf verschachtelte Werte:
+  projekt.get("einstellungen", {}).get("design", {}).get("farbe")
+
+------------------------------------------------------------------------
+5.5  defaultdict und Counter — nützliche Dict-Varianten
+------------------------------------------------------------------------
+
+  from collections import defaultdict, Counter
+
+  # defaultdict — erstellt automatisch einen Default-Wert wenn Key fehlt:
+  zaehler = defaultdict(int)    ← Default: 0
+  zaehler["hallo"] += 1         ← Funktioniert auch wenn "hallo" nicht da war!
+  zaehler["welt"] += 1
+  # → defaultdict(<class 'int'>, {'hallo': 1, 'welt': 1})
+
+  listen_dict = defaultdict(list)
+  listen_dict["gruppe"].append("a")    ← Kein KeyError!
+
+  # Counter — zählt Vorkommen automatisch:
+  from collections import Counter
+  text = "abracadabra"
+  c = Counter(text)
+  # → Counter({'a': 5, 'b': 2, 'r': 2, 'c': 1, 'd': 1})
+  c.most_common(3)   → [('a', 5), ('b', 2), ('r', 2)]
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Aus deinem WMO_ICONS-Dict in calendar-popup.py:
+WMO_ICONS = {0:"☀️",1:"🌤",2:"⛅",3:"☁️",45:"🌫",95:"⛈"}
+
+1. Schreibe eine Funktion get_icon(code) die das Icon oder "❓" zurückgibt
+2. Erstelle ein umgekehrtes Dict: {"☀️": 0, "🌤": 1, ...}
+3. Gib alle Codes mit ihren Icons sortiert nach Code-Nummer aus
+4. Zähle wie viele verschiedene Icons es gibt (ohne Duplikate)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Kontrollfluss — if, for, while
+================================================================================
+
+------------------------------------------------------------------------
+6.1  if / elif / else
+------------------------------------------------------------------------
+
+  temperatur = 21
+
+  if temperatur > 30:
+      print("Heiß!")
+  elif temperatur > 20:
+      print("Angenehm warm.")
+  elif temperatur > 10:
+      print("Kühl.")
+  else:
+      print("Kalt!")
+
+Regeln:
+  - Nur ein if, beliebig viele elif, maximal ein else
+  - Reihenfolge wichtig: erste wahre Bedingung gewinnt, Rest wird übersprungen
+  - Alle sind optional außer if
+
+Ternary-Operator (Einzeilen-if):
+  modus = "dunkel" if stunde > 20 else "hell"
+  ← Kurzform: WERT_WENN_TRUE if BEDINGUNG else WERT_WENN_FALSE
+
+  # Ohne:
+  if stunde > 20:
+      modus = "dunkel"
+  else:
+      modus = "hell"
+
+Match/Case (Python 3.10+) — wie switch in anderen Sprachen:
+  code = 2
+  match code:
+      case 0:
+          icon = "☀️"
+      case 1 | 2:          ← | für ODER
+          icon = "⛅"
+      case 45 | 48:
+          icon = "🌫"
+      case _:               ← default
+          icon = "❓"
+
+------------------------------------------------------------------------
+6.2  for-Schleifen
+------------------------------------------------------------------------
+
+In Python iteriert for immer über eine Sequenz — nicht über Zahlen:
+
+  # Über eine Liste:
+  for tag in ["Mo", "Di", "Mi"]:
+      print(tag)
+
+  # Über einen String (zeichenweise):
+  for buchstabe in "TrafkHop":
+      print(buchstabe)
+
+  # Über einen Zahlenbereich:
+  for i in range(5):        → 0, 1, 2, 3, 4
+      print(i)
+
+  range(start, stop, step):
+  range(5)           → 0, 1, 2, 3, 4
+  range(2, 8)        → 2, 3, 4, 5, 6, 7
+  range(0, 10, 2)    → 0, 2, 4, 6, 8
+  range(10, 0, -1)   → 10, 9, 8, 7, 6, 5, 4, 3, 2, 1
+
+  # enumerate — Index und Wert gleichzeitig:
+  for i, tag in enumerate(["Mo", "Di", "Mi"]):
+      print(f"{i}: {tag}")
+  # → 0: Mo, 1: Di, 2: Mi
+
+  enumerate(liste, start=1)  ← Start-Index ändern
+
+  # zip — mehrere Listen gleichzeitig:
+  tage = ["Mo", "Di", "Mi"]
+  wetter = ["☀️", "⛅", "🌧"]
+  for tag, icon in zip(tage, wetter):
+      print(f"{tag}: {icon}")
+
+  # zip endet bei der kürzesten Liste!
+
+  # Dict iterieren:
+  for code, icon in WMO_ICONS.items():
+      print(f"Code {code}: {icon}")
+
+break und continue:
+  for i in range(10):
+      if i == 3:
+          continue    ← Überspringt den Rest, geht zum nächsten i
+      if i == 7:
+          break       ← Beendet die Schleife komplett
+      print(i)
+  # → 0, 1, 2, 4, 5, 6
+
+for-else (selten, aber nützlich):
+  for item in liste:
+      if bedingung:
+          break
+  else:
+      # Wird ausgeführt wenn die Schleife NICHT durch break beendet wurde
+      print("Nicht gefunden!")
+
+Aus deinem calendar-popup.py:
+  for i in range(min(3, len(daily["time"]))):
+  ← Iteriert 0,1,2 (oder weniger wenn weniger Tage vorhanden)
+  ← min() verhindert IndexError wenn weniger als 3 Tage kommen
+
+  for row_idx, week in enumerate(calendar.monthcalendar(self._year, self._month)):
+      for col_idx, day in enumerate(week):
+  ← Verschachtelte Schleifen mit enumerate für Row- und Column-Indizes
+
+------------------------------------------------------------------------
+6.3  while-Schleifen
+------------------------------------------------------------------------
+
+while läuft solange eine Bedingung wahr ist:
+
+  count = 0
+  while count < 5:
+      print(count)
+      count += 1
+
+  # Endlosschleife (mit Escape):
+  while True:
+      eingabe = input("Tippe 'exit': ")
+      if eingabe == "exit":
+          break
+
+while-else:
+  n = 1
+  while n < 100:
+      if n % 7 == 0:
+          print(f"Erste Zahl durch 7 teilbar: {n}")
+          break
+      n += 1
+  else:
+      print("Keine Zahl gefunden.")
+
+------------------------------------------------------------------------
+6.4  Schleifen-Tricks und Patterns
+------------------------------------------------------------------------
+
+Über Index und gleichzeitig reverse:
+  for item in reversed(liste):
+      print(item)
+
+Sortiert iterieren ohne Original zu ändern:
+  for item in sorted(liste):
+      print(item)
+
+  for item in sorted(liste, key=lambda x: x.lower()):
+      print(item)
+
+Jeden n-ten Schritt:
+  for i, item in enumerate(liste):
+      if i % 2 == 0:
+          print(item)   ← nur jedes zweite Element
+
+Aus deinem smGen.py:
+  for root, dirs, files in os.walk(directory):
+      dirs[:] = [d for d in dirs if d != ".git"]
+  ← dirs[:] = ... ändert die Liste In-Place — os.walk sieht die Änderung
+  ← dirs = ... würde eine neue Variable erstellen — os.walk ignoriert das!
+  ← Das ist ein wichtiges Python-Pattern!
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+1. Schreibe eine Schleife die alle Monatsnamen ausgibt wie in deinem Code:
+   MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni",
+                "Juli","August","September","Oktober","November","Dezember"]
+   Format: "1. Januar", "2. Februar", ...
+
+2. Finde mit einer Schleife alle WMO-Codes die Gewitterwetter bedeuten
+   (nutze WMO_DESC und prüfe ob "Gewitter" im String ist)
+
+3. Schreibe eine while-Schleife die von 100 bis 0 rückwärts zählt
+   und nur Vielfache von 15 ausgibt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Funktionen
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Funktionen definieren und aufrufen
+------------------------------------------------------------------------
+
+  def grüsse(name):
+      """Begrüßt eine Person."""
+      print(f"Hallo, {name}!")
+
+  grüsse("TrafkHop")      → "Hallo, TrafkHop!"
+
+  # Rückgabewert:
+  def addiere(a, b):
+      return a + b
+
+  ergebnis = addiere(3, 4)    → 7
+
+  # Mehrere Rückgabewerte (als Tupel):
+  def min_max(liste):
+      return min(liste), max(liste)
+
+  klein, gross = min_max([3, 1, 4, 1, 5, 9])
+  # klein=1, gross=9
+
+  # Funktion ohne explizites return gibt None zurück:
+  def mach_was():
+      print("Gemacht")
+  # mach_was() gibt None zurück
+
+------------------------------------------------------------------------
+7.2  Parameter-Typen
+------------------------------------------------------------------------
+
+  # Positionale Parameter (Standard):
+  def f(a, b, c):
+      pass
+  f(1, 2, 3)              ← Reihenfolge wichtig!
+
+  # Default-Werte:
+  def grüsse(name, prefix="Hallo"):
+      print(f"{prefix}, {name}!")
+  grüsse("Trafk")              → "Hallo, Trafk!"
+  grüsse("Trafk", "Hey")       → "Hey, Trafk!"
+  grüsse("Trafk", prefix="Hi") → "Hi, Trafk!"
+
+  # Keyword Arguments (Schlüsselwort-Argumente):
+  def erstelle_popup(breite=400, höhe=300, titel="Popup"):
+      pass
+  erstelle_popup(titel="Kalender", höhe=500)   ← Reihenfolge egal!
+
+  # *args — beliebig viele positionale Argumente:
+  def summe(*zahlen):
+      return sum(zahlen)
+  summe(1, 2, 3)      → 6
+  summe(1, 2, 3, 4, 5) → 15
+  # zahlen ist ein Tupel!
+
+  # **kwargs — beliebig viele Keyword-Argumente:
+  def info(**daten):
+      for key, value in daten.items():
+          print(f"{key}: {value}")
+  info(name="Trafk", version=2, aktiv=True)
+
+  # Kombination:
+  def alles(positional, *args, schlüssel=None, **kwargs):
+      pass
+
+------------------------------------------------------------------------
+7.3  Scope — Gültigkeitsbereiche
+------------------------------------------------------------------------
+
+Python's Scope-Regeln: LEGB — Local, Enclosing, Global, Built-in
+
+  x = "global"
+
+  def äussere():
+      x = "enclosing"
+
+      def innere():
+          x = "local"
+          print(x)   → "local"     (lokal schlägt alles)
+
+      innere()
+      print(x)       → "enclosing"
+
+  äussere()
+  print(x)           → "global"
+
+  # Global-Variable in Funktion LESEN: geht immer
+  name = "TrafkHop"
+  def zeige():
+      print(name)   ← liest global
+
+  # Global-Variable in Funktion ÄNDERN: braucht global-Keyword
+  counter = 0
+  def increment():
+      global counter
+      counter += 1
+
+  # nonlocal — für enclosing scope:
+  def äussere():
+      x = 0
+      def innere():
+          nonlocal x
+          x += 1
+      innere()
+      print(x)   → 1
+
+------------------------------------------------------------------------
+7.4  Lambda — anonyme Funktionen
+------------------------------------------------------------------------
+
+Lambda ist eine Einzeilen-Funktion ohne Namen:
+
+  # Normal:
+  def quadrat(x):
+      return x ** 2
+
+  # Lambda:
+  quadrat = lambda x: x ** 2
+  quadrat(5)   → 25
+
+  # Mehrere Parameter:
+  addiere = lambda a, b: a + b
+
+Wann Lambda benutzen?
+  - Hauptsächlich als Argument für sorted(), map(), filter(), etc.
+  - Nicht für komplexe Logik!
+
+  # Sortieren nach zweitem Element:
+  paare = [(1, 3), (2, 1), (3, 2)]
+  sorted(paare, key=lambda p: p[1])   → [(2,1), (3,2), (1,3)]
+
+  # Sortieren nach Stringlänge:
+  worte = ["Python", "ist", "super", "cool"]
+  sorted(worte, key=lambda w: len(w))
+
+  # map und filter (List Comprehensions sind oft lesbarer):
+  quadrate = list(map(lambda x: x**2, range(5)))
+  gerade   = list(filter(lambda x: x%2==0, range(10)))
+
+------------------------------------------------------------------------
+7.5  Closures — Funktionen die Werte "einschließen"
+------------------------------------------------------------------------
+
+  def mache_multiplikator(faktor):
+      def multiplikiere(zahl):
+          return zahl * faktor    ← faktor ist "eingeschlossen"!
+      return multiplikiere        ← Gibt die Funktion zurück!
+
+  verdopple = mache_multiplikator(2)
+  verdreifache = mache_multiplikator(3)
+
+  verdopple(5)      → 10
+  verdreifache(5)   → 15
+
+Das ist ein Closure: innere() "erinnert sich" an die Variable faktor
+aus der äußeren Funktion, auch wenn mache_multiplikator() längst fertig ist.
+
+Aus deinen GTK-Callbacks (calendar-popup.py):
+  nb.connect("clicked", self._next_month)
+  ← self._next_month ist eine Methode (gebundene Funktion)
+  ← self ist wie ein Closure — die Funktion "weiß" zu welchem Objekt sie gehört
+
+------------------------------------------------------------------------
+7.6  Wichtige eingebaute Funktionen
+------------------------------------------------------------------------
+
+Du hast viele davon schon gesehen. Hier die Komplettliste der wichtigsten:
+
+  # Ausgabe/Eingabe:
+  print("Hallo", end="\n")      ← end bestimmt was am Ende steht
+  print("a", "b", sep=", ")     ← sep trennt mehrere Argumente
+  eingabe = input("Tippe: ")    ← liest Texteingabe (gibt immer str!)
+
+  # Zahlen:
+  abs(-5)          round(3.7)    min(...)    max(...)    sum(...)
+  pow(2, 10)       divmod(17, 3)   ← (5, 2) — Quotient und Rest
+
+  # Typen und Konvertierung:
+  type(x)          isinstance(x, int)    int()    float()    str()
+  bool()           list()    tuple()    dict()    set()
+
+  # Sequenzen:
+  len()    range()    enumerate()    zip()    reversed()    sorted()
+  map()    filter()    any()    all()
+
+  # any() und all() — sehr nützlich:
+  any([False, True, False])    → True   (mindestens eines True)
+  all([True, True, True])      → True   (alle True)
+  all([True, False, True])     → False
+
+  # Attribute und Objekte:
+  dir(x)           → Liste aller Attribute/Methoden von x
+  vars(x)          → Dict aller Instanz-Variablen
+  hasattr(x, "name")   → prüft ob x ein Attribut "name" hat
+  getattr(x, "name")   → liest Attribut x.name
+  setattr(x, "name", "wert")   → setzt x.name = "wert"
+
+  # Sonstiges:
+  id(x)            → eindeutige ID des Objekts (Speicheradresse)
+  hash(x)          → Hash-Wert (für unveränderliche Objekte)
+  open(...)        → Datei öffnen (Details in Teil 2)
+  help(x)          → Hilfe zu x (in der REPL sehr nützlich!)
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Inspiriert von deinem smGen.py:
+
+1. Schreibe eine Funktion get_priority(url_path) die:
+   - "0.10" zurückgibt wenn "/backup/" im Pfad ist
+   - "0.65" für Code-Dateien (.js, .py, .css, etc.)
+   - "0.85" als Default
+
+2. Schreibe eine Funktion should_skip(path) die True zurückgibt
+   wenn der Pfad ".git" oder "games" enthält.
+
+3. Schreibe eine Funktion format_wmo(code, icons_dict, desc_dict) die
+   einen formatierten String zurückgibt: "☀️ Klar (Code 0)"
+
+4. Benutze sorted() mit lambda um WMO_ICONS nach Code sortiert auszugeben.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — Python Teil 1
+================================================================================
+
+GRUNDTYPEN:
+  int      float     str      bool      None
+  list     tuple     dict     set       bytes
+
+VARIABLEN:
+  name = "wert"         snake_case für Variablen
+  KONSTANTE = 42        GROSSBUCHSTABEN für Konstanten
+  a, b = 1, 2           Tuple Unpacking
+
+STRINGS:
+  f"Hallo {name}"       f-String (modern)
+  s.upper()  .lower()   .strip()  .split()  .replace()
+  s.startswith()  .endswith()  .find()  .join()
+  s[0]  s[1:3]  s[::-1]   Indexierung und Slicing
+
+LISTEN:
+  [1,2,3]   l.append()  l.pop()  l.extend()  l.sort()
+  [x**2 for x in range(10)]   List Comprehension
+  sorted()   reversed()   len()   min()   max()   sum()
+
+DICTIONARIES:
+  {"key": "value"}    d.get("key", default)
+  d.keys()   d.values()   d.items()
+  {k: v for k, v in d.items()}   Dict Comprehension
+
+KONTROLLFLUSS:
+  if ... elif ... else ...
+  for item in sequenz:
+  for i, item in enumerate(sequenz):
+  for k, v in dict.items():
+  while bedingung:
+  break   continue   pass
+
+FUNKTIONEN:
+  def name(param, default=wert, *args, **kwargs):
+  return wert
+  lambda x: x**2
+  any([...])   all([...])
+
+OPERATOREN:
+  +  -  *  /  //  %  **         Arithmetik
+  ==  !=  <  >  <=  >=          Vergleich
+  and  or  not                  Logik (nicht && || !)
+  in   not in   is   is not     Mitgliedschaft/Identität
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN — Python
+================================================================================
+
+Offizielle Docs    → https://docs.python.org/3/
+Tutorial (offiziell) → https://docs.python.org/3/tutorial/
+PEP 8 Styleguide   → https://peps.python.org/pep-0008/
+Real Python        → https://realpython.com (sehr gute Artikel)
+Python Cheatsheet  → https://www.pythoncheatsheet.org
+
+================================================================================
+Ende Python-Komplettkurs Teil 1 — Weiter mit Teil 2: OOP, Module, Dateien
+================================================================================
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

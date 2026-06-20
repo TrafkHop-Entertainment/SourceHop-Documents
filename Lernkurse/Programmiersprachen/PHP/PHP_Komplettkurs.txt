@@ -1,0 +1,2324 @@
+================================================================================
+PHP KOMPLETTKURS
+================================================================================
+
+Dieser Kurs baut auf dem HTML-, CSS- und JavaScript-Kurs auf.
+Du solltest wissen, was ein HTTP-Request ist, wie ein Formular funktioniert
+und was eine Variable ist. Alles andere erklären wir von Grund auf.
+
+================================================================================
+MODUL 1: Was ist PHP und wie funktioniert es?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Das Grundprinzip — serverseitig vs. clientseitig
+------------------------------------------------------------------------
+
+PHP ist eine serverseitige Skriptsprache. Der entscheidende Unterschied
+zu JavaScript:
+
+  JavaScript  → läuft im Browser des Nutzers (clientseitig)
+  PHP         → läuft auf dem Server, bevor der Browser irgendetwas sieht
+
+Was das bedeutet: Wenn jemand eine PHP-Seite aufruft, passiert folgendes:
+
+  1. Browser schickt einen HTTP-Request an den Server
+  2. Server führt die PHP-Datei aus
+  3. PHP produziert HTML (und nur das HTML)
+  4. Server schickt das fertige HTML zum Browser zurück
+  5. Browser zeigt das HTML an — sieht kein PHP, weiß nichts von PHP
+
+Das macht PHP ideal für:
+  - Datenbankzugriffe (Nutzerdaten, Produkte, Inhalte)
+  - Benutzerauthentifizierung (Logins, Sessions)
+  - Formulare verarbeiten (Kontakt, Bestellungen)
+  - Dynamische Webseiten (jeder sieht andere Inhalte)
+  - APIs bauen (Daten als JSON ausgeben)
+
+------------------------------------------------------------------------
+1.2  PHP in HTML einbetten
+------------------------------------------------------------------------
+
+PHP-Dateien enden auf .php. Du kannst PHP und HTML beliebig mischen:
+
+  <?php
+    $name = "TrafkHop";
+    $version = 3;
+  ?>
+
+  <!DOCTYPE html>
+  <html>
+  <body>
+    <h1>Willkommen bei <?php echo $name; ?>!</h1>
+    <p>Version <?php echo $version; ?> ist online.</p>
+  </body>
+  </html>
+
+Die PHP-Tags im Überblick:
+
+  <?php ... ?>    → Standard-Tag (immer benutzen)
+  <?= ... ?>      → Kurzform für <?php echo ... ?> (ab PHP 5.4 immer verfügbar)
+  <?  ... ?>      → Kurztag (NICHT benutzen, oft deaktiviert)
+
+  Bevorzuge <?= wenn du nur etwas ausgeben willst:
+    <h1>Hallo, <?= $name ?>!</h1>
+
+PHP-Kommentare:
+
+  // Einzeiliger Kommentar
+  # Auch einzeilig (aus der Shell-Welt, seltener genutzt)
+  /* Mehrzeiliger
+     Kommentar */
+
+------------------------------------------------------------------------
+1.3  Ausführungsumgebung einrichten
+------------------------------------------------------------------------
+
+Du brauchst einen Webserver mit PHP. Drei Optionen:
+
+  OPTION A: XAMPP (Windows/Mac/Linux)
+    → Installiert Apache + PHP + MySQL in einem Paket
+    → Dateien kommen in den htdocs-Ordner
+    → Aufruf: http://localhost/dein-projekt/
+
+  OPTION B: PHP Built-in Server (nur für Entwicklung)
+    → Kein Apache nötig, nur PHP installiert
+    → Im Projektordner:
+       php -S localhost:8000
+    → Aufruf: http://localhost:8000/
+
+  OPTION C: Docker (für Fortgeschrittene)
+    → docker run -p 8080:80 -v $(pwd):/var/www/html php:apache
+    → Sauber, isoliert, produktionsnah
+
+  Für diesen Kurs reicht OPTION B vollständig.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle eine Datei index.php. Lasse PHP deinen Namen und das aktuelle
+Datum ausgeben. Benutze <?= für die Ausgaben. Rufe die Datei im Browser
+auf und vergewissere dich, dass im Quelltext (Rechtsklick → Quelltext)
+KEIN PHP-Code sichtbar ist — nur das fertige HTML.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Variablen, Datentypen, Operatoren
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Variablen — Syntax und Besonderheiten
+------------------------------------------------------------------------
+
+In PHP beginnt jede Variable mit $. Das ist Pflicht, kein Optional:
+
+  $name    = "TrafkHop";
+  $version = 3;
+  $preis   = 9.99;
+  $aktiv   = true;
+
+Regeln:
+  - Immer $-Prefix
+  - Groß-/Kleinschreibung zählt: $Name und $name sind VERSCHIEDENE Variablen
+  - Beginnt mit Buchstabe oder Unterstrich, nicht mit Zahl
+  - PHP ist dynamisch getypt — der Typ ergibt sich aus dem Wert
+
+Variablennamen-Konventionen in PHP:
+
+  $snake_case        → Standard in PHP (PSR-12)
+  $camelCase         → auch akzeptiert, kommt aus der JS-Welt
+  $KONSTANTEN_STYLE  → NICHT für Variablen, das sind Konstanten
+
+------------------------------------------------------------------------
+2.2  Datentypen
+------------------------------------------------------------------------
+
+PHP hat 8 primitive Typen:
+
+  STRING (Zeichenkette):
+    $s1 = 'einfache Anführungszeichen';  → kein Escaping, kein Interpolieren
+    $s2 = "doppelte Anführungszeichen";  → Variablen werden interpoliert
+    $s3 = "Hallo $name!";               → gibt "Hallo TrafkHop!" aus
+    $s4 = "Version {$arr['key']}";      → geschweifte Klammern für komplexe Ausdrücke
+
+    Sonderzeichen in doppelten Anführungszeichen:
+      \n   Zeilenumbruch
+      \t   Tab
+      \$   Literales Dollar-Zeichen
+      \"   Literales Anführungszeichen
+
+  INTEGER (Ganzzahl):
+    $i1 = 42;
+    $i2 = -7;
+    $i3 = 0b1010;    → binär (10)
+    $i4 = 0o17;      → oktal (15)
+    $i5 = 0xFF;      → hexadezimal (255)
+    $i6 = 1_000_000; → Unterstrich als Lesehilfe (PHP 7.4+)
+
+  FLOAT (Kommazahl):
+    $f1 = 3.14;
+    $f2 = 1.5e3;    → 1500.0
+    $f3 = INF;      → Unendlich
+    $f4 = NAN;      → Not A Number
+
+  BOOLEAN:
+    $b1 = true;
+    $b2 = false;
+    → Schreibweise egal: TRUE, True, true — alles dasselbe
+
+  NULL:
+    $x = null;      → kein Wert
+    $y;             → undefinierte Variable ist auch null (mit Warnung)
+
+  ARRAY:    → eigenes Kapitel (Modul 4)
+  OBJECT:   → eigenes Kapitel (Modul 9)
+  RESOURCE: → Datei-Handle, Datenbankverbindung etc.
+
+Typ prüfen und umwandeln:
+
+  gettype($var)        → gibt Typnamen als String zurück
+  is_string($var)      → true/false
+  is_int($var)
+  is_float($var)
+  is_bool($var)
+  is_null($var)
+  is_array($var)
+
+  var_dump($var)       → gibt Typ UND Wert aus (für Debugging)
+  print_r($var)        → lesbare Darstellung (für Arrays besonders gut)
+
+Typumwandlung (Type Casting):
+
+  $zahl  = (int)"42abc";    → 42 (nimmt Zahl vom Anfang)
+  $text  = (string)42;      → "42"
+  $bool  = (bool)0;         → false
+  $float = (float)"3.14";   → 3.14
+
+------------------------------------------------------------------------
+2.3  Konstanten
+------------------------------------------------------------------------
+
+  define("SITE_NAME", "TrafkHop");   → alte Schreibweise
+  const VERSION = "3.0";             → moderne Schreibweise (in Klassen und global)
+
+  echo SITE_NAME;   → kein $ bei Konstanten!
+
+  Eingebaute Konstanten:
+    PHP_VERSION      → z.B. "8.3.0"
+    PHP_EOL          → Zeilenende (\n auf Linux, \r\n auf Windows)
+    PHP_INT_MAX      → größte darstellbare Ganzzahl
+    PHP_INT_MIN      → kleinste darstellbare Ganzzahl
+    PHP_FLOAT_EPSILON → kleinster Float-Unterschied
+    DIRECTORY_SEPARATOR → / auf Linux, \ auf Windows
+    true, false, null → technisch Konstanten
+
+------------------------------------------------------------------------
+2.4  Operatoren
+------------------------------------------------------------------------
+
+ARITHMETISCH:
+  +   Addition
+  -   Subtraktion
+  *   Multiplikation
+  /   Division (gibt Float wenn nicht ganzzahlig)
+  %   Modulo (Rest)
+  **  Potenz (2 ** 8 = 256)
+
+ZUWEISUNGSOPERATOREN:
+  =    Zuweisung
+  +=   $x += 5  →  $x = $x + 5
+  -=   $x -= 3
+  *=   $x *= 2
+  /=   $x /= 4
+  .=   $text .= " Welt"   → String anhängen (concatenation assignment)
+  **=  $x **= 2
+
+STRING-OPERATOR:
+  .    Konkatenation: "Hallo" . " " . "Welt"  → "Hallo Welt"
+       (In JS ist das +, in PHP ist es !)
+
+VERGLEICHSOPERATOREN:
+  ==   Gleich (nur Wert, Typ wird ignoriert)
+  ===  Identisch (Wert UND Typ müssen übereinstimmen) — FAST IMMER BEVORZUGEN
+  !=   Ungleich (nur Wert)
+  !==  Nicht identisch (Wert oder Typ unterschiedlich)
+  <    Kleiner
+  >    Größer
+  <=   Kleiner oder gleich
+  >=   Größer oder gleich
+  <=>  Spaceship-Operator: -1 / 0 / 1 (für Sortierung)
+
+  WICHTIG: == macht "Type Juggling" — das führt zu Überraschungen:
+    0 == "a"     → true  (PHP 7), false (PHP 8) ← Verhalten hat sich geändert!
+    0 == ""      → true  (PHP 7), false (PHP 8)
+    "1" == "01"  → true (beide sind 1)
+    100 == "1e2" → true (1e2 = 100)
+
+  Deshalb: IMMER === verwenden, außer du willst explizit typ-unsensitiv vergleichen.
+
+LOGISCHE OPERATOREN:
+  &&   UND (hohe Priorität)
+  ||   ODER (hohe Priorität)
+  !    NICHT
+  and  UND (niedrige Priorität — Falle! Fast immer && nehmen)
+  or   ODER (niedrige Priorität — Falle! Fast immer || nehmen)
+  xor  Exklusives ODER
+
+BESONDERE PHP-OPERATOREN:
+  ??   Null-Coalescing: $a ?? $b  → $a wenn nicht null, sonst $b
+       $name = $_GET['name'] ?? 'Gast';
+
+  ??=  Null-Coalescing-Zuweisung (PHP 7.4+):
+       $config['debug'] ??= false;  → setzt nur wenn null
+
+  ?:   Elvis-Operator (Kurzform von ternary):
+       $x = $a ?: 'Fallback';  → $a wenn truthy, sonst 'Fallback'
+
+  @    Error-Suppressor: @file_get_contents('...')  → Fehler unterdrücken
+       → NICHT benutzen! Verbirgt echte Probleme. Stattdessen: Fehlerbehandlung.
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Deklariere Variablen für einen fiktiven Nutzer: Name (String),
+Alter (Integer), Kontostand (Float), ist Premium-Nutzer (Boolean).
+Gib alle Variablen mit var_dump() aus. Berechne dann, wie viel Guthaben
+nach einer 9.99€-Abbuchung übrig bleibt, und gib das Ergebnis formatiert
+aus (2 Nachkommastellen mit number_format()).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Kontrollstrukturen
+================================================================================
+
+------------------------------------------------------------------------
+3.1  if / elseif / else
+------------------------------------------------------------------------
+
+  $alter = 20;
+
+  if ($alter >= 18) {
+      echo "Volljährig";
+  } elseif ($alter >= 16) {
+      echo "Fast volljährig";
+  } else {
+      echo "Minderjährig";
+  }
+
+  Kurzform (ternary):
+    $text = ($alter >= 18) ? "Volljährig" : "Minderjährig";
+
+  Null-Coalescing für fehlende Werte (kein if nötig):
+    $name = $_GET['name'] ?? 'Gast';
+
+Alternative Syntax (für PHP in HTML — lesbarer):
+
+  <?php if ($eingeloggt): ?>
+    <p>Willkommen, <?= $name ?>!</p>
+  <?php else: ?>
+    <p>Bitte einloggen.</p>
+  <?php endif; ?>
+
+------------------------------------------------------------------------
+3.2  switch / match
+------------------------------------------------------------------------
+
+SWITCH (klassisch, loose comparison):
+
+  $farbe = "rot";
+
+  switch ($farbe) {
+      case "rot":
+          echo "Stopp";
+          break;
+      case "gelb":
+          echo "Achtung";
+          break;
+      case "grün":
+          echo "Los";
+          break;
+      default:
+          echo "Unbekannte Farbe";
+  }
+
+  ACHTUNG: Ohne break fällt switch durch in den nächsten case (fall-through).
+  Das ist manchmal gewollt, meistens ein Bug.
+
+MATCH (PHP 8.0+, strict comparison, kein fall-through):
+
+  $text = match($farbe) {
+      "rot"   => "Stopp",
+      "gelb"  => "Achtung",
+      "grün"  => "Los",
+      default => "Unbekannte Farbe"
+  };
+
+  match() ist fast immer besser als switch:
+    - Verwendet ===, nicht == (kein Type Juggling)
+    - Kein break nötig
+    - Gibt einen Wert zurück
+    - Wirft UnhandledMatchError wenn kein case passt und kein default existiert
+
+  Mehrere Werte pro Arm:
+    $typ = match($code) {
+        200, 201, 204 => "Erfolg",
+        301, 302      => "Redirect",
+        404           => "Nicht gefunden",
+        500           => "Serverfehler",
+        default       => "Unbekannt"
+    };
+
+------------------------------------------------------------------------
+3.3  Schleifen
+------------------------------------------------------------------------
+
+WHILE — Bedingung zuerst prüfen:
+
+  $i = 0;
+  while ($i < 5) {
+      echo $i;
+      $i++;
+  }
+
+DO-WHILE — Mindestens einmal ausführen:
+
+  $i = 0;
+  do {
+      echo $i;
+      $i++;
+  } while ($i < 5);
+
+FOR — klassische Zählschleife:
+
+  for ($i = 0; $i < 10; $i++) {
+      echo $i;
+  }
+
+  Rückwärts:
+    for ($i = 10; $i >= 0; $i--) { ... }
+
+  Mehrere Variablen:
+    for ($i = 0, $j = 10; $i < $j; $i++, $j--) { ... }
+
+FOREACH — Arrays und Objekte iterieren:
+
+  $farben = ["rot", "grün", "blau"];
+
+  foreach ($farben as $farbe) {
+      echo $farbe . "\n";
+  }
+
+  Mit Schlüssel:
+    $person = ["name" => "Max", "alter" => 25];
+    foreach ($person as $schluessel => $wert) {
+        echo "$schluessel: $wert\n";
+    }
+
+  foreach ist FAST IMMER die richtige Wahl für Arrays in PHP.
+
+STEUERUNG:
+  break;       → Schleife sofort beenden
+  continue;    → zum nächsten Durchlauf springen
+  break 2;     → zwei verschachtelte Schleifen beenden (in anderen Sprachen selten)
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Erstelle ein Array mit 10 Zahlen. Iteriere mit foreach und gib nur die
+geraden Zahlen aus (% 2 === 0). Dann erstelle eine Tabelle in HTML, die
+per for-Schleife das 1×1 (1 bis 10) ausgibt. Jede Zeile ist eine Zahl,
+jede Zelle zeigt das Produkt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Arrays — das Schweizer Taschenmesser von PHP
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Indexed Arrays (numerisch)
+------------------------------------------------------------------------
+
+  $farben = ["rot", "grün", "blau"];    // Kurzschreibweise (PHP 5.4+)
+  $farben = array("rot", "grün", "blau");  // alte Schreibweise
+
+  Zugriff per Index (beginnt bei 0):
+    echo $farben[0];   → "rot"
+    echo $farben[2];   → "blau"
+
+  Elemente hinzufügen:
+    $farben[] = "gelb";           → ans Ende anhängen
+    $farben[10] = "lila";         → an bestimmten Index (Lücken möglich!)
+    array_push($farben, "orange"); → wie [], aber kann mehrere aufnehmen
+
+  Anzahl Elemente:
+    count($farben)        → Anzahl (auch für assoziative Arrays)
+
+------------------------------------------------------------------------
+4.2  Assoziative Arrays (Key-Value)
+------------------------------------------------------------------------
+
+  $person = [
+      "name"  => "Max Mustermann",
+      "alter" => 28,
+      "stadt" => "Wien"
+  ];
+
+  Zugriff:
+    echo $person["name"];    → "Max Mustermann"
+
+  Ändern / Hinzufügen:
+    $person["email"] = "max@example.com";
+
+  Prüfen ob Key existiert:
+    isset($person["email"])          → true (key existiert und nicht null)
+    array_key_exists("email", $person) → true (auch wenn Wert null ist)
+
+  Key entfernen:
+    unset($person["alter"]);
+
+------------------------------------------------------------------------
+4.3  Mehrdimensionale Arrays
+------------------------------------------------------------------------
+
+  $benutzer = [
+      ["name" => "Max",  "rolle" => "admin"],
+      ["name" => "Lisa", "rolle" => "user"],
+      ["name" => "Tom",  "rolle" => "user"],
+  ];
+
+  Zugriff:
+    echo $benutzer[0]["name"];   → "Max"
+    echo $benutzer[1]["rolle"];  → "user"
+
+  Über alle iterieren:
+    foreach ($benutzer as $b) {
+        echo $b["name"] . " ist " . $b["rolle"] . "\n";
+    }
+
+------------------------------------------------------------------------
+4.4  Wichtige Array-Funktionen
+------------------------------------------------------------------------
+
+MANIPULATION:
+  array_push($arr, $wert)     → ans Ende anhängen
+  array_pop($arr)             → letztes Element entfernen und zurückgeben
+  array_shift($arr)           → erstes Element entfernen (Index neu nummeriert)
+  array_unshift($arr, $wert)  → ans Anfang einfügen
+  array_splice($arr, $start, $länge, $neu) → ersetzen/entfernen/einfügen
+
+SUCHEN:
+  in_array($wert, $arr)        → true wenn Wert vorhanden
+  in_array($wert, $arr, true)  → strict mode (===)
+  array_search($wert, $arr)    → gibt Key zurück oder false
+  array_keys($arr)             → alle Keys als Array
+  array_values($arr)           → alle Werte als Array (re-indexed)
+
+SORTIEREN:
+  sort($arr)                  → aufsteigend nach Wert (Keys werden neu vergeben)
+  rsort($arr)                 → absteigend nach Wert
+  asort($arr)                 → aufsteigend, Keys bleiben erhalten
+  arsort($arr)                → absteigend, Keys bleiben erhalten
+  ksort($arr)                 → nach Keys sortieren
+  krsort($arr)                → nach Keys, absteigend
+  usort($arr, $callback)      → eigene Sortierfunktion
+
+  Beispiel usort:
+    usort($benutzer, fn($a, $b) => $a["name"] <=> $b["name"]);
+
+TRANSFORMATION:
+  array_map($callback, $arr)          → Funktion auf jedes Element anwenden
+  array_filter($arr, $callback)       → Elemente filtern (truthy oder Callback)
+  array_reduce($arr, $callback, $init) → auf einen Wert reduzieren
+  array_slice($arr, $start, $länge)   → Teilarray ausschneiden
+  array_merge($arr1, $arr2)           → Arrays zusammenführen
+  array_unique($arr)                  → Duplikate entfernen
+  array_flip($arr)                    → Keys und Werte tauschen
+  array_reverse($arr)                 → Reihenfolge umkehren
+  array_chunk($arr, $größe)           → in Blöcke aufteilen
+  array_combine($keys, $values)       → aus zwei Arrays ein assoziatives bauen
+
+BEISPIELE:
+  $zahlen = [3, 1, 4, 1, 5, 9, 2, 6];
+
+  $verdoppelt = array_map(fn($x) => $x * 2, $zahlen);
+  // [6, 2, 8, 2, 10, 18, 4, 12]
+
+  $groß = array_filter($zahlen, fn($x) => $x > 3);
+  // [4, 5, 9, 6]
+
+  $summe = array_reduce($zahlen, fn($carry, $x) => $carry + $x, 0);
+  // 31
+
+STRING ↔ ARRAY:
+  explode(",", "rot,grün,blau")       → ["rot", "grün", "blau"]
+  implode(", ", ["rot", "grün", "blau"]) → "rot, grün, blau"
+  str_split("Hallo", 2)              → ["Ha", "ll", "o"]
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Erstelle ein Array mit 5 Produkten, jedes ein assoziatives Array mit
+name, preis, lagerbestand. Gib alle Produkte aus, die noch auf Lager
+sind (lagerbestand > 0). Berechne den Gesamtwert aller Produkte
+(preis × lagerbestand) mit array_reduce. Sortiere die Produkte nach
+Preis aufsteigend (usort).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Strings — Zeichenketten meistern
+================================================================================
+
+------------------------------------------------------------------------
+5.1  String-Grundlagen und Ausgabe
+------------------------------------------------------------------------
+
+  echo "Text";             → Ausgabe, kein Rückgabewert, minimal schneller
+  print "Text";            → Ausgabe, gibt 1 zurück (selten nötig)
+  printf("%.2f", 3.14159); → formatierte Ausgabe (wie C's printf)
+  sprintf("%.2f", 3.14159); → formatierter String als Rückgabewert
+
+  printf-Formatierungszeichen:
+    %s   String
+    %d   Integer (dezimal)
+    %f   Float
+    %.2f Float mit 2 Nachkommastellen
+    %05d Integer, 5-stellig mit führenden Nullen
+    %x   Hexadezimal
+
+  Heredoc (für mehrzeilige Strings):
+    $text = <<<EOT
+    Das ist ein
+    mehrzeiliger String.
+    Variablen wie $name werden interpoliert.
+    EOT;
+
+  Nowdoc (kein Interpolieren, wie einfache Anführungszeichen):
+    $text = <<<'EOT'
+    Kein $name hier.
+    EOT;
+
+------------------------------------------------------------------------
+5.2  Wichtige String-Funktionen
+------------------------------------------------------------------------
+
+LÄNGE UND SUCHE:
+  strlen($s)                     → Länge in Bytes (ACHTUNG bei UTF-8!)
+  mb_strlen($s, 'UTF-8')         → Länge in Zeichen (multi-byte-sicher)
+  strpos($s, $suche)             → Position (0-basiert) oder false
+  strrpos($s, $suche)            → letzte Position
+  str_contains($s, $suche)       → true/false (PHP 8.0+)
+  str_starts_with($s, $prefix)   → true/false (PHP 8.0+)
+  str_ends_with($s, $suffix)     → true/false (PHP 8.0+)
+  substr_count($s, $suche)       → wie oft kommt $suche vor
+
+TRANSFORMIEREN:
+  strtolower($s)                 → alles klein
+  strtoupper($s)                 → alles groß
+  mb_strtolower($s, 'UTF-8')     → klein (UTF-8 sicher, für Umlaute)
+  ucfirst($s)                    → ersten Buchstaben groß
+  ucwords($s)                    → erstes Zeichen jedes Wortes groß
+  trim($s)                       → Leerzeichen an beiden Enden entfernen
+  ltrim($s), rtrim($s)           → nur links/rechts
+  trim($s, ".,")                 → bestimmte Zeichen entfernen
+  str_replace($alt, $neu, $s)    → ersetzen (auch Arrays möglich)
+  str_ireplace($alt, $neu, $s)   → case-insensitive Ersatz
+  substr($s, $start, $länge)     → Teilstring
+  str_pad($s, $länge, $zeichen)  → auffüllen
+  str_repeat("=-", 40)           → wiederholen
+  wordwrap($s, 80, "\n")         → Zeilen umbrechen
+
+PRÜFEN:
+  ctype_alpha($s)                → nur Buchstaben?
+  ctype_digit($s)                → nur Ziffern?
+  ctype_alnum($s)                → Buchstaben oder Ziffern?
+  is_numeric($s)                 → ist ein numerischer Wert?
+
+KONVERTIERUNG:
+  number_format(1234567.891, 2, ',', '.')  → "1.234.567,89"
+  htmlspecialchars($s)           → < > & " in Entities umwandeln (SICHERHEIT!)
+  htmlspecialchars_decode($s)    → zurückwandeln
+  nl2br($s)                      → \n → <br>
+  strip_tags($s)                 → alle HTML-Tags entfernen
+  addslashes($s)                 → Sonderzeichen escapen
+  base64_encode($s)              → Base64
+  base64_decode($s)              → Base64 zurück
+  md5($s)                        → MD5-Hash (NICHT für Passwörter!)
+  sha1($s)                       → SHA1-Hash (NICHT für Passwörter!)
+  password_hash($pw, PASSWORD_BCRYPT) → Passwort-Hash (richtig!)
+
+------------------------------------------------------------------------
+5.3  Reguläre Ausdrücke
+------------------------------------------------------------------------
+
+  preg_match($pattern, $string)           → 1 wenn Treffer, 0 wenn nicht
+  preg_match($pattern, $string, $matches) → Treffer in $matches speichern
+  preg_match_all($pattern, $string, $m)   → alle Treffer finden
+  preg_replace($pattern, $ersatz, $string) → ersetzen
+  preg_split($pattern, $string)           → aufteilen
+
+Pattern-Syntax: /pattern/flags
+
+  Zeichen-Klassen:
+    \d     Ziffer (0-9)
+    \D     keine Ziffer
+    \w     Wortzeichen (a-z A-Z 0-9 _)
+    \W     kein Wortzeichen
+    \s     Whitespace (Leerzeichen, Tab, Newline)
+    \S     kein Whitespace
+    .      beliebiges Zeichen (außer Newline)
+    [aeiou] eines dieser Zeichen
+    [^aeiou] keines dieser Zeichen
+
+  Quantifikatoren:
+    *     0 oder mehr
+    +     1 oder mehr
+    ?     0 oder 1
+    {3}   genau 3
+    {2,5} 2 bis 5
+
+  Anker:
+    ^     Anfang des Strings
+    $     Ende des Strings
+
+  Flags:
+    i     case-insensitive
+    m     multiline (^ und $ gelten für jede Zeile)
+    s     . matcht auch Newline
+
+  Beispiel E-Mail validieren:
+    $pattern = '/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/';
+    if (preg_match($pattern, $email)) {
+        // gültige E-Mail
+    }
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Schreibe eine Funktion sanitize_input($text) die: führende/nachfolgende
+Leerzeichen entfernt, HTML-Sonderzeichen escaped, und den String
+zurückgibt. Schreibe dann eine Funktion is_valid_email($email), die
+per Regex prüft ob eine gültige E-Mail-Adresse vorliegt, und eine
+Funktion truncate($text, $länge), die einen Text auf $länge Zeichen
+kürzt und "..." anhängt wenn abgeschnitten.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Funktionen
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Funktionen definieren und aufrufen
+------------------------------------------------------------------------
+
+  function begrüßung($name) {
+      return "Hallo, $name!";
+  }
+
+  echo begrüßung("Max");    → "Hallo, Max!"
+
+  Regeln:
+    - Funktionsname: case-insensitive (BEGRÜSSUNG() und begrüßung() sind gleich)
+    - Parameter werden per Wert übergeben (keine Änderung des Originals)
+    - return verlässt die Funktion und gibt einen Wert zurück
+    - Ohne return gibt die Funktion null zurück
+
+------------------------------------------------------------------------
+6.2  Parameter und Argumente
+------------------------------------------------------------------------
+
+STANDARDWERTE:
+
+  function verbinden($host, $port = 3306, $db = "default") {
+      return "$host:$port/$db";
+  }
+
+  verbinden("localhost")              → "localhost:3306/default"
+  verbinden("localhost", 5432)        → "localhost:5432/default"
+  verbinden("localhost", 5432, "cms") → "localhost:5432/cms"
+
+  WICHTIG: Parameter mit Standardwert müssen NACH denen ohne stehen.
+
+TYPENDEKLARATION (PHP 7+):
+
+  function addiere(int $a, int $b): int {
+      return $a + $b;
+  }
+
+  function hol_name(): string { ... }
+  function hol_nutzer(): ?User { ... }   → ? bedeutet nullable (User oder null)
+  function speichern(): void { ... }     → kein Rückgabewert
+
+  Typen: int, float, string, bool, array, object, mixed, void, never
+  Klassen: any Classname (z.B. User, PDO, DateTime)
+  Union: int|string (PHP 8.0+)
+  Intersection: Countable&Iterator (PHP 8.1+)
+
+VARIADIC PARAMETER (beliebig viele Argumente):
+
+  function summe(int ...$zahlen): int {
+      return array_sum($zahlen);
+  }
+
+  summe(1, 2, 3, 4, 5)   → 15
+
+ÜBERGABE PER REFERENZ:
+
+  function verdoppeln(int &$wert): void {
+      $wert *= 2;
+  }
+
+  $x = 5;
+  verdoppeln($x);
+  echo $x;    → 10
+
+------------------------------------------------------------------------
+6.3  Gültigkeitsbereich (Scope)
+------------------------------------------------------------------------
+
+In PHP haben Funktionen keinen Zugriff auf äußere Variablen:
+
+  $name = "Global";
+
+  function test() {
+      echo $name;    // FEHLER: $name ist hier nicht verfügbar!
+  }
+
+  Zugriff auf globale Variablen (selten gut, meist Design-Problem):
+    function test() {
+        global $name;
+        echo $name;   // jetzt geht es
+    }
+
+  Besser: Variable als Parameter übergeben!
+
+  STATIC-Variablen (behalten ihren Wert zwischen Aufrufen):
+    function zähler() {
+        static $count = 0;
+        return ++$count;
+    }
+    zähler(); → 1
+    zähler(); → 2
+    zähler(); → 3
+
+------------------------------------------------------------------------
+6.4  Anonyme Funktionen, Callbacks, Arrow Functions
+------------------------------------------------------------------------
+
+ANONYME FUNKTION (Closure):
+
+  $verdoppeln = function($x) {
+      return $x * 2;
+  };
+
+  echo $verdoppeln(5);   → 10
+
+  Mit use — Zugriff auf äußere Variablen:
+    $faktor = 3;
+    $multiplizieren = function($x) use ($faktor) {
+        return $x * $faktor;
+    };
+
+    Per Referenz in der Closure ändern:
+    $multiplizieren = function($x) use (&$faktor) { ... };
+
+ARROW FUNCTION (PHP 7.4+):
+
+  $verdoppeln = fn($x) => $x * 2;
+
+  Greift automatisch auf äußere Variablen zu (kein use nötig):
+    $faktor = 3;
+    $mult = fn($x) => $x * $faktor;   // $faktor ist automatisch verfügbar
+
+  Arrow Functions sind ideal für Einzeiler in Callbacks:
+    $großeZahlen = array_filter($zahlen, fn($x) => $x > 10);
+    $verdoppelt  = array_map(fn($x) => $x * 2, $zahlen);
+
+EINGEBAUTE FUNKTIONEN ALS CALLBACKS:
+  usort($arr, 'strcmp');              → strcmp als Callback-String
+  array_map('strtolower', $strings);  → strtolower auf jeden Wert anwenden
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Schreibe eine Funktion berechne_rabatt(float $preis, float $prozent = 10): float.
+Dann eine higher-order Funktion wende_an(array $produkte, callable $callback): array
+die eine Funktion auf alle Produkte anwendet. Teste sie mit einer Arrow Function
+die den Preis um 20% erhöht.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Formulare und Benutzereingaben
+================================================================================
+
+------------------------------------------------------------------------
+7.1  GET und POST — der Unterschied
+------------------------------------------------------------------------
+
+GET:
+  - Daten werden an die URL angehängt: /suche?q=php&seite=2
+  - Sichtbar in der URL (Browser-History, Lesezeichen möglich)
+  - Begrenzt auf ~2000 Zeichen
+  - Für: Suche, Filter, Navigation — Dinge, die man bookmarken kann
+  - NIEMALS für Passwörter, vertrauliche Daten
+
+POST:
+  - Daten werden im HTTP-Body gesendet, nicht in der URL
+  - Kein Cache, kein Bookmarking
+  - Keine Längenbeschränkung (außer Server-Limits)
+  - Für: Formulare, Logins, Datei-Uploads, Daten ändern/löschen
+
+Zugriff in PHP:
+
+  $_GET["name"]     → GET-Parameter
+  $_POST["name"]    → POST-Parameter
+  $_REQUEST["name"] → GET und POST (vermeide das, zu vage)
+
+------------------------------------------------------------------------
+7.2  Formulare verarbeiten
+------------------------------------------------------------------------
+
+  HTML (formular.php):
+    <form method="post" action="verarbeiten.php">
+        <input type="text" name="benutzername" required>
+        <input type="password" name="passwort" required>
+        <button type="submit">Senden</button>
+    </form>
+
+  PHP (verarbeiten.php):
+    <?php
+    if ($_SERVER["REQUEST_METHOD"] === "POST") {
+        $benutzername = trim($_POST["benutzername"] ?? "");
+        $passwort     = $_POST["passwort"] ?? "";
+
+        if (empty($benutzername)) {
+            die("Benutzername fehlt");   // Abbrechen mit Ausgabe
+        }
+
+        // Verarbeitung hier...
+    }
+    ?>
+
+  Alternativ: alles in einer Datei (häufiges Muster):
+
+    <?php
+    $fehler = [];
+    $erfolg = false;
+
+    if ($_SERVER["REQUEST_METHOD"] === "POST") {
+        $name = trim($_POST["name"] ?? "");
+
+        if (empty($name)) {
+            $fehler[] = "Name ist ein Pflichtfeld.";
+        }
+
+        if (empty($fehler)) {
+            // Verarbeitung
+            $erfolg = true;
+        }
+    }
+    ?>
+
+    <?php if ($erfolg): ?>
+      <p class="success">Erfolgreich gespeichert!</p>
+    <?php endif; ?>
+
+    <?php foreach ($fehler as $f): ?>
+      <p class="error"><?= htmlspecialchars($f) ?></p>
+    <?php endforeach; ?>
+
+    <form method="post">
+        <input type="text" name="name" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
+        <button type="submit">Senden</button>
+    </form>
+
+------------------------------------------------------------------------
+7.3  Eingaben absichern — NIEMALS vertrauen
+------------------------------------------------------------------------
+
+  GOLDENE REGEL: Niemals $_GET oder $_POST direkt in HTML oder SQL einfügen!
+
+  Für HTML-Ausgabe:
+    echo htmlspecialchars($input);   // IMMER!
+    // Wandelt < > & " ' in HTML-Entities um → verhindert XSS
+
+  Für Zahlen:
+    $id = (int)$_GET['id'];          // Typcast erzwingt Integer
+    $preis = (float)$_POST['preis'];
+
+  Für E-Mail:
+    $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+    if ($email === false) {
+        // ungültige E-Mail
+    }
+
+  filter_input-Typen:
+    FILTER_VALIDATE_INT     → Ganzzahl
+    FILTER_VALIDATE_FLOAT   → Kommazahl
+    FILTER_VALIDATE_EMAIL   → E-Mail-Adresse
+    FILTER_VALIDATE_URL     → URL
+    FILTER_VALIDATE_IP      → IP-Adresse
+    FILTER_SANITIZE_STRING  → (veraltet in PHP 8.1, strip_tags() nehmen)
+    FILTER_SANITIZE_EMAIL   → ungültige E-Mail-Zeichen entfernen
+
+  Für Datenbanken → Kapitel 8 (Prepared Statements)!
+
+------------------------------------------------------------------------
+7.4  Datei-Uploads
+------------------------------------------------------------------------
+
+HTML:
+  <form method="post" enctype="multipart/form-data">
+      <input type="file" name="bild" accept="image/*">
+      <button type="submit">Hochladen</button>
+  </form>
+
+PHP:
+  if (isset($_FILES['bild']) && $_FILES['bild']['error'] === UPLOAD_ERR_OK) {
+      $datei     = $_FILES['bild'];
+      $name      = $datei['name'];       // Originaldateiname (NICHT vertrauen!)
+      $tmp       = $datei['tmp_name'];  // temporärer Pfad auf dem Server
+      $größe     = $datei['size'];      // Bytes
+      $typ       = $datei['type'];      // MIME-Type (NICHT vertrauen!)
+
+      // SICHER validieren:
+      $maxGröße = 5 * 1024 * 1024;  // 5 MB
+      if ($größe > $maxGröße) { die("Datei zu groß"); }
+
+      $erlaubteTypen = ['image/jpeg', 'image/png', 'image/gif'];
+      $wirklichTyp   = mime_content_type($tmp);  // wirklichen Typ prüfen!
+      if (!in_array($wirklichTyp, $erlaubteTypen)) { die("Falscher Dateityp"); }
+
+      // Sicheren Dateinamen generieren:
+      $ext     = pathinfo($name, PATHINFO_EXTENSION);
+      $sicherN = uniqid() . '.' . strtolower($ext);
+      $ziel    = 'uploads/' . $sicherN;
+
+      move_uploaded_file($tmp, $ziel);
+      echo "Gespeichert als: $sicherN";
+  }
+
+  Fehler-Codes für $_FILES[...]['error']:
+    UPLOAD_ERR_OK          → 0, alles gut
+    UPLOAD_ERR_INI_SIZE    → 1, größer als upload_max_filesize in php.ini
+    UPLOAD_ERR_FORM_SIZE   → 2, größer als MAX_FILE_SIZE im Formular
+    UPLOAD_ERR_PARTIAL     → 3, nur teilweise hochgeladen
+    UPLOAD_ERR_NO_FILE     → 4, keine Datei ausgewählt
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Erstelle ein Kontaktformular (Name, E-Mail, Betreff, Nachricht). Validiere
+alle Felder server-seitig. Zeige Fehler rot über dem Formular, fülle
+die Felder nach Fehler wieder vor (Value-Restoration). Bei Erfolg:
+Zeige eine Bestätigung. Alle Ausgaben müssen mit htmlspecialchars()
+abgesichert sein.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Datenbanken mit PDO
+================================================================================
+
+------------------------------------------------------------------------
+8.1  PDO — PHP Data Objects
+------------------------------------------------------------------------
+
+PDO ist Philippis's einheitliches Datenbankinterface. Ein Code für
+MySQL, PostgreSQL, SQLite und andere — nur die Verbindungszeile ändert sich.
+
+VERBINDUNG AUFBAUEN:
+
+  try {
+      $pdo = new PDO(
+          "mysql:host=localhost;dbname=meine_db;charset=utf8mb4",
+          "benutzername",
+          "passwort",
+          [
+              PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+              PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+              PDO::ATTR_EMULATE_PREPARES   => false,
+          ]
+      );
+  } catch (PDOException $e) {
+      // Fehlermeldung NIEMALS dem Nutzer zeigen!
+      error_log($e->getMessage());
+      die("Datenbankfehler. Bitte später erneut versuchen.");
+  }
+
+  Wichtige Optionen erklärt:
+    ERRMODE_EXCEPTION   → Fehler werfen statt still ignorieren
+    FETCH_ASSOC         → Rows als assoziative Arrays zurückgeben
+    EMULATE_PREPARES    → false für echte Prepared Statements (sicherer)
+
+  SQLite (für einfache Projekte ohne Server):
+    $pdo = new PDO("sqlite:/pfad/zur/datenbank.sqlite");
+
+------------------------------------------------------------------------
+8.2  Prepared Statements — der EINZIGE richtige Weg
+------------------------------------------------------------------------
+
+NIEMALS so:
+  // SQL-INJECTION! Katastrophal!
+  $id = $_GET['id'];
+  $pdo->query("SELECT * FROM nutzer WHERE id = $id");
+  // Jemand sendet: id=1 OR 1=1 → bekommt ALLE Nutzer
+  // Jemand sendet: id=1; DROP TABLE nutzer → löscht die ganze Tabelle
+
+IMMER so (Prepared Statement mit Platzhaltern):
+
+  // Methode 1: ? (Positions-Platzhalter)
+  $stmt = $pdo->prepare("SELECT * FROM nutzer WHERE id = ?");
+  $stmt->execute([$id]);
+  $nutzer = $stmt->fetch();    // eine Zeile
+  // oder
+  $nutzer = $stmt->fetchAll(); // alle Zeilen
+
+  // Methode 2: :name (benannte Platzhalter — besser lesbar)
+  $stmt = $pdo->prepare("SELECT * FROM nutzer WHERE email = :email AND aktiv = :aktiv");
+  $stmt->execute([':email' => $email, ':aktiv' => 1]);
+
+  Die Werte werden GETRENNT vom SQL gesendet → keine Injection möglich.
+
+------------------------------------------------------------------------
+8.3  CRUD-Operationen
+------------------------------------------------------------------------
+
+CREATE (INSERT):
+
+  $stmt = $pdo->prepare(
+      "INSERT INTO nutzer (name, email, erstellt) VALUES (?, ?, NOW())"
+  );
+  $stmt->execute([$name, $email]);
+
+  $neueId = $pdo->lastInsertId();   → ID des eingefügten Datensatzes
+
+READ (SELECT):
+
+  // Alle Nutzer:
+  $stmt = $pdo->query("SELECT * FROM nutzer ORDER BY name");
+  $nutzer = $stmt->fetchAll();
+
+  // Einen bestimmten Nutzer:
+  $stmt = $pdo->prepare("SELECT * FROM nutzer WHERE id = ?");
+  $stmt->execute([$id]);
+  $nutzer = $stmt->fetch();
+  if (!$nutzer) { /* nicht gefunden */ }
+
+  // Nur ein Wert:
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM nutzer WHERE aktiv = 1");
+  $stmt->execute();
+  $anzahl = $stmt->fetchColumn();
+
+  // Als Objekte statt Arrays:
+  $stmt->fetchAll(PDO::FETCH_OBJ);         → stdClass Objekte
+  $stmt->fetchAll(PDO::FETCH_CLASS, User::class); → direkt in User-Klasse
+
+UPDATE:
+
+  $stmt = $pdo->prepare(
+      "UPDATE nutzer SET name = ?, email = ? WHERE id = ?"
+  );
+  $stmt->execute([$neuName, $neuEmail, $id]);
+  $betroffeneZeilen = $stmt->rowCount();
+
+DELETE:
+
+  $stmt = $pdo->prepare("DELETE FROM nutzer WHERE id = ?");
+  $stmt->execute([$id]);
+
+------------------------------------------------------------------------
+8.4  Transaktionen
+------------------------------------------------------------------------
+
+Wenn mehrere SQL-Befehle eine Einheit bilden (entweder alle oder keine):
+
+  try {
+      $pdo->beginTransaction();
+
+      $pdo->prepare("UPDATE konten SET guthaben = guthaben - ? WHERE id = ?")->execute([$betrag, $vonId]);
+      $pdo->prepare("UPDATE konten SET guthaben = guthaben + ? WHERE id = ?")->execute([$betrag, $zuId]);
+
+      $pdo->commit();
+  } catch (PDOException $e) {
+      $pdo->rollBack();    // Alles rückgängig machen!
+      throw $e;
+  }
+
+------------------------------------------------------------------------
+8.5  Datenbankstruktur anlegen (DDL)
+------------------------------------------------------------------------
+
+  -- nutzer-Tabelle erstellen:
+  CREATE TABLE nutzer (
+      id        INT AUTO_INCREMENT PRIMARY KEY,
+      name      VARCHAR(100) NOT NULL,
+      email     VARCHAR(255) NOT NULL UNIQUE,
+      passwort  VARCHAR(255) NOT NULL,
+      rolle     ENUM('user', 'admin') DEFAULT 'user',
+      aktiv     TINYINT(1) DEFAULT 1,
+      erstellt  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      geaendert DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+  In PHP ausführen:
+    $pdo->exec("CREATE TABLE ...");  // für DDL ohne Platzhalter
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Erstelle eine SQLite-Datenbank mit einer Tabelle "aufgaben" (id, titel,
+beschreibung, erledigt, erstellt). Schreibe PHP-Funktionen:
+alle_aufgaben($pdo): array, aufgabe_erstellen($pdo, $titel, $beschreibung),
+aufgabe_erledigen($pdo, $id), aufgabe_löschen($pdo, $id).
+Baue damit eine einfache HTML-Seite: Aufgaben anzeigen,
+Formular zum Hinzufügen, Links zum Erledigen und Löschen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Sessions und Cookies
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Sessions — Zustand zwischen Requests
+------------------------------------------------------------------------
+
+HTTP ist zustandslos — jeder Request ist unabhängig. Sessions lösen das:
+
+  session_start();   → IMMER als allererstes, vor jeder Ausgabe!
+
+  // Werte setzen:
+  $_SESSION["nutzer_id"] = 42;
+  $_SESSION["name"]      = "Max";
+  $_SESSION["eingeloggt"] = true;
+
+  // Lesen:
+  echo $_SESSION["name"];
+
+  // Prüfen ob gesetzt:
+  if (isset($_SESSION["nutzer_id"])) { ... }
+
+  // Einzelnen Wert löschen:
+  unset($_SESSION["name"]);
+
+  // Gesamte Session zerstören (z.B. beim Logout):
+  session_destroy();
+  $_SESSION = [];   // auch das Array leeren
+
+Typischer Login-Flow:
+
+  // login.php
+  session_start();
+  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+      $email = $_POST['email'] ?? '';
+      $passwort = $_POST['passwort'] ?? '';
+
+      $stmt = $pdo->prepare("SELECT * FROM nutzer WHERE email = ?");
+      $stmt->execute([$email]);
+      $nutzer = $stmt->fetch();
+
+      if ($nutzer && password_verify($passwort, $nutzer['passwort'])) {
+          session_regenerate_id(true);   // Schutz vor Session Fixation!
+          $_SESSION['nutzer_id'] = $nutzer['id'];
+          $_SESSION['name']      = $nutzer['name'];
+          header("Location: dashboard.php");
+          exit;
+      } else {
+          $fehler = "Falsche E-Mail oder Passwort.";
+      }
+  }
+
+  // Seite schützen (z.B. dashboard.php):
+  session_start();
+  if (!isset($_SESSION['nutzer_id'])) {
+      header("Location: login.php");
+      exit;
+  }
+  // Nur eingeloggte Nutzer sehen das hier.
+
+  Passwörter in PHP:
+    password_hash($passwort, PASSWORD_BCRYPT)     → beim Registrieren
+    password_verify($eingabe, $hash)               → beim Einloggen
+    NIEMALS md5() oder sha1() für Passwörter!
+
+------------------------------------------------------------------------
+9.2  Cookies
+------------------------------------------------------------------------
+
+  // Cookie setzen:
+  setcookie("thema", "dunkel", [
+      'expires'  => time() + 60*60*24*30,  // 30 Tage
+      'path'     => '/',
+      'secure'   => true,    // nur über HTTPS
+      'httponly' => true,    // kein JavaScript-Zugriff (Schutz vor XSS)
+      'samesite' => 'Strict' // Schutz vor CSRF
+  ]);
+
+  // Cookie lesen:
+  $thema = $_COOKIE['thema'] ?? 'hell';
+
+  // Cookie löschen (Ablauf in der Vergangenheit setzen):
+  setcookie('thema', '', time() - 3600, '/');
+
+  Unterschied Session vs. Cookie:
+    Session  → auf dem Server gespeichert, Client hat nur eine ID (sicherer)
+    Cookie   → beim Client gespeichert, kann manipuliert werden (nie vertrauen!)
+
+  → Vertrauliche Daten (Nutzer-ID, Rechte) gehören in die Session, nie in Cookies.
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Erstelle ein vollständiges Login-System: Registrierung (Name, E-Mail,
+Passwort mit Bestätigung), Login, Logout, eine geschützte "Profil"-Seite.
+Passwörter mit password_hash() speichern, session_regenerate_id() nach
+Login aufrufen, ausgeloggte Nutzer auf die Login-Seite weiterleiten.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Objektorientierung in PHP
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Klassen und Objekte
+------------------------------------------------------------------------
+
+  class Benutzer {
+      // Eigenschaften (Properties)
+      public string $name;
+      public string $email;
+      private string $passwortHash;
+      protected int $punkte = 0;
+
+      // Konstruktor
+      public function __construct(string $name, string $email, string $passwort) {
+          $this->name = $name;
+          $this->email = $email;
+          $this->passwortHash = password_hash($passwort, PASSWORD_BCRYPT);
+      }
+
+      // Methoden
+      public function hatPasswort(string $passwort): bool {
+          return password_verify($passwort, $this->passwortHash);
+          //     ↑ $this greift auf das aktuelle Objekt zu
+      }
+
+      public function gibPunkte(): int {
+          return $this->punkte;
+      }
+  }
+
+  // Objekt erstellen:
+  $nutzer = new Benutzer("Max", "max@example.com", "geheim123");
+  echo $nutzer->name;                     → "Max"
+  echo $nutzer->hatPasswort("geheim123"); → true
+  echo $nutzer->passwortHash;             → FEHLER! private
+
+  Sichtbarkeit:
+    public    → überall zugänglich
+    protected → im Objekt und in abgeleiteten Klassen
+    private   → nur innerhalb der Klasse selbst
+
+------------------------------------------------------------------------
+10.2  Vererbung
+------------------------------------------------------------------------
+
+  class AdminBenutzer extends Benutzer {
+      private array $rechte = [];
+
+      public function __construct(string $name, string $email, string $passwort) {
+          parent::__construct($name, $email, $passwort);  // Eltern-Konstruktor
+          $this->rechte = ['nutzer_verwalten', 'inhalte_verwalten'];
+      }
+
+      public function hatRecht(string $recht): bool {
+          return in_array($recht, $this->rechte);
+      }
+
+      // Methode überschreiben:
+      public function gibPunkte(): int {
+          return parent::gibPunkte() * 2;   // Admins bekommen doppelte Punkte
+      }
+  }
+
+  $admin = new AdminBenutzer("Lisa", "lisa@example.com", "sicher");
+  echo $admin->name;                         → "Lisa" (geerbt)
+  echo $admin->hatRecht("nutzer_verwalten"); → true
+
+------------------------------------------------------------------------
+10.3  Interfaces und abstrakte Klassen
+------------------------------------------------------------------------
+
+INTERFACE — definiert einen Vertrag (was eine Klasse können MUSS):
+
+  interface Bezahlbar {
+      public function berechnePreis(): float;
+      public function gibBeschreibung(): string;
+  }
+
+  class Produkt implements Bezahlbar {
+      public function __construct(private string $name, private float $preis) {}
+
+      public function berechnePreis(): float {
+          return $this->preis;
+      }
+
+      public function gibBeschreibung(): string {
+          return $this->name;
+      }
+  }
+
+  Klasse kann mehrere Interfaces implementieren:
+    class Ding implements Bezahlbar, Vergleichbar, Klonierbar { ... }
+
+ABSTRAKTE KLASSE — wie Klasse, aber nicht instanziierbar:
+
+  abstract class Form {
+      abstract public function flaeche(): float;   // muss überschrieben werden
+
+      public function beschreibe(): string {
+          return "Ich habe eine Fläche von " . $this->flaeche();
+      }
+  }
+
+  class Rechteck extends Form {
+      public function __construct(private float $b, private float $h) {}
+
+      public function flaeche(): float {
+          return $this->b * $this->h;
+      }
+  }
+
+------------------------------------------------------------------------
+10.4  Traits — horizontale Wiederverwendung
+------------------------------------------------------------------------
+
+  trait Zeitstempel {
+      private DateTime $erstellt;
+      private DateTime $geaendert;
+
+      public function setzeErstellt(): void {
+          $this->erstellt = new DateTime();
+      }
+
+      public function gibErstellt(): DateTime {
+          return $this->erstellt;
+      }
+  }
+
+  class Artikel {
+      use Zeitstempel;
+      public string $titel = "";
+  }
+
+  Mehrere Traits in einer Klasse:
+    class Ding {
+        use Zeitstempel, Logbar, Cachebar;
+    }
+
+------------------------------------------------------------------------
+10.5  Statische Methoden und Eigenschaften
+------------------------------------------------------------------------
+
+  class Datenbankverbindung {
+      private static ?PDO $instanz = null;
+
+      public static function holen(): PDO {
+          if (self::$instanz === null) {
+              self::$instanz = new PDO(/* ... */);
+          }
+          return self::$instanz;
+      }
+  }
+
+  $pdo = Datenbankverbindung::holen();   // kein new, direkt auf die Klasse
+
+  self::   → greift auf die eigene Klasse zu (statisch, nicht überschreibbar)
+  static:: → Late Static Binding (überschreibbar in Kindklassen)
+  parent:: → Elternklasse
+
+------------------------------------------------------------------------
+10.6  Magische Methoden
+------------------------------------------------------------------------
+
+  __construct()    → Konstruktor, beim new aufgerufen
+  __destruct()     → Destruktor, beim Aufräumen
+  __toString()     → aufgerufen wenn Objekt als String verwendet wird (echo $obj)
+  __get($name)     → aufgerufen wenn auf nicht-existierende Property zugegriffen wird
+  __set($n, $v)    → aufgerufen beim Setzen einer nicht-existierenden Property
+  __isset($name)   → aufgerufen bei isset() / empty()
+  __unset($name)   → aufgerufen bei unset()
+  __call($n, $args)  → aufgerufen bei nicht-existierenden Methoden
+  __clone()        → aufgerufen bei clone $objekt
+  __invoke($arg)   → aufgerufen wenn Objekt wie Funktion aufgerufen wird ($obj())
+
+  Beispiel __toString:
+    class Punkt {
+        public function __construct(public float $x, public float $y) {}
+
+        public function __toString(): string {
+            return "({$this->x}, {$this->y})";
+        }
+    }
+
+    $p = new Punkt(3, 4);
+    echo $p;    → "(3, 4)"
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Implementiere ein einfaches Warenkorb-System mit OOP:
+Klasse Produkt (id, name, preis, menge), Klasse Warenkorb
+(Produkte hinzufügen/entfernen, Gesamtpreis berechnen, Anzahl Artikel
+zurückgeben). Nutze ein Interface Preisberechnung das die Methode
+gibGesamtpreis(): float vorschreibt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Fehlerbehandlung
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Fehlertypen in PHP
+------------------------------------------------------------------------
+
+PHP unterscheidet verschiedene Fehler-Ebenen:
+
+  E_ERROR        → Fataler Fehler, Script stoppt
+  E_WARNING      → Warnung, Script läuft weiter
+  E_NOTICE       → Hinweis (undefinierte Variable etc.)
+  E_DEPRECATED   → veraltete Funktion/Syntax
+  E_ALL          → alle Fehler
+
+Konfiguration (php.ini oder per Code):
+
+  error_reporting(E_ALL);                    // alle Fehler anzeigen
+  ini_set('display_errors', '1');            // Fehler im Browser zeigen (nur Entwicklung!)
+  ini_set('display_errors', '0');            // Fehler verstecken (Produktion!)
+  ini_set('log_errors', '1');               // Fehler loggen
+  ini_set('error_log', '/pfad/error.log');  // wohin loggen?
+
+------------------------------------------------------------------------
+11.2  Exceptions — Ausnahmebehandlung
+------------------------------------------------------------------------
+
+  try {
+      $ergebnis = teilen(10, 0);
+  } catch (DivisionByZeroError $e) {
+      echo "Division durch Null: " . $e->getMessage();
+  } catch (InvalidArgumentException $e) {
+      echo "Ungültiges Argument: " . $e->getMessage();
+  } catch (Exception $e) {
+      echo "Allgemeiner Fehler: " . $e->getMessage();
+      error_log($e->getTraceAsString());
+  } finally {
+      // wird IMMER ausgeführt, egal ob Exception oder nicht
+      echo "Aufräumen...";
+  }
+
+Eigene Exception-Klassen:
+
+  class ValidierungsFehler extends RuntimeException {
+      private array $fehler;
+
+      public function __construct(array $fehler) {
+          $this->fehler = $fehler;
+          parent::__construct("Validierung fehlgeschlagen");
+      }
+
+      public function gibFehler(): array {
+          return $this->fehler;
+      }
+  }
+
+  // Werfen:
+  throw new ValidierungsFehler(["Name fehlt", "E-Mail ungültig"]);
+
+  // Fangen:
+  try {
+      // ...
+  } catch (ValidierungsFehler $e) {
+      foreach ($e->gibFehler() as $fehler) {
+          echo "<p>$fehler</p>";
+      }
+  }
+
+Wichtige Exception-Klassen:
+
+  Exception            → Basis für alle Exceptions
+  RuntimeException     → Laufzeitfehler
+  InvalidArgumentException → ungültiges Argument
+  OutOfRangeException  → Index außerhalb des gültigen Bereichs
+  LogicException       → Logikfehler im Code
+  PDOException         → Datenbankfehler
+  TypeError            → falscher Typ
+  ValueError           → falscher Wert beim richtigen Typ
+  Error                → Basis für PHP-interne Fehler
+  DivisionByZeroError  → Division durch Null
+  ArithmeticError      → allgemeiner Rechenfehler
+
+------------------------------------------------------------------------
+11.3  Error Handler und Shutdown Function
+------------------------------------------------------------------------
+
+  // Eigenen Error-Handler registrieren:
+  set_error_handler(function($schwere, $meldung, $datei, $zeile) {
+      if (!(error_reporting() & $schwere)) {
+          return false;  // ignorieren wenn Fehler unterdrückt
+      }
+      throw new ErrorException($meldung, 0, $schwere, $datei, $zeile);
+  });
+
+  // Shutdown-Funktion (läuft auch nach fatalen Fehlern):
+  register_shutdown_function(function() {
+      $fehler = error_get_last();
+      if ($fehler && in_array($fehler['type'], [E_ERROR, E_PARSE, E_CORE_ERROR])) {
+          error_log("Fataler Fehler: " . $fehler['message']);
+          // Nutzerfreundliche Fehlerseite anzeigen
+      }
+  });
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+Schreibe eine Funktion lade_datei(string $pfad): string die eine Datei
+lädt und den Inhalt zurückgibt. Wirf eine RuntimeException wenn die
+Datei nicht existiert, eine InvalidArgumentException wenn $pfad leer ist.
+Teste beide Fälle mit try-catch. Dann: Erstelle eine eigene Exception-Klasse
+DateiNichtGefunden mit einer zusätzlichen Methode gibPfad(): string.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Dateisystem und externe Daten
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Dateien lesen und schreiben
+------------------------------------------------------------------------
+
+EINFACHE LESE-/SCHREIBOPERATIONEN:
+
+  // Gesamten Inhalt lesen:
+  $inhalt = file_get_contents('/pfad/datei.txt');
+  if ($inhalt === false) { /* Fehler */ }
+
+  // Gesamten Inhalt schreiben (überschreibt):
+  file_put_contents('/pfad/datei.txt', "Neuer Inhalt");
+
+  // Anhängen:
+  file_put_contents('/pfad/datei.txt', "Neue Zeile\n", FILE_APPEND);
+
+  // Datei als Array von Zeilen:
+  $zeilen = file('/pfad/datei.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+  // Zeilenweise lesen (für große Dateien):
+  $datei = fopen('/pfad/datei.txt', 'r');
+  while (!feof($datei)) {
+      $zeile = fgets($datei);
+      // Verarbeitung
+  }
+  fclose($datei);
+
+  Öffnungs-Modi (fopen):
+    'r'   → nur lesen (Datei muss existieren)
+    'r+'  → lesen und schreiben (Datei muss existieren)
+    'w'   → nur schreiben (erstellt/überschreibt)
+    'w+'  → lesen und schreiben (erstellt/überschreibt)
+    'a'   → anhängen (erstellt wenn nicht vorhanden)
+    'a+'  → lesen und anhängen
+    'x'   → schreiben, FEHLER wenn Datei existiert
+
+------------------------------------------------------------------------
+12.2  Verzeichnis-Operationen
+------------------------------------------------------------------------
+
+  file_exists($pfad)     → existiert Datei oder Verzeichnis?
+  is_file($pfad)         → ist es eine Datei?
+  is_dir($pfad)          → ist es ein Verzeichnis?
+  is_readable($pfad)     → ist lesbar?
+  is_writable($pfad)     → ist schreibbar?
+  filesize($pfad)        → Dateigröße in Bytes
+  filemtime($pfad)       → Zeitstempel letzte Änderung (Unix-Timestamp)
+
+  mkdir('/pfad/neu', 0755, true)   → Verzeichnis erstellen (true = rekursiv)
+  rmdir('/pfad/leer')              → leeres Verzeichnis löschen
+  unlink('/pfad/datei.txt')        → Datei löschen
+  rename('/alt', '/neu')           → umbenennen oder verschieben
+  copy('/quelle', '/ziel')         → kopieren
+
+  Verzeichnis-Inhalt auflisten:
+    $dateien = scandir('/pfad');   // inkl. . und ..
+    $dateien = glob('/pfad/*.txt'); // mit Platzhalter
+
+  Rekursiv alle PHP-Dateien finden:
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator('/pfad')
+    );
+    foreach ($iterator as $datei) {
+        if ($datei->getExtension() === 'php') {
+            echo $datei->getPathname() . "\n";
+        }
+    }
+
+------------------------------------------------------------------------
+12.3  JSON und externe Daten
+------------------------------------------------------------------------
+
+JSON VERARBEITEN:
+
+  // PHP → JSON:
+  $daten = ["name" => "Max", "alter" => 28, "hobbys" => ["PHP", "Hiking"]];
+  $json = json_encode($daten);
+  $json = json_encode($daten, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+  // JSON → PHP:
+  $daten = json_decode($json, true);  // true = assoziatives Array
+  $obj   = json_decode($json);        // false/weglassen = stdClass Objekt
+
+  // Fehler prüfen:
+  if (json_last_error() !== JSON_ERROR_NONE) {
+      echo json_last_error_msg();
+  }
+
+HTTP-ANFRAGEN (externe APIs):
+
+  // Einfach mit file_get_contents (nicht für POST):
+  $json = file_get_contents("https://api.example.com/nutzer");
+  $daten = json_decode($json, true);
+
+  // Mit cURL (empfohlen, volle Kontrolle):
+  $ch = curl_init("https://api.example.com/nutzer");
+  curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_HTTPHEADER     => ["Content-Type: application/json"],
+      CURLOPT_TIMEOUT        => 10,
+  ]);
+  $antwort = curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+
+  if ($httpCode === 200) {
+      $daten = json_decode($antwort, true);
+  }
+
+  // POST mit cURL:
+  $ch = curl_init("https://api.example.com/erstellen");
+  curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_POST           => true,
+      CURLOPT_POSTFIELDS     => json_encode(["name" => "Max"]),
+      CURLOPT_HTTPHEADER     => ["Content-Type: application/json", "Authorization: Bearer TOKEN"],
+  ]);
+
+CSV VERARBEITEN:
+
+  // Lesen:
+  $datei = fopen('daten.csv', 'r');
+  $kopfzeile = fgetcsv($datei);   // erste Zeile als Spaltennamen
+  while ($zeile = fgetcsv($datei)) {
+      $datensatz = array_combine($kopfzeile, $zeile);
+      // $datensatz['name'], $datensatz['email'] etc.
+  }
+  fclose($datei);
+
+  // Schreiben:
+  $datei = fopen('export.csv', 'w');
+  fputcsv($datei, ['Name', 'E-Mail', 'Alter']);
+  fputcsv($datei, ['Max', 'max@example.com', 28]);
+  fclose($datei);
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+Schreibe ein PHP-Script das: (1) Eine JSON-Konfigurationsdatei liest und
+die Werte in einem assoziativen Array zurückgibt. (2) Alle .log-Dateien
+in einem Verzeichnis auflistet und die letzte Änderungszeit ausgibt.
+(3) Eine Funktion log_schreiben($nachricht) die mit Zeitstempel in eine
+Logdatei schreibt (anhängen, nicht überschreiben).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: Eine PHP-Anwendung strukturieren
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Das MVC-Muster (Model-View-Controller)
+------------------------------------------------------------------------
+
+MVC trennt drei Verantwortlichkeiten:
+
+  MODEL      → Daten und Geschäftslogik (Datenbankzugriffe, Berechnungen)
+  VIEW       → Darstellung (nur HTML ausgeben, keine Logik)
+  CONTROLLER → Verbindung (Request verarbeiten, Model aufrufen, View laden)
+
+Einfache Struktur ohne Framework:
+
+  /projekt
+    /models
+      User.php
+      Post.php
+    /views
+      header.php
+      footer.php
+      /users
+        list.php
+        show.php
+    /controllers
+      UserController.php
+      PostController.php
+    index.php      → Entry Point (alles läuft hier durch)
+    config.php     → Konfiguration (Datenbankdaten etc.)
+
+------------------------------------------------------------------------
+13.2  Autoloading und Composer
+------------------------------------------------------------------------
+
+Composer ist der PHP-Paketmanager (wie npm für Node.js).
+
+  # Installieren: https://getcomposer.org
+
+  # Neues Projekt initialisieren:
+  composer init
+
+  # Paket installieren (z.B. PHPMailer):
+  composer require phpmailer/phpmailer
+
+  # Paket für Entwicklung (Tests etc.):
+  composer require --dev phpunit/phpunit
+
+  # Alle Pakete installieren (aus composer.json):
+  composer install
+
+  # Aktualisieren:
+  composer update
+
+PSR-4 Autoloading — automatisch Klassen laden:
+
+  In composer.json:
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+
+  composer dump-autoload
+
+  In PHP:
+    require 'vendor/autoload.php';  // einmal am Anfang
+    $nutzer = new App\Models\User(); // Klasse wird automatisch geladen
+
+------------------------------------------------------------------------
+13.3  Konfiguration sicher verwalten
+------------------------------------------------------------------------
+
+NIEMALS Zugangsdaten direkt im Code:
+
+  // SCHLECHT:
+  $pdo = new PDO("mysql:host=localhost;dbname=db", "root", "geheim123");
+
+  // GUT: Umgebungsvariablen oder .env-Datei
+
+  Mit dotenv (vlad/phpdotenv):
+    composer require vlucas/phpdotenv
+
+    .env Datei (NIEMALS in Git einchecken! In .gitignore!):
+      DB_HOST=localhost
+      DB_NAME=meine_db
+      DB_USER=dbnutzer
+      DB_PASS=sicheresPasswort
+
+    PHP:
+      $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+      $dotenv->load();
+
+      $host = $_ENV['DB_HOST'];
+      $name = $_ENV['DB_NAME'];
+
+  .gitignore muss enthalten:
+    .env
+    vendor/
+    *.log
+
+------------------------------------------------------------------------
+13.4  Einfaches Routing
+------------------------------------------------------------------------
+
+index.php als zentraler Eintrittspunkt:
+
+  // .htaccess für Apache (alle Requests → index.php):
+  // RewriteEngine On
+  // RewriteCond %{REQUEST_FILENAME} !-f
+  // RewriteRule ^ index.php [QSA,L]
+
+  // index.php
+  $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+  $uri = rtrim($uri, '/');
+  $method = $_SERVER['REQUEST_METHOD'];
+
+  switch ($uri) {
+      case '':
+      case '/':
+          require 'views/home.php';
+          break;
+      case '/nutzer':
+          if ($method === 'GET') {
+              require 'controllers/UserController.php';
+              (new UserController())->liste();
+          }
+          break;
+      case preg_match('#^/nutzer/(\d+)$#', $uri, $m) ? $uri : '!':
+          $id = $m[1];
+          require 'controllers/UserController.php';
+          (new UserController())->zeige($id);
+          break;
+      default:
+          http_response_code(404);
+          require 'views/404.php';
+  }
+
+------------------------------------------------------------------------
+13.5  JSON-API bauen
+------------------------------------------------------------------------
+
+  header("Content-Type: application/json");
+  header("Access-Control-Allow-Origin: *");    // CORS (nur für öffentliche APIs)
+
+  $nutzer = [
+      ["id" => 1, "name" => "Max"],
+      ["id" => 2, "name" => "Lisa"],
+  ];
+
+  http_response_code(200);
+  echo json_encode(["daten" => $nutzer, "anzahl" => count($nutzer)]);
+  exit;
+
+  Für Fehler:
+    http_response_code(404);
+    echo json_encode(["fehler" => "Nutzer nicht gefunden"]);
+    exit;
+
+  HTTP-Status-Codes:
+    200 OK                  → Erfolg
+    201 Created             → Erfolgreich erstellt (POST)
+    204 No Content          → Erfolg ohne Antwort-Body (DELETE)
+    400 Bad Request         → Fehlerhafte Anfrage (Validierungsfehler)
+    401 Unauthorized        → Nicht authentifiziert
+    403 Forbidden           → Authentifiziert aber kein Zugriff
+    404 Not Found           → Nicht gefunden
+    422 Unprocessable Entity → Validierungsfehler (moderner als 400)
+    500 Internal Server Error → Serverfehler
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+Strukturiere die Aufgaben-App aus Übung 8 nach MVC:
+- models/Aufgabe.php mit allen Datenbankoperationen als statische Methoden
+- views/aufgaben/liste.php (nur HTML und minimale PHP-Logik)
+- controllers/AufgabenController.php
+- index.php mit einfachem Routing
+Erstelle außerdem einen API-Endpunkt /api/aufgaben der alle Aufgaben
+als JSON zurückgibt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: Sicherheit in PHP
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Die häufigsten Angriffe und ihre Abwehr
+------------------------------------------------------------------------
+
+XSS — Cross-Site Scripting:
+
+  Problem:
+    echo $_GET['name'];   // Angreifer: ?name=<script>diebstahlCode()</script>
+    Browser führt das Script aus → Cookies gestohlen, Seite manipuliert
+
+  Lösung:
+    echo htmlspecialchars($_GET['name'], ENT_QUOTES, 'UTF-8');
+    // IMMER bei der Ausgabe, nicht bei der Eingabe!
+
+SQL-INJECTION:
+
+  Problem:
+    $pdo->query("SELECT * FROM nutzer WHERE id = " . $_GET['id']);
+    // Angreifer: ?id=1 OR 1=1 → alle Nutzer
+
+  Lösung:
+    Prepared Statements (Kapitel 8). Ausnahmslos.
+
+CSRF — Cross-Site Request Forgery:
+
+  Problem:
+    Angreifer-Seite enthält <form action="https://bank.de/überweisen">.
+    Wenn Nutzer eingeloggt ist, führt der Browser die Aktion aus.
+
+  Lösung: CSRF-Token
+    // Beim Seitenaufruf:
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    // Im Formular:
+    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+
+    // Bei der Verarbeitung:
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) {
+        die("CSRF-Angriff erkannt!");
+    }
+
+PATH TRAVERSAL:
+
+  Problem:
+    $datei = $_GET['datei'];
+    include("seiten/$datei");   // ?datei=../../../etc/passwd
+
+  Lösung:
+    $datei = basename($_GET['datei']);          // Pfad entfernen
+    $erlaubt = ['home', 'ueber', 'kontakt'];
+    if (!in_array($datei, $erlaubt)) { die(); } // Whitelist
+    include("seiten/$datei.php");
+
+SESSION SICHERHEIT:
+
+  session_start();
+  session_regenerate_id(true);  // nach Login immer!
+
+  Sichere Session-Einstellungen (php.ini oder ini_set):
+    session.cookie_httponly = 1   // kein JS-Zugriff
+    session.cookie_secure   = 1   // nur HTTPS
+    session.cookie_samesite = Strict
+    session.use_strict_mode = 1   // nur eigene Session-IDs akzeptieren
+
+------------------------------------------------------------------------
+14.2  Passwörter richtig handhaben
+------------------------------------------------------------------------
+
+  // Erstellen (z.B. bei Registrierung):
+  $hash = password_hash($passwort, PASSWORD_BCRYPT);
+  // oder moderner:
+  $hash = password_hash($passwort, PASSWORD_ARGON2ID);
+  // In Datenbank speichern
+
+  // Prüfen (z.B. bei Login):
+  if (password_verify($eingegebenes_passwort, $hash_aus_db)) {
+      // Login erfolgreich
+
+      // Hash aktualisieren wenn nötig (Algorithmus-Update):
+      if (password_needs_rehash($hash_aus_db, PASSWORD_ARGON2ID)) {
+          $neuerHash = password_hash($eingegebenes_passwort, PASSWORD_ARGON2ID);
+          // In Datenbank aktualisieren
+      }
+  }
+
+  NIEMALS:
+    - md5($passwort) oder sha1($passwort) → reversibel/zu schnell
+    - Passwort im Klartext speichern
+    - Passwort loggen
+
+------------------------------------------------------------------------
+14.3  Sichere Zufallszahlen
+------------------------------------------------------------------------
+
+  // Kryptografisch sicherer Zufall:
+  $token = bin2hex(random_bytes(32));      → 64-stelliger Hex-String
+  $zahl  = random_int(1, 100);             → sichere Zufallszahl
+  $token = base64_encode(random_bytes(32)); → Base64-Token
+
+  NIEMALS rand() oder mt_rand() für sicherheitskritische Dinge!
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+Überarbeite das Login-System aus Übung 9:
+- CSRF-Token zu jedem Formular hinzufügen und prüfen
+- Alle Ausgaben mit htmlspecialchars() absichern
+- session_regenerate_id(true) nach erfolgreichem Login
+- Maximale Login-Versuche (Rate Limiting): nach 5 Fehlversuchen
+  30 Sekunden sperren (mit Session oder Datenbank)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Moderne PHP-Features (PHP 8+)
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Named Arguments (PHP 8.0+)
+------------------------------------------------------------------------
+
+  // Ohne named arguments:
+  array_slice($arr, 0, 3, true);   // Was bedeutet true hier?
+
+  // Mit named arguments:
+  array_slice(array: $arr, offset: 0, length: 3, preserve_keys: true);
+
+  // Besonders nützlich für Funktionen mit vielen Parametern:
+  htmlspecialchars(string: $s, encoding: 'UTF-8', double_encode: false);
+
+------------------------------------------------------------------------
+15.2  Enums (PHP 8.1+)
+------------------------------------------------------------------------
+
+  // Reiner Enum:
+  enum Farbe {
+      case Rot;
+      case Grün;
+      case Blau;
+  }
+
+  $f = Farbe::Rot;
+  match ($f) {
+      Farbe::Rot  => "Stopp",
+      Farbe::Grün => "Los",
+      Farbe::Blau => "Info",
+  };
+
+  // Backed Enum (mit Wert):
+  enum Status: string {
+      case Entwurf   = 'draft';
+      case Aktiv     = 'active';
+      case Archiviert = 'archived';
+  }
+
+  $s = Status::Aktiv;
+  echo $s->value;         → "active"
+  $s = Status::from('draft');        → Status::Entwurf
+  $s = Status::tryFrom('unbekannt'); → null (statt Exception)
+
+  // Enum mit Methoden und Interface:
+  enum Priorität: int implements Sortierbar {
+      case Niedrig = 1;
+      case Mittel  = 2;
+      case Hoch    = 3;
+
+      public function label(): string {
+          return match($this) {
+              self::Niedrig => "🟢 Niedrig",
+              self::Mittel  => "🟡 Mittel",
+              self::Hoch    => "🔴 Hoch",
+          };
+      }
+  }
+
+------------------------------------------------------------------------
+15.3  Fibers (PHP 8.1+) — kooperatives Multitasking
+------------------------------------------------------------------------
+
+  $fiber = new Fiber(function(): string {
+      $a = Fiber::suspend("erste Pause");
+      $b = Fiber::suspend("zweite Pause");
+      return "fertig: $a + $b";
+  });
+
+  $wert1 = $fiber->start();      → "erste Pause"
+  $wert2 = $fiber->resume("A");  → "zweite Pause"
+  $fiber->resume("B");
+  echo $fiber->getReturn();      → "fertig: A + B"
+
+------------------------------------------------------------------------
+15.4  Readonly Properties (PHP 8.1+) und Constructor Promotion
+------------------------------------------------------------------------
+
+  class Punkt {
+      // Constructor Promotion + readonly:
+      public function __construct(
+          public readonly float $x,
+          public readonly float $y,
+          public readonly float $z = 0.0,
+      ) {}
+  }
+
+  $p = new Punkt(1.0, 2.0);
+  echo $p->x;    → 1.0
+  $p->x = 5.0;  → FEHLER! readonly kann nicht geändert werden
+
+  // Readonly Klassen (PHP 8.2+) — alle Properties sind readonly:
+  readonly class KoordinatePaar {
+      public function __construct(
+          public float $lat,
+          public float $lng,
+      ) {}
+  }
+
+------------------------------------------------------------------------
+15.5  First-Class Callable Syntax (PHP 8.1+)
+------------------------------------------------------------------------
+
+  // Früher:
+  $fn = fn($x) => strlen($x);
+  usort($arr, 'strcmp');
+
+  // Jetzt:
+  $fn = strlen(...);               // Funktion als Callable
+  $fn = $obj->methode(...);        // Methode als Callable
+  $fn = KlassenName::statisch(...); // Statisch als Callable
+
+  usort($arr, strcmp(...));
+  array_map(strtolower(...), $strings);
+
+------------------------------------------------------------------------
+15.6  Intersection Types und never (PHP 8.1+)
+------------------------------------------------------------------------
+
+  // Intersection Type — Wert muss BEIDE Typen erfüllen:
+  function verarbeite(Iterator&Countable $sammlung): void {
+      foreach ($sammlung as $item) { /* ... */ }
+      echo count($sammlung);
+  }
+
+  // never — Funktion kehrt niemals zurück:
+  function fehlschlagen(string $nachricht): never {
+      throw new RuntimeException($nachricht);
+  }
+
+  function umleiten(string $url): never {
+      header("Location: $url");
+      exit;
+  }
+
+------------------------------------------------------------------------
+15.7  match + Null-Safe Operator
+------------------------------------------------------------------------
+
+  // Null-Safe Operator (PHP 8.0+):
+  $stadtName = $nutzer?->getAdresse()?->getStadt()?->getName();
+  // Ohne ? müsste man prüfen ob jedes Objekt null ist
+
+  // match mit no-match Exception:
+  $ergebnis = match(true) {
+      $punkte >= 90 => 'Sehr gut',
+      $punkte >= 75 => 'Gut',
+      $punkte >= 60 => 'Befriedigend',
+      $punkte >= 50 => 'Ausreichend',
+      default       => 'Nicht bestanden',
+  };
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+Refaktoriere das Warenkorb-System aus Übung 10:
+- Nutze Constructor Promotion mit readonly Properties für Produkt
+- Erstelle einen Enum KategorieSatus (Verfügbar, AufAnfrage, Ausverkauft)
+  als backed enum mit string-Werten
+- Ersetze isset()-Ketten durch den Null-Safe Operator
+- Nutze Named Arguments bei mindestens zwei Funktionsaufrufen
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — PHP
+================================================================================
+
+VARIABLEN:
+  $var = wert | $arr[] = | unset($var) | isset($var) | empty($var)
+  gettype() | var_dump() | print_r() | is_string/int/array/null()
+  Typen: int float string bool array object null
+
+STRINGS:
+  strlen / mb_strlen | strpos / str_contains / str_starts_with
+  strtolower/upper | trim/ltrim/rtrim | str_replace | substr
+  number_format | htmlspecialchars | explode / implode
+  sprintf / printf | preg_match / preg_replace
+
+ARRAYS:
+  [] | count | array_push/pop/shift/unshift | sort/rsort/usort
+  array_map | array_filter | array_reduce | array_merge | array_unique
+  in_array | array_search | array_keys/values | array_slice | array_chunk
+
+KONTROLLSTRUKTUREN:
+  if/elseif/else | switch/case/break | match (PHP 8)
+  while | do-while | for | foreach ($arr as $k => $v)
+  break | continue | break 2
+
+FUNKTIONEN:
+  function f(Typ $p = Standard): Rückgabetyp { ... }
+  Typen: int float string bool array object mixed void never ?Type Typ|Typ
+  fn($x) => Ausdruck | function() use ($var) { ... }
+  ...$args (variadic) | &$ref (Referenz)
+
+KLASSEN:
+  class | extends | implements | abstract | interface | trait | enum
+  public/protected/private | static | readonly | const
+  new | $this | self:: | parent:: | static::
+  __construct | __toString | __get/__set | __call | __clone
+
+DATENBANK:
+  new PDO(dsn, user, pass, options) | $pdo->prepare(sql)
+  $stmt->execute([...]) | $stmt->fetch() | $stmt->fetchAll()
+  $pdo->lastInsertId() | $stmt->rowCount()
+  beginTransaction | commit | rollBack
+
+SUPER-GLOBALS:
+  $_GET | $_POST | $_FILES | $_SESSION | $_COOKIE | $_SERVER | $_ENV
+
+SESSIONS:
+  session_start() | $_SESSION['key'] = | session_destroy()
+  session_regenerate_id(true)
+
+HTTP:
+  header("Location: url") | http_response_code(404) | exit
+  $_SERVER['REQUEST_METHOD'] | $_SERVER['REQUEST_URI']
+
+SICHERHEIT:
+  htmlspecialchars() | password_hash() | password_verify()
+  filter_input() | random_bytes() | hash_equals()
+  Prepared Statements immer | CSRF-Token | session_regenerate_id()
+
+DATEISYSTEM:
+  file_get_contents | file_put_contents | fopen/fclose/fgets/fwrite
+  file_exists | is_file/dir | mkdir | unlink | rename | copy
+  json_encode / json_decode
+
+NÜTZLICHE FUNKTIONEN:
+  date("Y-m-d H:i:s") | time() | mktime() | strtotime()
+  range(1, 10) | array_fill | compact | extract
+  ob_start/ob_get_clean (Output Buffering)
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN — PHP
+================================================================================
+
+PHP Dokumentation (exzellent, mit Nutzerkommentaren):
+  https://www.php.net/manual/de/
+
+PHP: The Right Way (Best Practices):
+  https://phptherightway.com
+
+Composer (Paketmanager):
+  https://getcomposer.org
+
+PSR Standards (Coding Standards):
+  https://www.php-fig.org/psr/
+
+Packagist (PHP Packages):
+  https://packagist.org
+
+Laravel (beliebtestes PHP-Framework):
+  https://laravel.com/docs
+
+Symfony (Enterprise-Framework):
+  https://symfony.com/doc
+
+PHPUnit (Testing):
+  https://phpunit.de
+
+OWASP (Sicherheit):
+  https://owasp.org/www-project-top-ten/
+
+PHP Security Cheat Sheet:
+  https://cheatsheetseries.owasp.org/cheatsheets/PHP_Configuration_Cheat_Sheet.html
+
+Modern PHP von Josh Lockhart:
+  https://modernphp.com (Buch-Empfehlung)
+
+
+################################################################################
+ABSCHLUSS
+################################################################################
+
+PHP ist trotz seines Rufes eine mächtige, moderne Sprache — besonders ab
+Version 8.x. Das Entscheidende ist nicht ob PHP, sondern WIE PHP.
+Prepared Statements immer. Ausgaben immer escapen. Passwörter nie im
+Klartext. Den Rest lernst du durch Bauen — starte ein echtes Projekt,
+mach Fehler, lies die Fehlermeldungen, schau in die Dokumentation.
+================================================================================
+ENDE DES KURSES
+================================================================================
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

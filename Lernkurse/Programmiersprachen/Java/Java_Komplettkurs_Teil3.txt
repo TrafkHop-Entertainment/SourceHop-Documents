@@ -1,0 +1,1308 @@
+================================================================================
+JAVA KOMPLETTKURS — TEIL 3 von 4
+Collections · Exceptions · I/O · Lambdas · Streams · Optional
+================================================================================
+
+================================================================================
+MODUL 13: Collections Framework — die wichtigsten Sammlungen
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Übersicht: Collection-Hierarchie
+------------------------------------------------------------------------
+
+Das Java Collections Framework ist eine Hierarchie von Interfaces und Klassen:
+
+  Iterable
+    └─ Collection
+          ├─ List       → geordnet, Duplikate erlaubt
+          │     ├─ ArrayList      (dynamisches Array, schnell bei Index-Zugriff)
+          │     └─ LinkedList     (doppelt verkettete Liste, schnell bei Einfügen)
+          │
+          ├─ Set        → keine Duplikate
+          │     ├─ HashSet        (ungeordnet, schnellste Suche O(1))
+          │     ├─ LinkedHashSet  (Einfügereihenfolge beibehalten)
+          │     └─ TreeSet        (sortiert, O(log n))
+          │
+          └─ Queue      → FIFO (First In, First Out)
+                ├─ LinkedList     (auch als Queue nutzbar)
+                ├─ ArrayDeque     (Deque = Double-ended Queue, empfohlen)
+                └─ PriorityQueue  (Prioritäts-Warteschlange)
+
+  Map (kein Collection, aber Teil des Frameworks):
+    ├─ HashMap          (schnell, ungeordnet)
+    ├─ LinkedHashMap    (Einfügereihenfolge)
+    ├─ TreeMap          (nach Key sortiert)
+    ├─ Hashtable        (veraltet, synchronized → ConcurrentHashMap bevorzugen)
+    └─ EnumMap          (für Enum-Keys, sehr effizient)
+
+------------------------------------------------------------------------
+13.2  List — geordnete Sequenzen
+------------------------------------------------------------------------
+
+ArrayList — dynamisches Array (häufigste Wahl):
+  List<String> namen = new ArrayList<>();
+  namen.add("Anna");
+  namen.add("Ben");
+  namen.add("Clara");
+
+  // Index-Zugriff O(1):
+  namen.get(1)        → "Ben"
+  namen.size()        → 3
+  namen.isEmpty()     → false
+
+  // Hinzufügen:
+  namen.add("David")          // ans Ende
+  namen.add(1, "Anton")       // an Index 1 (alle anderen rücken nach rechts)
+
+  // Entfernen:
+  namen.remove("Ben")         // nach Wert (erstes Vorkommen)
+  namen.remove(0)             // nach Index (gibt entferntes Element zurück)
+
+  // Suchen:
+  namen.contains("Anna")      → true
+  namen.indexOf("Anna")       → Erster Treffer (Index), oder -1
+  namen.lastIndexOf("Anna")   → Letzter Treffer
+
+  // Ersetzen:
+  namen.set(0, "Alicia")      // Index 0 auf "Alicia"
+
+  // Teilbereich:
+  namen.subList(1, 3)         → View (!) von Index 1 bis exkl. 3
+
+  // Sortieren:
+  Collections.sort(namen)                          // natürliche Ordnung
+  namen.sort(Comparator.reverseOrder())            // umgekehrt
+  namen.sort(Comparator.comparingInt(String::length)) // nach Länge
+
+  // In Array umwandeln:
+  String[] arr = namen.toArray(new String[0]);
+
+  // Aus Array:
+  List<String> l = Arrays.asList("a", "b", "c");    // fixed-size! kein add/remove
+  List<String> l = new ArrayList<>(Arrays.asList("a", "b", "c")); // mutable
+
+  // Unmodifiable (seit Java 9):
+  List<String> unveränderlich = List.of("a", "b", "c");  // kein null, kein add/remove
+  List<String> kopie = List.copyOf(bestehendeList);
+
+  // Collections-Hilfsmethoden:
+  Collections.shuffle(namen)                   // zufällig mischen
+  Collections.reverse(namen)                  // umkehren
+  Collections.swap(namen, 0, 2)              // zwei Elemente tauschen
+  Collections.fill(namen, "X")              // alle auf "X"
+  Collections.frequency(namen, "Anna")       // wie oft kommt "Anna" vor?
+  Collections.disjoint(list1, list2)         // keine gemeinsamen Elemente?
+
+LinkedList — verkettete Liste (Stack + Queue):
+  LinkedList<String> ll = new LinkedList<>();
+  ll.addFirst("X")         // an Anfang
+  ll.addLast("Z")          // ans Ende
+  ll.getFirst()            // erstes Element (keine Entfernung)
+  ll.getLast()             // letztes Element
+  ll.removeFirst()         // erstes entfernen und zurückgeben
+  ll.removeLast()          // letztes entfernen
+
+  // Als Stack (LIFO):
+  ll.push("A")  // addFirst
+  ll.pop()      // removeFirst
+
+  // Als Queue (FIFO):
+  ll.offer("B")  // addLast
+  ll.poll()      // removeFirst (null wenn leer, nicht Exception)
+
+------------------------------------------------------------------------
+13.3  Set — keine Duplikate
+------------------------------------------------------------------------
+
+HashSet — schnellste Suche, keine Ordnung:
+  Set<String> menge = new HashSet<>();
+  menge.add("Apfel");
+  menge.add("Birne");
+  menge.add("Apfel");    // kein Fehler, aber nicht hinzugefügt!
+  menge.size()           → 2
+
+  menge.contains("Birne")  → true  (O(1))
+  menge.remove("Apfel")    → true (erfolgreich entfernt)
+
+  // Mengenoperationen:
+  Set<String> a = new HashSet<>(Set.of("x", "y", "z"));
+  Set<String> b = new HashSet<>(Set.of("y", "z", "w"));
+
+  Set<String> vereinigung = new HashSet<>(a);
+  vereinigung.addAll(b);           // {x, y, z, w}
+
+  Set<String> schnittmenge = new HashSet<>(a);
+  schnittmenge.retainAll(b);       // {y, z}
+
+  Set<String> differenz = new HashSet<>(a);
+  differenz.removeAll(b);          // {x}
+
+TreeSet — sortiertes Set:
+  TreeSet<Integer> sortiert = new TreeSet<>();
+  sortiert.add(5); sortiert.add(1); sortiert.add(3);
+  System.out.println(sortiert);    // [1, 3, 5] — immer sortiert!
+
+  sortiert.first()                 → 1
+  sortiert.last()                  → 5
+  sortiert.headSet(3)              → {1} (kleiner als 3, exklusiv)
+  sortiert.tailSet(3)              → {3, 5} (ab 3, inklusiv)
+  sortiert.subSet(1, 4)            → {1, 3} (1 bis exkl. 4)
+  sortiert.floor(4)                → 3 (größtes Element ≤ 4)
+  sortiert.ceiling(4)              → 5 (kleinstes Element ≥ 4)
+  sortiert.lower(3)                → 1 (streng kleiner)
+  sortiert.higher(3)               → 5 (streng größer)
+
+LinkedHashSet — Einfügereihenfolge beibehalten:
+  Set<String> geordnet = new LinkedHashSet<>();
+  geordnet.add("C"); geordnet.add("A"); geordnet.add("B");
+  System.out.println(geordnet);   // [C, A, B] — Einfügereihenfolge!
+
+------------------------------------------------------------------------
+13.4  Map — Schlüssel-Wert-Paare
+------------------------------------------------------------------------
+
+HashMap — schnellste Map, keine Ordnung:
+  Map<String, Integer> alter = new HashMap<>();
+  alter.put("Anna", 25);
+  alter.put("Ben", 30);
+  alter.put("Anna", 28);    // überschreibt den alten Wert!
+
+  alter.get("Anna")                   → 28
+  alter.get("Carla")                  → null (Schlüssel nicht vorhanden!)
+  alter.getOrDefault("Carla", 0)      → 0 (null-sicherer Zugriff)
+  alter.containsKey("Ben")            → true
+  alter.containsValue(25)             → false
+  alter.remove("Ben")                 → gibt 30 zurück, entfernt Eintrag
+  alter.size()                        → 1
+
+  alter.putIfAbsent("David", 35)      // nur wenn "David" noch nicht existiert
+  alter.replace("Anna", 29)           // nur wenn Schlüssel vorhanden
+  alter.replace("Anna", 28, 29)       // nur wenn Schlüssel UND aktueller Wert stimmen
+
+  // Map durchlaufen:
+  for (Map.Entry<String, Integer> eintrag : alter.entrySet()) {
+      System.out.println(eintrag.getKey() + ": " + eintrag.getValue());
+  }
+
+  for (String name : alter.keySet()) {
+      System.out.println(name + ": " + alter.get(name));
+  }
+
+  for (int wert : alter.values()) {
+      System.out.println(wert);
+  }
+
+  // forEach mit Lambda:
+  alter.forEach((name, wert) -> System.out.println(name + "=" + wert));
+
+  // compute-Methoden:
+  alter.compute("Anna", (k, v) -> v == null ? 1 : v + 1); // Anna → 30
+  alter.computeIfAbsent("Carla", k -> 0);    // nur wenn nicht vorhanden
+  alter.computeIfPresent("Anna", (k, v) -> v + 1); // nur wenn vorhanden
+
+  // merge — Zusammenführen:
+  alter.merge("Anna", 1, Integer::sum);  // wenn vorhanden: sum; sonst: 1
+
+  // Unmodifiable Map:
+  Map<String, Integer> imm = Map.of("a", 1, "b", 2);
+  Map<String, Integer> imm2 = Map.copyOf(bestehendeMap);
+
+TreeMap — nach Key sortiert:
+  TreeMap<String, Integer> sortiert = new TreeMap<>();
+  sortiert.put("B", 2); sortiert.put("A", 1); sortiert.put("C", 3);
+  System.out.println(sortiert);   // {A=1, B=2, C=3}
+
+  sortiert.firstKey()         → "A"
+  sortiert.lastKey()          → "C"
+  sortiert.headMap("B")       → {A=1} (Keys kleiner als "B")
+  sortiert.tailMap("B")       → {B=2, C=3}
+  sortiert.floorKey("B")      → "B"
+  sortiert.ceilingKey("B")    → "B"
+
+Häufige Map-Muster:
+
+  // Häufigkeiten zählen:
+  Map<String, Integer> häufig = new HashMap<>();
+  for (String wort : wörter) {
+      häufig.merge(wort, 1, Integer::sum);
+      // oder: häufig.put(wort, häufig.getOrDefault(wort, 0) + 1);
+  }
+
+  // Gruppieren:
+  Map<Integer, List<String>> nachLänge = new HashMap<>();
+  for (String s : wörter) {
+      nachLänge.computeIfAbsent(s.length(), k -> new ArrayList<>()).add(s);
+  }
+  // Eleganter mit Streams (Modul 17)
+
+------------------------------------------------------------------------
+13.5  Deque — doppelseitige Warteschlange
+------------------------------------------------------------------------
+
+ArrayDeque — empfohlen für Stack und Queue:
+  Deque<String> deque = new ArrayDeque<>();
+
+  // Als Stack (LIFO — Last In, First Out):
+  deque.push("A")     // addFirst
+  deque.push("B")
+  deque.push("C")
+  deque.pop()         // "C" — removeFirst
+  deque.peek()        // "B" — schaut oben, entfernt nicht
+
+  // Als Queue (FIFO — First In, First Out):
+  deque.offer("X")    // addLast
+  deque.offer("Y")
+  deque.poll()        // "X" — removeFirst
+  deque.peek()        // "Y"
+
+  // Beide Seiten:
+  deque.addFirst("vorne")
+  deque.addLast("hinten")
+  deque.peekFirst()   // schaut vorne
+  deque.peekLast()    // schaut hinten
+
+------------------------------------------------------------------------
+13.6  PriorityQueue — Prioritäts-Warteschlange
+------------------------------------------------------------------------
+
+  PriorityQueue<Integer> pq = new PriorityQueue<>();
+  pq.offer(5); pq.offer(1); pq.offer(3);
+
+  pq.poll()   → 1 (kleinster Wert zuerst — Min-Heap!)
+  pq.poll()   → 3
+  pq.poll()   → 5
+
+  // Max-Heap:
+  PriorityQueue<Integer> maxPQ = new PriorityQueue<>(Comparator.reverseOrder());
+
+  // Benutzerdefinierte Priorität:
+  PriorityQueue<Person> personPQ = new PriorityQueue<>(
+      Comparator.comparingInt(Person::getAlter)
+  );
+
+------------------------------------------------------------------------
+13.7  Collections-Utility-Methoden
+------------------------------------------------------------------------
+
+  Collections.unmodifiableList(liste)   → read-only View (bei Änderung: UnsupportedOperationException)
+  Collections.synchronizedList(liste)   → Thread-sicherer View
+  Collections.singletonList("Einziges") → unveränderliche Liste mit einem Element
+  Collections.emptyList()               → unveränderliche leere Liste
+  Collections.nCopies(5, "X")           → ["X","X","X","X","X"]
+  Collections.min(liste)                → kleinstes Element
+  Collections.max(liste)                → größtes Element
+  Collections.binarySearch(liste, x)    → Index (Liste muss sortiert sein!)
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+Schreibe WordAnalyser.java:
+- Lies einen Text-String (den du selbst definierst)
+- Teile in Wörter auf (split), normalisiere zu Kleinbuchstaben, entferne Satzzeichen
+- Benutze LinkedHashMap um die Wörter in Reihenfolge des ersten Auftretens mit
+  ihrer Häufigkeit zu speichern
+- Gib die 5 häufigsten Wörter aus
+- Zeige die eindeutigen Wörter (Set) sortiert
+- Finde heraus welche Wörter nur einmal vorkommen
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: Exceptions — Fehlerbehandlung
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Die Exception-Hierarchie
+------------------------------------------------------------------------
+
+  Throwable
+    ├─ Error           → Schwerwiegende JVM-Fehler — NICHT fangen!
+    │     ├─ OutOfMemoryError
+    │     ├─ StackOverflowError
+    │     └─ InternalError
+    │
+    └─ Exception
+          ├─ RuntimeException      → Unchecked — kein try-catch nötig (aber möglich)
+          │     ├─ NullPointerException
+          │     ├─ ArrayIndexOutOfBoundsException
+          │     ├─ ClassCastException
+          │     ├─ IllegalArgumentException
+          │     ├─ IllegalStateException
+          │     ├─ ArithmeticException (z.B. Division durch 0)
+          │     ├─ NumberFormatException
+          │     ├─ UnsupportedOperationException
+          │     └─ ConcurrentModificationException
+          │
+          └─ (alle anderen Exception-Unterklassen) → Checked!
+                ├─ IOException
+                │     ├─ FileNotFoundException
+                │     └─ EOFException
+                ├─ SQLException
+                └─ ParseException
+
+Checked vs. Unchecked:
+  Checked Exceptions müssen entweder mit try-catch behandelt oder
+  mit throws in der Methodensignatur deklariert werden.
+  Der Compiler erzwingt das!
+
+  Unchecked Exceptions (RuntimeException und Unterklassen) müssen nicht
+  deklariert oder gefangen werden — der Compiler sagt nichts.
+
+------------------------------------------------------------------------
+14.2  try-catch-finally
+------------------------------------------------------------------------
+
+Grundform:
+  try {
+      // Code der eine Exception werfen könnte
+      int ergebnis = 10 / 0;
+  } catch (ArithmeticException e) {
+      System.out.println("Fehler: " + e.getMessage());
+  }
+
+Mehrere catch-Blöcke:
+  try {
+      String s = null;
+      System.out.println(s.length());
+  } catch (NullPointerException e) {
+      System.out.println("null-Zugriff: " + e.getMessage());
+  } catch (Exception e) {
+      System.out.println("Allgemeiner Fehler: " + e);
+  }
+
+  Reihenfolge: Spezifischere zuerst! (Unterklassen vor Oberklassen)
+
+Multi-catch (seit Java 7):
+  try {
+      // ...
+  } catch (IOException | SQLException | ParseException e) {
+      // alle drei mit dem gleichen Handler
+      System.out.println("Einer von drei: " + e.getMessage());
+  }
+  // e ist dann final (implizit)
+
+finally-Block:
+  try {
+      // tue etwas
+  } catch (Exception e) {
+      // fehler
+  } finally {
+      // wird IMMER ausgeführt — mit und ohne Exception!
+      // Für Ressourcen-Freigabe (Dateien schließen, Verbindungen trennen)
+      System.out.println("Aufräumen");
+  }
+
+  finally wird ausgeführt auch wenn:
+  - kein Fehler war
+  - eine Exception aufgetreten ist
+  - return im try-Block (!) — finally läuft VOR dem Return
+  - Eine andere Exception im catch-Block
+
+  AUSNAHME: System.exit() — dann kein finally.
+
+try-with-resources (seit Java 7):
+  try (FileReader fr = new FileReader("datei.txt");
+       BufferedReader br = new BufferedReader(fr)) {
+      // fr und br werden automatisch am Ende geschlossen (close())
+      // auch wenn eine Exception auftritt!
+      String zeile;
+      while ((zeile = br.readLine()) != null) {
+          System.out.println(zeile);
+      }
+  } catch (IOException e) {
+      System.out.println("Lesefehler: " + e.getMessage());
+  }
+  // Kein finally für close() nötig!
+
+  Die Ressourcen werden in UMGEKEHRTER Reihenfolge geschlossen (br vor fr).
+  Ressourcen müssen AutoCloseable (oder Closeable) implementieren.
+
+------------------------------------------------------------------------
+14.3  Exceptions werfen
+------------------------------------------------------------------------
+
+  throw new IllegalArgumentException("Alter muss positiv sein");
+  throw new NullPointerException("name darf nicht null sein");
+  throw new RuntimeException("Unerwarteter Fehler", ursache);  // mit Ursache
+
+Exceptions in Methoden deklarieren (für Checked Exceptions):
+  public void liesDatei(String pfad) throws IOException, FileNotFoundException {
+      // ...
+  }
+  // Aufrufer MUSS damit umgehen (try-catch oder selbst throws)
+
+throws-Kaskade vermeiden mit Wrapper:
+  public void ladeDaten() {
+      try {
+          liesDatei("daten.txt");
+      } catch (IOException e) {
+          throw new RuntimeException("Datei konnte nicht geladen werden", e);
+          // ursache (cause) ist eingebettet — gut für Debugging!
+      }
+  }
+
+------------------------------------------------------------------------
+14.4  Eigene Exception-Klassen
+------------------------------------------------------------------------
+
+Unchecked (empfohlen für die meisten Fälle):
+  class KontoException extends RuntimeException {
+      private final String kontonummer;
+
+      public KontoException(String kontonummer, String nachricht) {
+          super(nachricht);
+          this.kontonummer = kontonummer;
+      }
+
+      public KontoException(String kontonummer, String nachricht, Throwable ursache) {
+          super(nachricht, ursache);
+          this.kontonummer = kontonummer;
+      }
+
+      public String getKontonummer() { return kontonummer; }
+  }
+
+Checked (wenn Aufrufer es MUSS behandeln — seltener empfohlen):
+  class InsufficientFundsException extends Exception {
+      private final double fehlendBetrag;
+
+      public InsufficientFundsException(double fehlend) {
+          super(String.format("Nicht genug Guthaben: %.2f€ fehlen", fehlend));
+          this.fehlendBetrag = fehlend;
+      }
+
+      public double getFehlendBetrag() { return fehlendBetrag; }
+  }
+
+------------------------------------------------------------------------
+14.5  Exception-Information auslesen
+------------------------------------------------------------------------
+
+  try {
+      // ...
+  } catch (Exception e) {
+      e.getMessage()           → Nachricht des Konstruktors
+      e.toString()             → Klassenname + Nachricht
+      e.getCause()             → die Ursache-Exception (wenn eingebettet)
+      e.getClass().getName()   → vollständiger Klassenname
+      e.printStackTrace()      → Stacktrace auf System.err ausgeben
+
+      // Stacktrace als String:
+      java.io.StringWriter sw = new java.io.StringWriter();
+      e.printStackTrace(new java.io.PrintWriter(sw));
+      String stackTrace = sw.toString();
+  }
+
+------------------------------------------------------------------------
+14.6  Best Practices für Exceptions
+------------------------------------------------------------------------
+
+Tue das:
+  ✓ Fange nur Exceptions die du auch wirklich behandeln kannst
+  ✓ Benutze spezifische Typen, nicht nur Exception
+  ✓ Logge (oder gib aus) aussagekräftige Fehlermeldungen
+  ✓ Bette Ursache-Exceptions ein: new RuntimeException("msg", ursache)
+  ✓ Schließe Ressourcen mit try-with-resources
+  ✓ Eigene Exceptions für domänenspezifische Fehler
+  ✓ throw early (früh prüfen), catch late (so spät wie möglich)
+
+Lass das:
+  ✗ Exception e { } — leerer catch-Block (verschluckt den Fehler!)
+  ✗ catch (Exception e) für alles (zu generisch)
+  ✗ RuntimeExceptions deklarieren mit throws (das ist optisch und unnötig)
+  ✗ Exception-Hierarchie ignorieren (Checked vs. Unchecked)
+  ✗ Exceptions für normalen Kontrollfluss (if/else ist besser als try/catch)
+  ✗ System.exit() in Bibliotheken
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+Erstelle BankAnwendung.java:
+- Klassen: KontoException (unchecked), ÜberweisungException, ValidierungException
+- Konto-Klasse mit Überprüfung: kein negativer Betrag, genug Guthaben beim Abheben
+- Methode überweise(Konto quelle, Konto ziel, double betrag)
+  mit allen nötigen Prüfungen und sinnvollen Exceptions
+- In main: verschiedene Fehlerszenarien testen und korrekt behandeln
+- Füge einen Logger ein (einfache statische Methode die Zeit + Nachricht ausgibt)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Dateien und I/O
+================================================================================
+
+------------------------------------------------------------------------
+15.1  java.nio.file.Path und Files — moderne I/O
+------------------------------------------------------------------------
+
+Seit Java 7 gibt es java.nio.file (NIO.2) — deutlich besser als das alte java.io.File.
+
+import java.nio.file.*;
+
+Path erstellen:
+  Path p1 = Path.of("C:/Users/Anna/dokument.txt");    // absolut
+  Path p2 = Path.of("relative/pfad/datei.txt");       // relativ
+  Path p3 = Path.of("C:/Users", "Anna", "docs");      // mehrere Teile
+
+Path-Methoden:
+  p1.getFileName()        → Path "dokument.txt"
+  p1.getParent()          → Path "C:/Users/Anna"
+  p1.getRoot()            → Path "C:/"
+  p1.toAbsolutePath()     → absoluter Pfad
+  p1.normalize()          → ../blah/./datei → normalisierter Pfad
+  p1.resolve("neu.txt")   → hängt relativen Pfad an
+  p1.relativize(p2)       → relativer Pfad von p1 zu p2
+  p1.toFile()             → java.io.File (für alte APIs)
+  p1.toString()           → Pfad als String
+
+Files — Datei-Operationen:
+  // Existenz und Typ:
+  Files.exists(p)                    → boolean
+  Files.notExists(p)                 → boolean
+  Files.isDirectory(p)               → boolean
+  Files.isRegularFile(p)             → boolean
+  Files.isReadable(p)                → boolean
+  Files.isWritable(p)                → boolean
+  Files.isHidden(p)                  → boolean
+
+  // Lesen:
+  String inhalt = Files.readString(p);                     // gesamte Datei als String (seit Java 11)
+  byte[] bytes = Files.readAllBytes(p);                    // gesamte Datei als Bytes
+  List<String> zeilen = Files.readAllLines(p);             // alle Zeilen als Liste
+  List<String> zeilen = Files.readAllLines(p, StandardCharsets.UTF_8); // mit Charset
+
+  // Stream für große Dateien (Zeilen-Stream, lazy):
+  try (Stream<String> stream = Files.lines(p)) {
+      stream.filter(z -> !z.isBlank()).forEach(System.out::println);
+  }
+
+  // Schreiben:
+  Files.writeString(p, "Inhalt");                         // Datei erstellen/überschreiben
+  Files.writeString(p, "Inhalt", StandardOpenOption.APPEND); // anhängen
+  Files.write(p, bytes);
+  Files.write(p, zeilen);                                 // Collection<String>
+
+  // Verzeichnisse:
+  Files.createDirectory(p)                               // einzelnes Verzeichnis
+  Files.createDirectories(p)                             // alle Zwischenverzeichnisse
+  Files.delete(p)                                        // Exception wenn nicht vorhanden
+  Files.deleteIfExists(p)                                // kein Fehler wenn nicht vorhanden
+  Files.copy(quelle, ziel)
+  Files.copy(quelle, ziel, StandardCopyOption.REPLACE_EXISTING)
+  Files.move(quelle, ziel)
+
+  // Metadaten:
+  Files.size(p)                                          // Größe in Bytes
+  Files.getLastModifiedTime(p)                           // FileTime
+  Files.readAttributes(p, BasicFileAttributes.class)    // alle Attribute
+
+  // Verzeichnis-Inhalt:
+  try (Stream<Path> stream = Files.list(p)) {            // direkter Inhalt
+      stream.forEach(System.out::println);
+  }
+
+  try (Stream<Path> stream = Files.walk(p)) {            // rekursiv
+      stream.filter(Files::isRegularFile).forEach(System.out::println);
+  }
+
+  DirectoryStream:
+  try (DirectoryStream<Path> dir = Files.newDirectoryStream(p, "*.txt")) {
+      for (Path file : dir) System.out.println(file);
+  }
+
+Temporäre Dateien und Verzeichnisse:
+  Path tmpDatei = Files.createTempFile("prefix", ".txt");
+  Path tmpDir = Files.createTempDirectory("tempdir");
+
+------------------------------------------------------------------------
+15.2  Streams und Reader/Writer (alte java.io API)
+------------------------------------------------------------------------
+
+Auch wenn NIO.2 bevorzugt wird, musst du die alte API kennen — viele
+Bibliotheken und APIs benutzen sie noch.
+
+Byte-Streams (für Binärdaten):
+  InputStream / OutputStream — abstrakte Basisklassen
+
+  try (FileInputStream fis = new FileInputStream("bild.jpg");
+       FileOutputStream fos = new FileOutputStream("kopie.jpg")) {
+      byte[] puffer = new byte[8192];
+      int gelesen;
+      while ((gelesen = fis.read(puffer)) != -1) {
+          fos.write(puffer, 0, gelesen);
+      }
+  }
+
+Gepufferte Streams (deutlich schneller!):
+  try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream("datei"));
+       BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream("ziel"))) {
+      // Pufferung: statt jeden Byte einzeln zu schreiben, wird in Blöcken geschrieben
+  }
+
+Character-Streams (für Text):
+  Reader / Writer — abstrakte Basisklassen
+
+  try (FileReader fr = new FileReader("text.txt", StandardCharsets.UTF_8);
+       BufferedReader br = new BufferedReader(fr)) {
+      String zeile;
+      while ((zeile = br.readLine()) != null) {
+          System.out.println(zeile);
+      }
+  }
+
+  try (FileWriter fw = new FileWriter("ausgabe.txt", StandardCharsets.UTF_8);
+       BufferedWriter bw = new BufferedWriter(fw);
+       PrintWriter pw = new PrintWriter(bw)) {
+      pw.println("Zeile 1");
+      pw.printf("Formatiert: %d%n", 42);
+  }
+
+PrintWriter — komfortabel für Text-Ausgabe:
+  try (PrintWriter pw = new PrintWriter(
+          new BufferedWriter(
+              new FileWriter("log.txt", true)))) {  // true = append
+      pw.println("Log-Eintrag: " + LocalDateTime.now());
+  }
+
+Serialisierung (Objekte speichern):
+  class Konfiguration implements Serializable {
+      private static final long serialVersionUID = 1L;  // für Kompatibilität
+      String host = "localhost";
+      int port = 8080;
+  }
+
+  // Speichern:
+  try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("config.ser"))) {
+      oos.writeObject(new Konfiguration());
+  }
+
+  // Laden:
+  try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("config.ser"))) {
+      Konfiguration config = (Konfiguration) ois.readObject();
+  }
+
+  transient Felder werden NICHT serialisiert:
+  transient String passwort;  // wird nicht in die Datei geschrieben
+
+------------------------------------------------------------------------
+15.3  Properties-Dateien
+------------------------------------------------------------------------
+
+  Properties props = new Properties();
+
+  // Aus Datei laden:
+  try (InputStream is = new FileInputStream("config.properties")) {
+      props.load(is);
+  }
+
+  // Wert lesen:
+  String host = props.getProperty("host");
+  String port = props.getProperty("port", "8080");  // mit Standardwert
+
+  // Wert setzen und speichern:
+  props.setProperty("host", "example.com");
+  try (OutputStream os = new FileOutputStream("config.properties")) {
+      props.store(os, "Anwendungs-Konfiguration");
+  }
+
+  // config.properties-Format:
+  // host=localhost
+  // port=8080
+  // name=Meine App
+
+------------------------------------------------------------------------
+15.4  Zeichensätze und Encoding
+------------------------------------------------------------------------
+
+StandardCharsets:
+  StandardCharsets.UTF_8       → empfohlen für alles!
+  StandardCharsets.ISO_8859_1  → lateinisches Alphabet (altes Windows)
+  StandardCharsets.US_ASCII    → nur ASCII
+
+  Immer Charset explizit angeben:
+  Files.readString(p, StandardCharsets.UTF_8)     // explizit, sicher
+  Files.readString(p)                             // nutzt System-Default — gefährlich!
+
+  // Bytes zu String:
+  String s = new String(bytes, StandardCharsets.UTF_8);
+  // String zu Bytes:
+  byte[] b = s.getBytes(StandardCharsets.UTF_8);
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+Schreibe DateiVerwalter.java:
+- Schreibe 100 Zeilen in eine Datei (nummeriert: "Zeile 1: ...")
+- Lese die Datei und zeige nur Zeilen die eine bestimmte Zahl enthalten
+- Kopiere die Datei in eine neue mit "_backup" im Namen
+- Erstelle ein Verzeichnis "auswertung" und schreibe eine Statistik-Datei hinein
+  (Anzahl Zeilen, längste Zeile, Datei-Größe)
+- Lösche die Backup-Datei wieder
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 16: Lambdas und Method References
+================================================================================
+
+------------------------------------------------------------------------
+16.1  Was sind Lambdas?
+------------------------------------------------------------------------
+
+Ein Lambda-Ausdruck ist eine anonyme Funktion — Code als Wert.
+Überall wo ein Functional Interface erwartet wird, kannst du ein Lambda benutzen.
+
+  // Ohne Lambda:
+  Comparator<String> komp = new Comparator<String>() {
+      @Override
+      public int compare(String a, String b) {
+          return a.compareTo(b);
+      }
+  };
+
+  // Mit Lambda:
+  Comparator<String> komp = (a, b) -> a.compareTo(b);
+
+Lambda-Syntax:
+  () -> ausdruck                  // kein Parameter, direkter Ausdruck
+  x -> ausdruck                   // ein Parameter (keine Klammern nötig)
+  (x) -> ausdruck                 // ein Parameter (Klammern optional)
+  (x, y) -> ausdruck              // zwei Parameter
+  (int x, int y) -> ausdruck      // mit Typangaben (optional wenn inferierbar)
+  (x, y) -> { return x + y; }    // Block-Lambda — braucht return!
+  x -> {                          // Block-Lambda mit mehreren Anweisungen
+      System.out.println(x);
+      return x * 2;
+  }
+
+Typen werden meist automatisch erkannt (Type Inference):
+  Runnable r = () -> System.out.println("Hallo");
+  // Java schließt: () -> void, passt zu Runnable.run()
+
+  Comparator<String> c = (a, b) -> a.length() - b.length();
+  // Java schließt: (String, String) -> int, passt zu Comparator.compare()
+
+------------------------------------------------------------------------
+16.2  Lambdas als Werte
+------------------------------------------------------------------------
+
+Lambdas können in Variablen gespeichert, als Parameter und Rückgabewerte
+benutzt werden:
+
+  Predicate<String> kürzerAls5 = s -> s.length() < 5;
+  kürzerAls5.test("Hi")     → true
+  kürzerAls5.test("Welt!")  → false
+
+  Function<Integer, Integer> verdoppeln = n -> n * 2;
+  verdoppeln.apply(5)     → 10
+
+  Consumer<String> ausgabe = System.out::println;   // Method Reference!
+  ausgabe.accept("Hallo");  → Hallo
+
+  Supplier<String> netter = () -> "Guten " + (LocalTime.now().getHour() < 12 ? "Morgen" : "Tag");
+  netter.get()   → je nach Uhrzeit verschiedene Begrüßung
+
+Lambdas als Parameter:
+  static void führeAus(Runnable aktion) {
+      System.out.println("Vor der Aktion");
+      aktion.run();
+      System.out.println("Nach der Aktion");
+  }
+
+  führeAus(() -> System.out.println("Die Aktion!"));
+
+  static <T> List<T> filtern(List<T> liste, Predicate<T> bedingung) {
+      List<T> ergebnis = new ArrayList<>();
+      for (T elem : liste) {
+          if (bedingung.test(elem)) ergebnis.add(elem);
+      }
+      return ergebnis;
+  }
+
+  List<String> lang = filtern(namen, s -> s.length() > 3);
+  List<Integer> positiv = filtern(zahlen, n -> n > 0);
+
+------------------------------------------------------------------------
+16.3  Closures — auf äußere Variablen zugreifen
+------------------------------------------------------------------------
+
+Lambdas können auf äußere Variablen zugreifen — aber NUR wenn diese
+"effectively final" sind (nicht verändert nach Deklaration):
+
+  int grenze = 10;
+  Predicate<Integer> kleiner = n -> n < grenze;  // OK! grenze wird nicht verändert
+
+  int zähler = 0;
+  Runnable r = () -> zähler++;   // COMPILE-FEHLER: zähler wird verändert!
+
+  // Workaround mit Array:
+  int[] zähler = {0};
+  Runnable r = () -> zähler[0]++;   // Arrays sind Objekte — das Feld ändert sich,
+                                     // nicht die Referenz auf das Array → OK
+
+  // oder AtomicInteger:
+  AtomicInteger zähler = new AtomicInteger(0);
+  Runnable r = () -> zähler.incrementAndGet();
+
+------------------------------------------------------------------------
+16.4  Method References — kurze Form für Lambdas
+------------------------------------------------------------------------
+
+Wenn ein Lambda nur eine bestehende Methode aufruft, kann man es kürzen:
+
+  1. Statische Methode:
+     λ: x -> Integer.parseInt(x)
+     ↓
+     Integer::parseInt
+
+  2. Instanzmethode auf Instanz:
+     λ: () -> System.out.println("...")
+     ↓ (wenn System.out eine Referenz ist)
+     System.out::println
+
+  3. Instanzmethode auf Parameter (erster Parameter ist das Objekt):
+     λ: (String s) -> s.toUpperCase()
+     ↓
+     String::toUpperCase
+
+     λ: (String s, String t) -> s.contains(t)
+     ↓
+     String::contains
+
+  4. Konstruktor:
+     λ: () -> new ArrayList<>()
+     ↓
+     ArrayList::new
+
+     λ: s -> new StringBuilder(s)
+     ↓
+     StringBuilder::new
+
+Beispiele in der Praxis:
+  List<String> namen = Arrays.asList("anna", "ben", "clara");
+  namen.forEach(System.out::println);              // 3: Instanz auf Instanz
+
+  namen.stream()
+      .map(String::toUpperCase)                    // 3: Instanzmethode auf Param.
+      .sorted(String::compareTo)                   // 3: Instanzmethode auf Param.
+      .collect(Collectors.toList());
+
+  List<String> parsed = List.of("1", "2", "3")
+      .stream()
+      .map(Integer::parseInt)                      // 1: Statische Methode
+      .collect(Collectors.toList());
+
+  Supplier<List<String>> factory = ArrayList::new; // 4: Konstruktor
+  List<String> l = factory.get();
+
+------------------------------------------------------------------------
+16.5  Functional Interface — Komposition
+------------------------------------------------------------------------
+
+Predicate:
+  Predicate<String> lang = s -> s.length() > 5;
+  Predicate<String> groß = s -> s.equals(s.toUpperCase());
+  
+  lang.and(groß).test("HALLO WELT")   → true   (beide)
+  lang.or(groß).test("HI")            → false  (keines)
+  lang.negate().test("Hi")            → true   (nicht-lang)
+  Predicate.not(lang).test("Hi")      → true   (statisch)
+
+Function:
+  Function<Integer, Integer> x2 = n -> n * 2;
+  Function<Integer, Integer> plus3 = n -> n + 3;
+
+  x2.andThen(plus3).apply(5)   → 13  (erst *2=10, dann +3=13)
+  x2.compose(plus3).apply(5)   → 16  (erst +3=8, dann *2=16)
+
+  Function.identity()   → x -> x (gibt das Argument zurück)
+
+Consumer:
+  Consumer<String> drucke = System.out::println;
+  Consumer<String> speichere = list::add;
+  drucke.andThen(speichere).accept("Hallo");  // erst drucken, dann speichern
+
+Comparator-Komposition:
+  Comparator<Person> c = Comparator
+      .comparing(Person::getNachname)
+      .thenComparing(Person::getVorname)
+      .thenComparingInt(Person::getAlter)
+      .reversed();
+
+--------------------------------------------------------------------------------
+ÜBUNG 16:
+Schreibe LambdaÜbungen.java:
+- Implementiere eine Methode berechne(int a, int b, BinaryOperator<Integer> op) → int
+  und rufe sie mit +, -, *, / auf (als Lambdas und als Method References)
+- Erstelle eine List<String> mit 10 Namen und filtere/transformiere sie mit:
+  - filter(): nur Namen mit > 4 Zeichen
+  - Capitalize: erster Buchstabe groß (als eigene statische Methode + Method Reference)
+  - Sortierung nach Länge dann alphabetisch
+- Schreibe eine Methode <T> T retry(Supplier<T> versuch, int maxVersuche)
+  die bei Exception bis zu maxVersuche mal wiederholt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 17: Streams API
+================================================================================
+
+------------------------------------------------------------------------
+17.1  Was sind Streams?
+------------------------------------------------------------------------
+
+Streams sind Pipelines für Datenverarbeitung. Kein Speicher, keine
+Schleife — du beschreibst WAS du willst, nicht WIE:
+
+  // Imperativ (wie):
+  List<String> ergebnis = new ArrayList<>();
+  for (String name : namen) {
+      if (name.length() > 3) {
+          ergebnis.add(name.toUpperCase());
+      }
+  }
+  Collections.sort(ergebnis);
+
+  // Deklarativ mit Streams (was):
+  List<String> ergebnis = namen.stream()
+      .filter(name -> name.length() > 3)
+      .map(String::toUpperCase)
+      .sorted()
+      .collect(Collectors.toList());
+
+Streams sind:
+  - Einmalig: Ein Stream kann nur einmal "konsumiert" werden
+  - Lazy: Zwischenoperationen werden nicht sofort ausgeführt
+  - Nicht speichernd: keine eigene Datenspeicherung
+
+------------------------------------------------------------------------
+17.2  Streams erstellen
+------------------------------------------------------------------------
+
+  // Aus Collection:
+  list.stream()
+  list.parallelStream()       // parallele Verarbeitung
+
+  // Aus Array:
+  Arrays.stream(arr)
+  Stream.of(1, 2, 3)
+
+  // Leer, einzeln, mehrere:
+  Stream.empty()
+  Stream.of("einzel")
+
+  // Builder:
+  Stream.Builder<String> b = Stream.builder();
+  b.add("A"); b.add("B"); b.add("C");
+  Stream<String> s = b.build();
+
+  // Unendliche Streams:
+  Stream.iterate(0, n -> n + 1)            // 0, 1, 2, 3, ...
+  Stream.iterate(0, n -> n < 100, n -> n + 1) // mit Abbruchbedingung (Java 9)
+  Stream.generate(Math::random)            // Zufallszahlen
+
+  // Bereichs-Streams für int, long, double:
+  IntStream.range(0, 10)        // 0 bis 9
+  IntStream.rangeClosed(1, 10)  // 1 bis 10
+  IntStream.of(1, 2, 3)
+  DoubleStream.of(1.5, 2.5)
+
+  // Aus String:
+  "Hallo".chars()               // IntStream der Unicode-Codepoints
+
+  // Aus Datei:
+  Files.lines(path)             // Stream<String>
+
+------------------------------------------------------------------------
+17.3  Intermediate Operations (Zwischenoperationen — lazy)
+------------------------------------------------------------------------
+
+Diese geben immer einen Stream zurück und werden erst beim Terminal
+ausgeführt:
+
+  filter(Predicate)          → behalte nur Elemente die true ergeben
+  map(Function)              → transformiere jedes Element
+  mapToInt(ToIntFunction)    → zu IntStream
+  mapToLong(ToLongFunction)
+  mapToDouble(ToDoubleFunction)
+  flatMap(Function<T,Stream<R>>) → jedes Element → Stream, dann flatten
+  distinct()                 → Duplikate entfernen (nutzt equals/hashCode)
+  sorted()                   → natürliche Ordnung
+  sorted(Comparator)         → eigene Ordnung
+  peek(Consumer)             → Seiteneffekt OHNE Transformation (für Debugging)
+  limit(long)                → max. n Elemente
+  skip(long)                 → erste n Elemente überspringen
+  takeWhile(Predicate)       → nimmt solange Bedingung true (Java 9)
+  dropWhile(Predicate)       → überspringt solange Bedingung true (Java 9)
+  mapMulti(BiConsumer)       → flexibles Mapping, ersetzt manche flatMap (Java 16)
+
+flatMap — das "Ent-Schachteln":
+  List<List<String>> geschachtelt = List.of(
+      List.of("A", "B"), List.of("C", "D"), List.of("E")
+  );
+
+  List<String> flach = geschachtelt.stream()
+      .flatMap(Collection::stream)   // jede innere Liste wird zum Stream
+      .collect(Collectors.toList()); // [A, B, C, D, E]
+
+  // Wörter aus Text extrahieren:
+  List<String> wörter = texte.stream()
+      .flatMap(text -> Arrays.stream(text.split("\\s+")))
+      .collect(Collectors.toList());
+
+------------------------------------------------------------------------
+17.4  Terminal Operations (Abschlussoperationen — ausführend)
+------------------------------------------------------------------------
+
+  collect(Collector)         → in Collection sammeln (häufigste Terminal-Op)
+  forEach(Consumer)          → für jeden ausführen
+  forEachOrdered(Consumer)   → für jeden in Ordnung (wichtig bei parallel)
+  count()                    → Anzahl
+  findFirst()                → Optional<T> — erstes Element
+  findAny()                  → Optional<T> — irgendeines (schneller bei parallel)
+  anyMatch(Predicate)        → true wenn mindestens eines true
+  allMatch(Predicate)        → true wenn alle true
+  noneMatch(Predicate)       → true wenn keines true
+  min(Comparator)            → Optional<T> Minimum
+  max(Comparator)            → Optional<T> Maximum
+  toList()                   → unmodifiable List (Java 16!)
+  toArray()                  → Object[]
+  toArray(IntFunction)       → T[] (z.B. String[]::new)
+  reduce(BinaryOperator)     → Optional<T>
+  reduce(T, BinaryOperator)  → T (mit Startwert)
+  reduce(U, BiFunction, BinaryOperator) → U (komplex)
+
+collect mit Collectors:
+  .collect(Collectors.toList())                // mutable List
+  .collect(Collectors.toUnmodifiableList())    // unveränderliche List
+  .collect(Collectors.toSet())                 // HashSet
+  .collect(Collectors.toCollection(TreeSet::new)) // benutzerdefinierte Collection
+  .collect(Collectors.joining(", "))           // Strings verbinden
+  .collect(Collectors.joining(", ", "[", "]")) // mit Präfix/Suffix
+  .collect(Collectors.counting())              // zählen → Long
+  .collect(Collectors.summingInt(Person::getAlter)) // summieren
+  .collect(Collectors.averagingInt(Person::getAlter)) // Durchschnitt → Double
+  .collect(Collectors.summarizingInt(Person::getAlter)) // Statistik-Objekt
+  .collect(Collectors.groupingBy(Person::getAbteilung)) // Map<Abteilung, List<Person>>
+  .collect(Collectors.groupingBy(Person::getAbteilung, Collectors.counting())) // Map<Abt, Long>
+  .collect(Collectors.partitioningBy(p -> p.getAlter() >= 18)) // Map<Boolean, List>
+  .collect(Collectors.toMap(Person::getId, p -> p))            // Map<ID, Person>
+  .collect(Collectors.toMap(Person::getId, p -> p, (a, b) -> a)) // mit Merge bei Konflikt
+
+reduce — manuell falten:
+  Optional<Integer> summe = Stream.of(1,2,3,4).reduce((a, b) -> a + b);
+  // oder:
+  int summe = Stream.of(1,2,3,4).reduce(0, Integer::sum);
+
+------------------------------------------------------------------------
+17.5  Spezielle Streams für primitive Typen
+------------------------------------------------------------------------
+
+IntStream, LongStream, DoubleStream — deutlich effizienter als Stream<Integer>
+weil kein Autoboxing:
+
+  IntStream.range(1, 6).sum()          → 15
+  IntStream.range(1, 6).average()      → OptionalDouble
+  IntStream.range(1, 6).min()          → OptionalInt
+  IntStream.range(1, 6).max()          → OptionalInt
+  IntStream.range(1, 6).count()        → 5
+  IntStream.range(1, 6).summaryStatistics() → IntSummaryStatistics
+
+  // Person::getAlter gibt int zurück → mapToInt
+  double durchschnitt = personen.stream()
+      .mapToInt(Person::getAlter)
+      .average()
+      .orElse(0);
+
+  // Primitive zu Objekten:
+  IntStream.of(1, 2, 3).boxed()       // IntStream → Stream<Integer>
+  Stream<Integer>.mapToInt(...)        // Stream<Integer> → IntStream
+
+------------------------------------------------------------------------
+17.6  Parallele Streams
+------------------------------------------------------------------------
+
+  list.parallelStream()                          // direkt parallel
+  list.stream().parallel()                       // erst dann parallel
+  intStream.parallel()
+
+  // Parallelisierung lohnt sich bei:
+  // - Großen Datensätzen (> 10.000 Elemente)
+  // - CPU-intensiven Operationen
+  // - Unabhängigen Elementen (keine Shared State!)
+
+  // VORSICHT bei:
+  // - Reihenfolge-sensitiven Operationen
+  // - I/O-gebundenen Operationen
+  // - Shared mutable state (führt zu Bugs!)
+
+  // forEachOrdered garantiert Reihenfolge auch bei parallel:
+  list.parallelStream().forEachOrdered(System.out::println);
+
+------------------------------------------------------------------------
+17.7  Stream-Beispiele
+------------------------------------------------------------------------
+
+  // Top 3 häufigste Wörter in einem Text:
+  Map<String, Long> häufigkeiten = Arrays.stream(text.split("\\s+"))
+      .map(String::toLowerCase)
+      .collect(Collectors.groupingBy(w -> w, Collectors.counting()));
+
+  häufigkeiten.entrySet().stream()
+      .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+      .limit(3)
+      .forEach(e -> System.out.println(e.getKey() + ": " + e.getValue()));
+
+  // Primzahlen bis 100:
+  List<Integer> primzahlen = IntStream.rangeClosed(2, 100)
+      .filter(n -> IntStream.rangeClosed(2, (int)Math.sqrt(n)).allMatch(d -> n % d != 0))
+      .boxed()
+      .collect(Collectors.toList());
+
+  // Personen nach Abteilung gruppieren und nach Alter sortieren:
+  Map<String, List<Person>> nachAbteilung = personen.stream()
+      .sorted(Comparator.comparingInt(Person::getAlter))
+      .collect(Collectors.groupingBy(Person::getAbteilung,
+          LinkedHashMap::new,
+          Collectors.toList()));
+
+  // Alle einzigartigen Zeichen in einem String:
+  Set<Character> zeichen = "Hallo Welt".chars()
+      .mapToObj(c -> (char) c)
+      .collect(Collectors.toCollection(LinkedHashSet::new));
+
+--------------------------------------------------------------------------------
+ÜBUNG 17:
+Erstelle StreamAnalyse.java mit einer Liste von 100 Personen (Person-Klasse mit
+name, alter, abteilung, gehalt):
+- Alle Personen über 30 in der Abteilung "Entwicklung" nach Gehalt absteigend
+- Durchschnittsgehalt pro Abteilung
+- Person mit dem höchsten Gehalt
+- Die 3 jüngsten Personen
+- Alle verschiedenen Abteilungen alphabetisch
+- Gesamtgehalt-Summe aller Entwickler
+- Prüfe ob jemand unter 18 ist
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: Optional — null-sichere Programmierung
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Das null-Problem
+------------------------------------------------------------------------
+
+null ist Tony Hoare's "Billion Dollar Mistake" — er hat es erfunden und
+es später bereut. NullPointerException ist die häufigste Java-Exception.
+
+  String name = getName();   // kann null zurückgeben
+  System.out.println(name.length());  // NPE wenn name == null!
+
+  // Defensiv (altmodisch):
+  if (name != null && name.length() > 0) {
+      System.out.println(name.length());
+  }
+
+  // null zurückgeben ist schlechter Stil. Besser: Optional.
+
+------------------------------------------------------------------------
+18.2  Optional erstellen und benutzen
+------------------------------------------------------------------------
+
+  Optional<String> mitWert  = Optional.of("Hallo");   // KEIN null erlaubt
+  Optional<String> ohneWert = Optional.empty();
+  Optional<String> vielleicht = Optional.ofNullable(name); // null → empty
+
+  // Wert vorhanden?
+  mitWert.isPresent()    → true
+  ohneWert.isPresent()   → false
+  mitWert.isEmpty()      → false   (Java 11)
+
+  // Wert holen:
+  mitWert.get()          → "Hallo"  (EXCEPTION wenn leer!)
+  ohneWert.get()         → NoSuchElementException
+
+  // Sichere Alternativen:
+  ohneWert.orElse("Standard")          → "Standard"
+  ohneWert.orElseGet(() -> berechne()) → lazy: nur berechnen wenn leer
+  ohneWert.orElseThrow()               → NoSuchElementException wenn leer
+  ohneWert.orElseThrow(() -> new KeinWertException("..."))
+
+  // Wenn vorhanden:
+  mitWert.ifPresent(s -> System.out.println(s));       // ausführen wenn vorhanden
+  mitWert.ifPresentOrElse(
+      s -> System.out.println(s),
+      () -> System.out.println("Nichts")
+  );
+
+------------------------------------------------------------------------
+18.3  Optional in Pipelines
+------------------------------------------------------------------------
+
+Optional hat map, flatMap, filter — genauso wie Stream:
+
+  Optional<String> ergebnis = Optional.ofNullable(name)
+      .filter(s -> !s.isBlank())
+      .map(String::trim)
+      .map(String::toUpperCase);
+
+  // flatMap wenn die Funktion selbst Optional zurückgibt:
+  Optional<String> email = Optional.of(person)
+      .map(Person::getAdresse)         // gibt Optional<Adresse>? → flatMap!
+      .flatMap(Adresse::getEmail)      // gibt Optional<String>
+      .map(String::toLowerCase);
+
+  // or() — Alternative Optional (Java 9):
+  Optional<String> ergebnis = cache.get(schlüssel)
+      .or(() -> datenbank.laden(schlüssel));
+  // Wenn cache leer, versuche Datenbank
+
+  // stream() — Optional → Stream (Java 9):
+  List<String> werte = optionals.stream()
+      .flatMap(Optional::stream)       // leere Optionals werden entfernt
+      .collect(Collectors.toList());
+
+------------------------------------------------------------------------
+18.4  Wann Optional benutzen
+------------------------------------------------------------------------
+
+  Benutze Optional ALS RÜCKGABETYP wenn ein Wert fehlen kann:
+    Optional<Person> findByEmail(String email) { ... }
+
+  Benutze Optional NICHT:
+  - Als Felder in Klassen (schlecht für Serialisierung)
+  - Als Methodenparameter (benutze stattdessen Overloading oder null-check)
+  - Für Collections (benutze leere Collection statt Optional<Collection>)
+  - Für primitiv (benutze OptionalInt, OptionalLong, OptionalDouble)
+
+  OptionalInt, OptionalLong, OptionalDouble:
+    OptionalInt oi = OptionalInt.of(42);
+    oi.getAsInt()    → 42
+    oi.isPresent()   → true
+    IntStream.range(1, 10).filter(n -> n > 8).findFirst() → OptionalInt
+
+--------------------------------------------------------------------------------
+ÜBUNG 18:
+Implementiere eine Klasse PersonenSuche mit:
+- Map<String, Person> als Datenspeicher (Name → Person)
+- Methode Optional<Person> sucheNachName(String name)
+- Methode Optional<String> sucheEmailNachName(String name)
+  (gibt nur Email wenn Person existiert UND Email vorhanden ist)
+- Methode String grüssePerson(String name)
+  (gibt "Hallo, [Name]!" oder "Person nicht gefunden" zurück)
+- Alle Methoden null-sicher implementiert mit Optional
+--------------------------------------------------------------------------------
+
+================================================================================
+ENDE TEIL 3
+================================================================================
+
+Weiter in Teil 4:
+  Modul 19: Threads und Nebenläufigkeit
+  Modul 20: Netzwerk und HTTP
+  Modul 21: Reflection und Annotations
+  Modul 22: Java Module System (JPMS)
+  Modul 23: Testing mit JUnit 5
+  Modul 24: Build-Tools (Maven/Gradle), Packaging
+  Modul 25: Abschlussprojekt — Kontoverwaltungs-Anwendung
+
+================================================================================

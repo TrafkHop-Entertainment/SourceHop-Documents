@@ -1,0 +1,1898 @@
+================================================================================
+SQL KOMPLETTKURS
+================================================================================
+
+Dieser Kurs setzt keinerlei Vorkenntnisse voraus. Du solltest wissen,
+was eine Tabelle ist (wie in Excel), und dass es so etwas wie Datenbanken
+gibt. Alles andere erklären wir von Grund auf.
+
+SQL steht für Structured Query Language — eine Abfragesprache, die
+praktisch jede relationale Datenbank spricht. Was du hier lernst,
+funktioniert (mit kleinen Unterschieden) in MySQL, PostgreSQL, SQLite,
+MariaDB, SQL Server und Oracle.
+
+================================================================================
+MODUL 1: Was ist eine relationale Datenbank?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Das Grundprinzip
+------------------------------------------------------------------------
+
+Eine relationale Datenbank speichert Daten in Tabellen — ähnlich wie
+Arbeitsblätter in Excel, nur strukturierter, skalierbarer, und mit
+Beziehungen zwischen den Tabellen.
+
+Jede Tabelle hat:
+  - Spalten (Columns / Felder): definieren WAS gespeichert wird
+  - Zeilen (Rows / Datensätze): enthalten die tatsächlichen Daten
+
+Beispiel Tabelle "nutzer":
+
+  id  | name          | email                 | alter
+  ----+---------------+-----------------------+------
+  1   | Max Mustermann| max@example.com       | 28
+  2   | Lisa Schmidt  | lisa@example.com      | 34
+  3   | Tom Berger    | tom@example.com       | 22
+
+Jede Zeile ist ein Datensatz (= ein Nutzer).
+Jede Spalte ist ein Attribut (= eine Eigenschaft).
+
+Warum nicht einfach alles in eine Tabelle packen?
+  → Redundanz. Wenn derselbe Nutzer 50 Bestellungen hat, würdest du
+    seinen Namen 50 Mal speichern. Ändert er seinen Namen: 50 Updates.
+    Lösung: Normalisierung — Daten aufteilen und Beziehungen herstellen.
+
+------------------------------------------------------------------------
+1.2  Schlüssel und Beziehungen
+------------------------------------------------------------------------
+
+PRIMÄRSCHLÜSSEL (Primary Key / PK):
+  Eindeutiger Identifier für jede Zeile.
+  Kein Wert darf doppelt vorkommen, kein Wert darf NULL sein.
+
+  Beispiel: id in der nutzer-Tabelle.
+
+FREMDSCHLÜSSEL (Foreign Key / FK):
+  Verweist auf den Primärschlüssel einer anderen Tabelle.
+  Stellt eine Beziehung zwischen zwei Tabellen her.
+
+  Beispiel: bestellungen-Tabelle hat eine Spalte nutzer_id, die auf
+  nutzer.id verweist.
+
+  bestellungen:
+    id | nutzer_id | produkt        | preis
+    ---+-----------+----------------+------
+    1  | 1         | PHP-Buch       | 29.99
+    2  | 1         | SQL-Kurs       | 19.99
+    3  | 2         | Linux-Guide    | 24.99
+
+  Nutzer 1 (Max) hat zwei Bestellungen. Seine Daten stehen nur EINMAL
+  in der nutzer-Tabelle, nicht doppelt in bestellungen.
+
+BEZIEHUNGSTYPEN:
+  1:1    → Eine Zeile in A gehört zu genau einer Zeile in B
+           (Nutzer ↔ Nutzerprofil)
+
+  1:N    → Eine Zeile in A gehört zu vielen Zeilen in B
+           (Nutzer → Bestellungen) — der häufigste Typ
+
+  N:M    → Viele Zeilen in A gehören zu vielen Zeilen in B
+           (Produkte ↔ Tags) — braucht eine Zwischentabelle
+
+------------------------------------------------------------------------
+1.3  Datenbankumgebung einrichten
+------------------------------------------------------------------------
+
+OPTION A: SQLite (kein Server, eine Datei, ideal zum Lernen)
+  → Einfach eine .db Datei — läuft überall
+  → Im Terminal: sqlite3 meine_db.sqlite
+  → GUI: DB Browser for SQLite (https://sqlitebrowser.org)
+
+OPTION B: MySQL / MariaDB (populärster Webserver-Stack)
+  → Mit XAMPP: kommt automatisch dabei
+  → GUI: phpMyAdmin oder MySQL Workbench
+  → Terminal: mysql -u root -p
+
+OPTION C: PostgreSQL (für anspruchsvolle Projekte)
+  → GUI: pgAdmin oder DBeaver
+  → Terminal: psql -U postgres
+
+OPTION D: Online (ohne Installation)
+  → https://sqlfiddle.com
+  → https://www.db-fiddle.com
+
+Für diesen Kurs ist OPTION A (SQLite) am einfachsten.
+Alle Beispiele laufen in SQLite, MySQL und PostgreSQL — Ausnahmen
+werden explizit genannt.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Installiere einen SQL-Client deiner Wahl. Erstelle eine neue Datenbank
+(oder .sqlite Datei). Öffne den SQL-Editor und tippe: SELECT 1 + 1;
+Das Ergebnis sollte 2 sein. Wenn das klappt, bist du startklar.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Tabellen erstellen — DDL
+================================================================================
+
+DDL = Data Definition Language: Befehle die Datenbankstrukturen erstellen,
+verändern oder löschen.
+
+------------------------------------------------------------------------
+2.1  CREATE TABLE
+------------------------------------------------------------------------
+
+  CREATE TABLE nutzer (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      name     VARCHAR(100) NOT NULL,
+      email    VARCHAR(255) NOT NULL UNIQUE,
+      alter    INTEGER,
+      erstellt DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+Zeile für Zeile:
+
+  CREATE TABLE nutzer (...)
+    Erstellt eine neue Tabelle mit dem Namen "nutzer".
+    Schlägt fehl wenn die Tabelle schon existiert.
+
+  id INTEGER PRIMARY KEY AUTOINCREMENT
+    id: Spaltenname
+    INTEGER: Datentyp (ganze Zahl)
+    PRIMARY KEY: eindeutiger Identifier der Tabelle
+    AUTOINCREMENT: Wert wird automatisch hochgezählt (1, 2, 3, ...)
+    In MySQL: AUTO_INCREMENT (ohne E am Ende!)
+
+  name VARCHAR(100) NOT NULL
+    name: Spaltenname
+    VARCHAR(100): Text bis zu 100 Zeichen
+    NOT NULL: Dieser Wert darf nicht leer sein
+
+  email VARCHAR(255) NOT NULL UNIQUE
+    UNIQUE: Kein doppelter Wert erlaubt — jede E-Mail einmalig
+
+  alter INTEGER
+    Ohne NOT NULL → Wert ist optional, kann NULL sein
+
+  erstellt DATETIME DEFAULT CURRENT_TIMESTAMP
+    DATETIME: Datum und Uhrzeit
+    DEFAULT CURRENT_TIMESTAMP: wenn kein Wert angegeben wird,
+    wird die aktuelle Zeit eingesetzt
+
+Tabelle nur erstellen wenn sie nicht existiert:
+  CREATE TABLE IF NOT EXISTS nutzer (...);
+
+------------------------------------------------------------------------
+2.2  Datentypen
+------------------------------------------------------------------------
+
+TEXT:
+  CHAR(n)         → genau n Zeichen (Leerzeichen-aufgefüllt), für feste Längen
+  VARCHAR(n)      → bis zu n Zeichen, ideal für Namen, E-Mails, URLs
+  TEXT            → unbegrenzt langer Text (Beschreibungen, Artikel-Inhalt)
+  TINYTEXT        → bis 255 Zeichen (MySQL)
+  MEDIUMTEXT      → bis 16 MB (MySQL)
+  LONGTEXT        → bis 4 GB (MySQL)
+
+ZAHLEN:
+  TINYINT         → -128 bis 127 (oder 0 bis 255 UNSIGNED)
+  SMALLINT        → -32.768 bis 32.767
+  INTEGER / INT   → ca. -2 Milliarden bis +2 Milliarden
+  BIGINT          → sehr große Zahlen
+  DECIMAL(m, d)   → exakte Dezimalzahl: m Gesamtstellen, d Nachkommastellen
+                     ideal für Geldbeträge! DECIMAL(10, 2) → bis 99999999.99
+  FLOAT           → Fließkommazahl (ungenau, nicht für Geld!)
+  DOUBLE          → doppelt genauer Float (immer noch ungenau)
+
+DATUM/ZEIT:
+  DATE            → nur Datum: 2026-06-16
+  TIME            → nur Uhrzeit: 14:30:00
+  DATETIME        → Datum + Uhrzeit: 2026-06-16 14:30:00
+  TIMESTAMP       → wie DATETIME, aber UTC, automatische Updates
+  YEAR            → nur Jahreszahl (MySQL)
+
+BOOLEAN:
+  BOOLEAN / BOOL  → true/false (in SQLite: 1/0 als INTEGER)
+  TINYINT(1)      → in MySQL oft als Boolean verwendet (1 = true, 0 = false)
+
+BINÄR:
+  BLOB            → Binary Large Object (Bilder, Dateien) — meist besser als Pfad speichern!
+
+BESONDERES:
+  JSON            → JSON-Daten (MySQL 5.7.8+, PostgreSQL, SQLite 3.38+)
+  UUID / CHAR(36) → für UUIDs als Primärschlüssel
+
+SQLite-Besonderheit:
+  SQLite ist dynamisch getypt. Es gibt nur 5 interne Typen:
+    NULL, INTEGER, REAL, TEXT, BLOB
+  VARCHAR(100) wird als TEXT gespeichert — die Zahl wird ignoriert.
+  Das ist okay — SQLite konvertiert sinnvoll.
+
+------------------------------------------------------------------------
+2.3  Constraints — Einschränkungen
+------------------------------------------------------------------------
+
+  PRIMARY KEY      → eindeutiger Identifier, nicht NULL
+  NOT NULL         → Wert muss angegeben werden
+  UNIQUE           → kein doppelter Wert in der Spalte
+  DEFAULT wert     → Standardwert wenn keiner angegeben wird
+  CHECK(bedingung) → Wert muss Bedingung erfüllen
+  FOREIGN KEY      → Verweis auf andere Tabelle
+
+  CHECK-Beispiel:
+    alter INTEGER CHECK(alter >= 0 AND alter <= 150)
+    preis DECIMAL(10,2) CHECK(preis >= 0)
+
+  FOREIGN KEY vollständig:
+    nutzer_id INTEGER NOT NULL,
+    FOREIGN KEY (nutzer_id) REFERENCES nutzer(id) ON DELETE CASCADE
+
+    ON DELETE CASCADE  → wenn Nutzer gelöscht wird, Bestellungen auch löschen
+    ON DELETE RESTRICT → Nutzer kann NICHT gelöscht werden wenn Bestellungen existieren
+    ON DELETE SET NULL → nutzer_id auf NULL setzen (Spalte muss nullable sein)
+
+------------------------------------------------------------------------
+2.4  Tabellen verändern — ALTER TABLE
+------------------------------------------------------------------------
+
+Spalte hinzufügen:
+  ALTER TABLE nutzer ADD COLUMN telefon VARCHAR(20);
+  ALTER TABLE nutzer ADD COLUMN aktiv BOOLEAN DEFAULT 1;
+
+Spalte umbenennen (MySQL 8+, SQLite 3.25+):
+  ALTER TABLE nutzer RENAME COLUMN alter TO geburtsjahr;
+
+Spalte entfernen (MySQL 8+, SQLite 3.35+):
+  ALTER TABLE nutzer DROP COLUMN telefon;
+
+Spalte ändern (MySQL):
+  ALTER TABLE nutzer MODIFY COLUMN name VARCHAR(200) NOT NULL;
+
+Tabelle umbenennen:
+  ALTER TABLE nutzer RENAME TO benutzer;
+
+------------------------------------------------------------------------
+2.5  Tabellen und Datenbanken löschen — DROP
+------------------------------------------------------------------------
+
+  DROP TABLE nutzer;                  → löscht Tabelle und alle Daten!
+  DROP TABLE IF EXISTS nutzer;        → kein Fehler wenn nicht vorhanden
+  DROP TABLE nutzer CASCADE;          → löscht auch abhängige Tabellen (PostgreSQL)
+
+  TRUNCATE TABLE nutzer;              → löscht alle Zeilen, behält Tabellenstruktur
+                                        (schneller als DELETE FROM nutzer)
+
+  DROP DATABASE meine_db;             → löscht die gesamte Datenbank!
+
+  ACHTUNG: DROP und TRUNCATE sind permanent. Kein UNDO, kein Papierkorb.
+           Immer erst ein Backup machen!
+
+------------------------------------------------------------------------
+2.6  Indizes
+------------------------------------------------------------------------
+
+Ein Index beschleunigt SELECT-Abfragen auf einer Spalte enorm —
+auf Kosten von etwas mehr Speicher und langsameren INSERTs.
+
+  CREATE INDEX idx_nutzer_email ON nutzer(email);
+  CREATE UNIQUE INDEX idx_nutzer_email ON nutzer(email);
+
+  -- Zusammengesetzter Index (mehrere Spalten):
+  CREATE INDEX idx_bestellungen ON bestellungen(nutzer_id, erstellt);
+
+  -- Index löschen:
+  DROP INDEX idx_nutzer_email;
+
+  Wann Index erstellen?
+    ✔ Spalten die oft in WHERE stehen: WHERE email = ?
+    ✔ Spalten für JOINs: WHERE b.nutzer_id = n.id
+    ✔ Spalten die oft sortiert werden: ORDER BY erstellt
+    ✗ Kleine Tabellen (< 1000 Zeilen) — dort bringt es nichts
+    ✗ Spalten die sich sehr oft ändern — langsame Updates
+
+PRIMARY KEY und UNIQUE erstellen automatisch einen Index.
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Erstelle eine Datenbank für einen Online-Shop. Erstelle diese drei
+Tabellen: "kategorien" (id, name, beschreibung), "produkte"
+(id, kategorie_id, name, beschreibung, preis DECIMAL(10,2),
+lagerbestand INTEGER DEFAULT 0, aktiv BOOLEAN DEFAULT 1),
+"kunden" (id, vorname, nachname, email UNIQUE, erstellt DATETIME).
+Alle Primärschlüssel sollen auto-increment sein. Erstelle einen
+Fremdschlüssel von produkte.kategorie_id auf kategorien.id.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Daten einfügen — INSERT
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Grundlegende INSERT-Syntax
+------------------------------------------------------------------------
+
+Einen einzelnen Datensatz einfügen:
+
+  INSERT INTO nutzer (name, email, alter)
+  VALUES ('Max Mustermann', 'max@example.com', 28);
+
+  Reihenfolge der Spalten in () muss zur Reihenfolge in VALUES passen.
+  Spalten mit DEFAULT oder AUTOINCREMENT können weggelassen werden.
+
+Ohne Spaltenliste (NICHT empfohlen):
+  INSERT INTO nutzer VALUES (NULL, 'Max', 'max@example.com', 28, CURRENT_TIMESTAMP);
+  → Reihenfolge muss EXAKT der Tabellendefinition entsprechen.
+    Sobald sich die Tabelle ändert, bricht das.
+
+------------------------------------------------------------------------
+3.2  Mehrere Datensätze auf einmal
+------------------------------------------------------------------------
+
+  INSERT INTO nutzer (name, email, alter) VALUES
+      ('Max Mustermann', 'max@example.com', 28),
+      ('Lisa Schmidt',   'lisa@example.com', 34),
+      ('Tom Berger',     'tom@example.com', 22),
+      ('Anna Weber',     'anna@example.com', 29);
+
+  Viel schneller als vier separate INSERT-Befehle!
+  Alle werden in einer Transaktion eingefügt — entweder alle oder keine.
+
+------------------------------------------------------------------------
+3.3  INSERT ... SELECT
+------------------------------------------------------------------------
+
+Daten aus einer anderen Tabelle einfügen:
+
+  INSERT INTO archiv_nutzer (name, email)
+  SELECT name, email
+  FROM nutzer
+  WHERE alter > 30;
+
+  Ideal für: Archivierung, Kopieren, Migration.
+
+------------------------------------------------------------------------
+3.4  Konflikte behandeln
+------------------------------------------------------------------------
+
+Was passiert wenn du einen Nutzer mit einer E-Mail einfügst, die schon
+existiert (UNIQUE-Constraint)?
+
+IGNORE (SQLite, MySQL):
+  INSERT OR IGNORE INTO nutzer (name, email) VALUES ('Test', 'max@example.com');
+  → Fehler wird ignoriert, der Datensatz wird einfach nicht eingefügt.
+
+REPLACE (MySQL, SQLite):
+  REPLACE INTO nutzer (id, name, email) VALUES (1, 'Max Neu', 'max@example.com');
+  → Löscht den alten Datensatz und fügt den neuen ein.
+
+ON CONFLICT (SQLite):
+  INSERT INTO nutzer (name, email) VALUES ('Max', 'max@example.com')
+  ON CONFLICT(email) DO NOTHING;
+
+  INSERT INTO nutzer (name, email, alter) VALUES ('Max', 'max@example.com', 28)
+  ON CONFLICT(email) DO UPDATE SET
+      name = excluded.name,
+      alter = excluded.alter;
+
+ON DUPLICATE KEY UPDATE (MySQL):
+  INSERT INTO nutzer (name, email, alter) VALUES ('Max', 'max@example.com', 28)
+  ON DUPLICATE KEY UPDATE name = VALUES(name), alter = VALUES(alter);
+
+UPSERT in PostgreSQL:
+  INSERT INTO nutzer (name, email) VALUES ('Max', 'max@example.com')
+  ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name;
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Befülle die drei Tabellen aus Übung 2 mit je 5 sinnvollen Datensätzen.
+Mindestens 3 Produkte sollen derselben Kategorie angehören.
+Mindestens ein Produkt soll lagerbestand = 0 haben.
+Versuche dann, eine E-Mail-Adresse doppelt einzufügen — beobachte
+den Fehler und repariere ihn mit ON CONFLICT DO NOTHING.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Daten abfragen — SELECT
+================================================================================
+
+SELECT ist der mächtigste und meistgenutzte SQL-Befehl.
+80% der SQL-Arbeit besteht aus dem Verfeinern von SELECT-Abfragen.
+
+------------------------------------------------------------------------
+4.1  Grundlegende SELECT-Syntax
+------------------------------------------------------------------------
+
+Alle Spalten und alle Zeilen:
+  SELECT * FROM nutzer;
+  (Das * bedeutet "alle Spalten" — in Produktion meistens vermeiden!)
+
+Bestimmte Spalten:
+  SELECT name, email FROM nutzer;
+  SELECT vorname, nachname, email FROM kunden;
+
+Mit Alias (Spalte umbenennen in der Ausgabe):
+  SELECT name AS benutzername, email AS kontakt FROM nutzer;
+  SELECT preis AS 'Preis (€)' FROM produkte;
+
+Ausdruck als Spalte:
+  SELECT name, preis, preis * 1.19 AS preis_mit_mwst FROM produkte;
+  SELECT vorname || ' ' || nachname AS vollname FROM kunden;   -- SQLite/PostgreSQL
+  SELECT CONCAT(vorname, ' ', nachname) AS vollname FROM kunden; -- MySQL
+
+Literal ausgeben (ohne FROM):
+  SELECT 42;
+  SELECT 'Hallo Welt';
+  SELECT 3.14 * 5 * 5 AS kreisflaeche;
+
+------------------------------------------------------------------------
+4.2  WHERE — Filtern
+------------------------------------------------------------------------
+
+  SELECT * FROM nutzer WHERE alter > 25;
+  SELECT * FROM produkte WHERE preis < 50 AND aktiv = 1;
+  SELECT * FROM kunden WHERE email LIKE '%@gmail.com';
+
+Vergleichsoperatoren:
+  =        genau gleich
+  != / <>  ungleich
+  <        kleiner
+  >        größer
+  <=       kleiner oder gleich
+  >=       größer oder gleich
+
+Logische Operatoren:
+  AND      beide Bedingungen müssen wahr sein
+  OR       mindestens eine muss wahr sein
+  NOT      Bedingung umkehren
+  ()       Klammerung für Priorität
+
+  Beispiel:
+    SELECT * FROM produkte
+    WHERE (preis < 20 OR lagerbestand = 0) AND aktiv = 1;
+
+BETWEEN:
+  SELECT * FROM produkte WHERE preis BETWEEN 10 AND 50;
+  → Inklusive! Entspricht: preis >= 10 AND preis <= 50
+
+IN:
+  SELECT * FROM nutzer WHERE alter IN (20, 25, 30);
+  SELECT * FROM produkte WHERE kategorie_id IN (1, 2, 3);
+
+NOT IN:
+  SELECT * FROM nutzer WHERE alter NOT IN (20, 25, 30);
+
+IS NULL / IS NOT NULL:
+  SELECT * FROM nutzer WHERE telefon IS NULL;
+  SELECT * FROM nutzer WHERE telefon IS NOT NULL;
+  NIEMALS: WHERE telefon = NULL  → funktioniert nicht! NULL ist nicht gleich NULL.
+
+LIKE — Textsuche mit Platzhaltern:
+  SELECT * FROM nutzer WHERE name LIKE 'Max%';    → beginnt mit "Max"
+  SELECT * FROM nutzer WHERE name LIKE '%mann';   → endet mit "mann"
+  SELECT * FROM nutzer WHERE email LIKE '%@gmail%'; → enthält "@gmail"
+  SELECT * FROM nutzer WHERE name LIKE '_ax%';    → zweiter Buchstabe 'a', dritter 'x'
+
+  % = beliebig viele Zeichen (auch null)
+  _ = genau ein beliebiges Zeichen
+  LIKE ist standardmäßig case-insensitive in MySQL, case-sensitive in PostgreSQL
+
+------------------------------------------------------------------------
+4.3  ORDER BY — Sortieren
+------------------------------------------------------------------------
+
+  SELECT * FROM nutzer ORDER BY name;             → aufsteigend (ASC ist Standard)
+  SELECT * FROM nutzer ORDER BY name ASC;         → aufsteigend explizit
+  SELECT * FROM nutzer ORDER BY alter DESC;       → absteigend
+  SELECT * FROM nutzer ORDER BY name DESC, alter ASC; → nach mehreren Spalten
+
+  ORDER BY kann auch nach Ausdrücken oder Alias sortieren:
+    SELECT name, preis * 1.19 AS brutto FROM produkte ORDER BY brutto DESC;
+
+  NULL-Werte: werden je nach Datenbank unterschiedlich sortiert.
+    PostgreSQL/SQLite: NULL am Ende bei ASC, am Anfang bei DESC
+    MySQL: NULL gilt als kleiner als alle anderen Werte
+    Explizit: ORDER BY alter NULLS LAST / NULLS FIRST (PostgreSQL)
+
+------------------------------------------------------------------------
+4.4  LIMIT und OFFSET — Seitenweise ausgeben
+------------------------------------------------------------------------
+
+  SELECT * FROM nutzer LIMIT 10;            → erste 10 Zeilen
+  SELECT * FROM nutzer LIMIT 10 OFFSET 20;  → Zeilen 21-30 (Seite 3 bei 10/Seite)
+
+  Seitenformel: OFFSET = (seite - 1) * pro_seite
+
+  MySQL-Kurzform:
+    SELECT * FROM nutzer LIMIT 20, 10;  → OFFSET 20, dann 10 Zeilen
+
+  WICHTIG: ORDER BY vor LIMIT! Ohne ORDER BY ist die Reihenfolge nicht garantiert.
+    SELECT * FROM produkte ORDER BY erstellt DESC LIMIT 5;
+    → Die 5 neuesten Produkte
+
+------------------------------------------------------------------------
+4.5  DISTINCT — Duplikate entfernen
+------------------------------------------------------------------------
+
+  SELECT DISTINCT kategorie_id FROM produkte;
+  → Gibt jede kategorie_id nur einmal aus.
+
+  SELECT DISTINCT stadt, land FROM adressen;
+  → Gibt jede einzigartige Kombination aus Stadt + Land aus.
+
+  SELECT COUNT(DISTINCT email) FROM nutzer;
+  → Anzahl eindeutiger E-Mail-Adressen.
+
+------------------------------------------------------------------------
+4.6  Aggregatfunktionen
+------------------------------------------------------------------------
+
+  COUNT(*):       Anzahl aller Zeilen (inkl. NULL)
+  COUNT(spalte):  Anzahl Zeilen wo spalte nicht NULL ist
+  SUM(spalte):    Summe aller Werte
+  AVG(spalte):    Durchschnitt aller Werte
+  MIN(spalte):    kleinster Wert
+  MAX(spalte):    größter Wert
+
+  Beispiele:
+    SELECT COUNT(*) AS anzahl_nutzer FROM nutzer;
+    SELECT SUM(lagerbestand) AS gesamt_lager FROM produkte;
+    SELECT AVG(preis) AS durchschnittspreis FROM produkte;
+    SELECT MIN(preis) AS guenstigstes, MAX(preis) AS teuerstes FROM produkte;
+
+    SELECT
+        COUNT(*) AS gesamt,
+        COUNT(telefon) AS mit_telefon,
+        COUNT(*) - COUNT(telefon) AS ohne_telefon
+    FROM nutzer;
+
+------------------------------------------------------------------------
+4.7  GROUP BY — Gruppieren
+------------------------------------------------------------------------
+
+GROUP BY fasst Zeilen mit gleichem Wert zusammen, damit Aggregatfunktionen
+pro Gruppe statt für die gesamte Tabelle berechnet werden.
+
+  SELECT kategorie_id, COUNT(*) AS anzahl
+  FROM produkte
+  GROUP BY kategorie_id;
+
+  → Wie viele Produkte gibt es pro Kategorie?
+
+  SELECT kategorie_id, AVG(preis) AS durchschnittspreis, MAX(preis) AS max_preis
+  FROM produkte
+  GROUP BY kategorie_id
+  ORDER BY durchschnittspreis DESC;
+
+HAVING — wie WHERE aber für Gruppen (nach GROUP BY):
+
+  SELECT kategorie_id, COUNT(*) AS anzahl
+  FROM produkte
+  GROUP BY kategorie_id
+  HAVING COUNT(*) >= 3;
+  → Nur Kategorien mit mindestens 3 Produkten
+
+  WHERE filtert EINZELNE ZEILEN (vor GROUP BY).
+  HAVING filtert GRUPPEN (nach GROUP BY).
+
+  SELECT kategorie_id, COUNT(*) AS anzahl
+  FROM produkte
+  WHERE aktiv = 1                   -- erst: nur aktive Produkte
+  GROUP BY kategorie_id
+  HAVING COUNT(*) >= 2;             -- dann: nur Kategorien mit >= 2 aktiven Produkten
+
+Reihenfolge in einer SELECT-Abfrage:
+  SELECT    → was ausgeben
+  FROM      → aus welcher Tabelle
+  WHERE     → Zeilen filtern
+  GROUP BY  → gruppieren
+  HAVING    → Gruppen filtern
+  ORDER BY  → sortieren
+  LIMIT     → begrenzen
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Schreibe Abfragen für den Online-Shop:
+1. Alle Produkte die mehr als 20€ kosten, sortiert nach Preis aufsteigend
+2. Die 3 teuersten Produkte (die auf Lager sind)
+3. Durchschnittspreis, günstigstes und teuerstes Produkt pro Kategorie
+4. Alle Kunden deren E-Mail auf "@gmail.com" endet
+5. Wie viele Produkte sind auf Lager (lagerbestand > 0), wie viele ausverkauft?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Tabellen verknüpfen — JOINs
+================================================================================
+
+JOINs sind das Herzstück relationaler Datenbanken. Sie verknüpfen Daten
+aus verschiedenen Tabellen basierend auf einer gemeinsamen Spalte.
+
+------------------------------------------------------------------------
+5.1  INNER JOIN — nur übereinstimmende Zeilen
+------------------------------------------------------------------------
+
+  SELECT produkte.name, kategorien.name AS kategorie
+  FROM produkte
+  INNER JOIN kategorien ON produkte.kategorie_id = kategorien.id;
+
+  Nur Produkte die EINE Kategorie haben (und Kategorien die mindestens
+  ein Produkt haben) erscheinen im Ergebnis.
+
+Mit Tabellen-Alias (kürzer, lesbarer):
+
+  SELECT p.name, p.preis, k.name AS kategorie
+  FROM produkte p
+  INNER JOIN kategorien k ON p.kategorie_id = k.id
+  WHERE p.aktiv = 1
+  ORDER BY k.name, p.preis;
+
+Mehrere JOINs:
+
+  SELECT
+      b.id AS bestellung,
+      k.vorname || ' ' || k.nachname AS kunde,
+      p.name AS produkt,
+      p.preis
+  FROM bestellungen b
+  INNER JOIN kunden k ON b.kunden_id = k.id
+  INNER JOIN produkte p ON b.produkt_id = p.id;
+
+------------------------------------------------------------------------
+5.2  LEFT JOIN — alle aus der linken Tabelle
+------------------------------------------------------------------------
+
+  SELECT k.name AS kunde, COUNT(b.id) AS anzahl_bestellungen
+  FROM kunden k
+  LEFT JOIN bestellungen b ON b.kunden_id = k.id
+  GROUP BY k.id, k.name;
+
+  Alle Kunden erscheinen — auch die ohne Bestellungen.
+  Bei denen ohne Bestellungen ist b.id NULL → COUNT(b.id) gibt 0 zurück.
+
+INNER vs. LEFT:
+  INNER JOIN → nur Zeilen die in BEIDEN Tabellen einen Match haben
+  LEFT JOIN  → alle Zeilen der linken Tabelle, egal ob Match rechts
+
+Kunden OHNE Bestellungen finden:
+
+  SELECT k.name
+  FROM kunden k
+  LEFT JOIN bestellungen b ON b.kunden_id = k.id
+  WHERE b.id IS NULL;
+
+  → LEFT JOIN + WHERE rechte Seite IS NULL = "was ist nur links vorhanden"
+
+------------------------------------------------------------------------
+5.3  RIGHT JOIN und FULL OUTER JOIN
+------------------------------------------------------------------------
+
+RIGHT JOIN:
+  Wie LEFT JOIN, aber alle Zeilen der RECHTEN Tabelle.
+  Selten genutzt — man dreht einfach die Tabellen und nimmt LEFT JOIN.
+
+  SELECT p.name, k.name AS kategorie
+  FROM kategorien k
+  RIGHT JOIN produkte p ON p.kategorie_id = k.id;
+  → Alle Produkte, auch die ohne Kategorie.
+
+FULL OUTER JOIN (nicht in MySQL, aber in PostgreSQL und SQLite mit Union):
+  Alle Zeilen aus beiden Tabellen — mit oder ohne Match.
+
+  -- PostgreSQL:
+  SELECT k.name, b.id
+  FROM kunden k
+  FULL OUTER JOIN bestellungen b ON b.kunden_id = k.id;
+
+  -- MySQL-Alternative (UNION):
+  SELECT k.name, b.id FROM kunden k LEFT JOIN bestellungen b ON b.kunden_id = k.id
+  UNION
+  SELECT k.name, b.id FROM kunden k RIGHT JOIN bestellungen b ON b.kunden_id = k.id;
+
+------------------------------------------------------------------------
+5.4  SELF JOIN — Tabelle mit sich selbst verknüpfen
+------------------------------------------------------------------------
+
+Wenn eine Tabelle eine hierarchische Struktur hat (z.B. Mitarbeiter
+und ihr Vorgesetzter, der auch ein Mitarbeiter ist):
+
+  mitarbeiter:
+    id | name    | vorgesetzter_id
+    ---+---------+----------------
+    1  | Boss    | NULL
+    2  | Max     | 1
+    3  | Lisa    | 1
+    4  | Tom     | 2
+
+  SELECT m.name AS mitarbeiter, v.name AS vorgesetzter
+  FROM mitarbeiter m
+  LEFT JOIN mitarbeiter v ON m.vorgesetzter_id = v.id;
+
+  Ergebnis:
+    mitarbeiter | vorgesetzter
+    Boss        | NULL
+    Max         | Boss
+    Lisa        | Boss
+    Tom         | Max
+
+------------------------------------------------------------------------
+5.5  CROSS JOIN — Kreuzprodukt
+------------------------------------------------------------------------
+
+Verknüpft jede Zeile aus Tabelle A mit jeder Zeile aus Tabelle B.
+Selten nötig, aber manchmal sinnvoll (z.B. Größen × Farben):
+
+  SELECT farben.name, groessen.bezeichnung
+  FROM farben
+  CROSS JOIN groessen;
+
+  3 Farben × 4 Größen = 12 Kombinationen.
+
+------------------------------------------------------------------------
+5.6  Subqueries in JOINs — abgeleitete Tabellen
+------------------------------------------------------------------------
+
+  SELECT k.name, stats.anzahl
+  FROM kunden k
+  INNER JOIN (
+      SELECT kunden_id, COUNT(*) AS anzahl
+      FROM bestellungen
+      GROUP BY kunden_id
+  ) stats ON stats.kunden_id = k.id
+  WHERE stats.anzahl >= 3;
+  → Kunden die mindestens 3 Bestellungen haben.
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Schreibe JOINs für den Online-Shop:
+1. Alle Produkte mit ihrem Kategorienamen (auch Produkte ohne Kategorie)
+2. Alle Kategorien und wie viele aktive Produkte sie haben
+   (Kategorien mit 0 aktiven Produkten auch anzeigen)
+3. Kategorie mit dem höchsten Durchschnittspreis aller ihrer Produkte
+4. Kunden die noch nie eine Bestellung aufgegeben haben
+5. Die 5 umsatzstärksten Kunden (Summe aller Bestellungspreise)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Unterabfragen — Subqueries
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Subquery in WHERE
+------------------------------------------------------------------------
+
+Eine Subquery ist eine SELECT-Abfrage innerhalb einer anderen Abfrage.
+Sie wird in Klammern eingeschlossen.
+
+Einfache Subquery (gibt einen Wert zurück):
+
+  SELECT name, preis
+  FROM produkte
+  WHERE preis > (SELECT AVG(preis) FROM produkte);
+  → Alle Produkte die teurer sind als der Durchschnitt.
+
+  SELECT name
+  FROM kunden
+  WHERE id = (SELECT kunden_id FROM bestellungen ORDER BY erstellt DESC LIMIT 1);
+  → Der Kunde der zuletzt bestellt hat.
+
+IN mit Subquery (gibt mehrere Werte zurück):
+
+  SELECT name FROM kunden
+  WHERE id IN (
+      SELECT DISTINCT kunden_id FROM bestellungen WHERE preis > 50
+  );
+  → Kunden die mindestens eine Bestellung über 50€ gemacht haben.
+
+NOT IN mit Subquery:
+
+  SELECT name FROM kunden
+  WHERE id NOT IN (
+      SELECT DISTINCT kunden_id FROM bestellungen
+  );
+  → Kunden ohne jede Bestellung.
+  ACHTUNG: NOT IN mit NULL-Werten macht Probleme! Besser LEFT JOIN verwenden.
+
+------------------------------------------------------------------------
+6.2  Subquery in FROM (abgeleitete Tabelle)
+------------------------------------------------------------------------
+
+  SELECT kategorie_name, MAX(durchschnittspreis) AS max_avg
+  FROM (
+      SELECT k.name AS kategorie_name, AVG(p.preis) AS durchschnittspreis
+      FROM kategorien k
+      INNER JOIN produkte p ON p.kategorie_id = k.id
+      GROUP BY k.id
+  ) kategorien_stats;
+  → Der höchste Durchschnittspreis aller Kategorien.
+
+------------------------------------------------------------------------
+6.3  Subquery in SELECT (skalare Subquery)
+------------------------------------------------------------------------
+
+  SELECT
+      name,
+      preis,
+      (SELECT AVG(preis) FROM produkte) AS gesamt_durchschnitt,
+      preis - (SELECT AVG(preis) FROM produkte) AS abweichung_vom_schnitt
+  FROM produkte;
+  → Jedes Produkt mit Abweichung vom Gesamtdurchschnitt.
+
+  ACHTUNG: Diese skalare Subquery wird für JEDE Zeile ausgeführt.
+  Bei großen Tabellen besser mit JOIN oder CTE lösen (nächstes Kapitel).
+
+------------------------------------------------------------------------
+6.4  EXISTS — prüfen ob etwas existiert
+------------------------------------------------------------------------
+
+  SELECT name
+  FROM kunden k
+  WHERE EXISTS (
+      SELECT 1 FROM bestellungen b WHERE b.kunden_id = k.id
+  );
+  → Kunden die mindestens eine Bestellung haben (wie INNER JOIN, aber oft schneller).
+
+  SELECT name
+  FROM kunden k
+  WHERE NOT EXISTS (
+      SELECT 1 FROM bestellungen b WHERE b.kunden_id = k.id
+  );
+  → Kunden ohne Bestellungen (sicherer als NOT IN wenn NULL-Werte möglich).
+
+------------------------------------------------------------------------
+6.5  CTEs — Common Table Expressions (WITH)
+------------------------------------------------------------------------
+
+CTEs machen komplexe Abfragen lesbarer. Sie sind wie temporäre, benannte
+Subqueries.
+
+  WITH bestellungen_pro_kunde AS (
+      SELECT kunden_id, COUNT(*) AS anzahl, SUM(preis) AS umsatz
+      FROM bestellungen
+      GROUP BY kunden_id
+  )
+  SELECT k.name, bpk.anzahl, bpk.umsatz
+  FROM kunden k
+  INNER JOIN bestellungen_pro_kunde bpk ON bpk.kunden_id = k.id
+  WHERE bpk.anzahl >= 3
+  ORDER BY bpk.umsatz DESC;
+
+Mehrere CTEs:
+
+  WITH
+  aktive_produkte AS (
+      SELECT * FROM produkte WHERE aktiv = 1
+  ),
+  teure_produkte AS (
+      SELECT * FROM aktive_produkte WHERE preis > 50
+  )
+  SELECT tp.name, k.name AS kategorie
+  FROM teure_produkte tp
+  INNER JOIN kategorien k ON tp.kategorie_id = k.id;
+
+Rekursive CTEs (für Hierarchien, z.B. Kategoriebäume):
+
+  WITH RECURSIVE untergeordnete AS (
+      SELECT id, name, vorgesetzter_id, 0 AS ebene
+      FROM mitarbeiter
+      WHERE vorgesetzter_id IS NULL    -- Wurzel (Boss)
+
+      UNION ALL
+
+      SELECT m.id, m.name, m.vorgesetzter_id, u.ebene + 1
+      FROM mitarbeiter m
+      INNER JOIN untergeordnete u ON m.vorgesetzter_id = u.id
+  )
+  SELECT ebene, name FROM untergeordnete ORDER BY ebene, name;
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Schreibe für den Online-Shop:
+1. Alle Produkte deren Preis über dem Durchschnitt ihrer Kategorie liegt
+   (Subquery in WHERE)
+2. Für jedes Produkt: Name, Preis, und wie viel % teurer/günstiger
+   als der Kategoriedurchschnitt (skalare Subquery oder CTE)
+3. Die Top-3-Kategorien nach Gesamtumsatz (Summe aller Bestellungspreise
+   aller Produkte dieser Kategorie) — mit CTE
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Daten ändern und löschen — UPDATE und DELETE
+================================================================================
+
+------------------------------------------------------------------------
+7.1  UPDATE — Daten aktualisieren
+------------------------------------------------------------------------
+
+  UPDATE nutzer SET name = 'Maximilian Mustermann' WHERE id = 1;
+
+  UPDATE produkte SET preis = preis * 0.9 WHERE kategorie_id = 2;
+  → Alle Produkte in Kategorie 2 um 10% vergünstigen.
+
+  UPDATE produkte SET lagerbestand = 0, aktiv = 0 WHERE id = 5;
+  → Mehrere Spalten gleichzeitig.
+
+ACHTUNG — ohne WHERE:
+  UPDATE produkte SET aktiv = 0;
+  → Macht ALLE Produkte inaktiv! IMMER WHERE kontrollieren!
+
+Update mit Subquery:
+
+  UPDATE produkte
+  SET preis = preis * 1.05
+  WHERE kategorie_id = (SELECT id FROM kategorien WHERE name = 'Elektronik');
+
+Update mit JOIN (MySQL):
+
+  UPDATE produkte p
+  INNER JOIN kategorien k ON p.kategorie_id = k.id
+  SET p.preis = p.preis * 1.1
+  WHERE k.name = 'Premium';
+
+------------------------------------------------------------------------
+7.2  DELETE — Daten löschen
+------------------------------------------------------------------------
+
+  DELETE FROM nutzer WHERE id = 3;
+
+  DELETE FROM bestellungen WHERE erstellt < '2024-01-01';
+  → Alle alten Bestellungen löschen.
+
+ACHTUNG — ohne WHERE:
+  DELETE FROM nutzer;
+  → Löscht ALLE Nutzer! Wie TRUNCATE, aber langsamer (Zeile für Zeile).
+
+Delete mit Subquery:
+
+  DELETE FROM bestellungen
+  WHERE kunden_id IN (
+      SELECT id FROM kunden WHERE aktiv = 0
+  );
+  → Bestellungen inaktiver Kunden löschen.
+
+Weiches Löschen (Soft Delete) — oft besser als echtes Löschen:
+  Statt DELETE: eine Spalte gelöscht_am DATETIME setzen.
+
+  UPDATE nutzer SET gelöscht_am = CURRENT_TIMESTAMP WHERE id = 3;
+
+  Bei SELECT immer filtern:
+    SELECT * FROM nutzer WHERE gelöscht_am IS NULL;
+
+  Vorteile: Daten bleiben erhalten, können wiederhergestellt werden,
+  Audit-Trail bleibt intakt.
+
+------------------------------------------------------------------------
+7.3  Transaktionen — Änderungen zusammenfassen
+------------------------------------------------------------------------
+
+Eine Transaktion fasst mehrere SQL-Befehle zu einer Einheit zusammen:
+entweder alle werden ausgeführt (COMMIT) oder keine (ROLLBACK).
+
+  BEGIN TRANSACTION;  -- oder: BEGIN; oder: START TRANSACTION;
+
+  UPDATE konten SET guthaben = guthaben - 100 WHERE id = 1;
+  UPDATE konten SET guthaben = guthaben + 100 WHERE id = 2;
+
+  COMMIT;    -- Änderungen dauerhaft speichern
+
+  -- Wenn ein Fehler passiert:
+  ROLLBACK;  -- Alle Änderungen rückgängig machen
+
+ACID-Eigenschaften von Transaktionen:
+  Atomicity   → Alles oder nichts
+  Consistency → Datenbank bleibt konsistent
+  Isolation   → Transaktionen stören sich nicht
+  Durability  → Nach COMMIT sind Daten dauerhaft gespeichert
+
+SAVEPOINT — Zwischenspeicherpunkte:
+
+  BEGIN;
+  INSERT INTO a VALUES (1);
+  SAVEPOINT nach_a;
+
+  INSERT INTO b VALUES (2);
+  ROLLBACK TO nach_a;  → macht nur b rückgängig, a bleibt!
+
+  COMMIT;
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Schreibe für den Online-Shop:
+1. Erhöhe alle Preise um 5% für Produkte die seit 6+ Monaten
+   nicht bestellt wurden
+2. Setze lagerbestand auf 0 für alle Produkte einer bestimmten Kategorie
+3. Implementiere ein Soft Delete für Kunden: füge eine gelöscht_am-Spalte
+   hinzu und schreibe UPDATE und SELECT die das berücksichtigen
+4. Simuliere einen Kauf in einer Transaktion: Bestellung einfügen +
+   Lagerbestand des Produkts reduzieren. Benutze BEGIN/COMMIT.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Funktionen und Ausdrücke
+================================================================================
+
+------------------------------------------------------------------------
+8.1  String-Funktionen
+------------------------------------------------------------------------
+
+LÄNGE:
+  LENGTH('Hallo')              → 5 (Bytes, nicht Zeichen bei UTF-8!)
+  CHAR_LENGTH('Hallo')         → 5 (Zeichen) [MySQL]
+  LENGTH('Hallo')              → 5 [SQLite/PostgreSQL]
+
+GROSS/KLEIN:
+  UPPER('hallo')               → 'HALLO'
+  LOWER('HALLO')               → 'hallo'
+
+TEILE:
+  SUBSTR('Hallo Welt', 7)      → 'Welt'          [SQLite/Standard]
+  SUBSTR('Hallo Welt', 7, 4)   → 'Welt'          (7. Zeichen, 4 lang)
+  SUBSTRING('Hallo', 2, 3)     → 'all'           [MySQL/PostgreSQL]
+  LEFT('Hallo Welt', 5)        → 'Hallo'         [MySQL]
+  RIGHT('Hallo Welt', 4)       → 'Welt'          [MySQL]
+
+SUCHEN UND ERSETZEN:
+  INSTR('Hallo', 'llo')        → 3              (Position, 1-basiert)
+  REPLACE('Hallo', 'l', 'r')   → 'Harro'
+
+TRIMMEN:
+  TRIM('  Hallo  ')            → 'Hallo'
+  LTRIM('  Hallo  ')           → 'Hallo  '
+  RTRIM('  Hallo  ')           → '  Hallo'
+  TRIM('x' FROM 'xxHalloxx')  → 'Hallo'
+
+VERBINDEN:
+  'Vor' || 'name'              → 'Vorname'       [SQLite/PostgreSQL]
+  CONCAT('Vor', 'name')        → 'Vorname'       [MySQL]
+  CONCAT_WS(' ', 'Max', 'M.')  → 'Max M.'        [MySQL, mit Trennzeichen]
+
+------------------------------------------------------------------------
+8.2  Numerische Funktionen
+------------------------------------------------------------------------
+
+  ROUND(3.14159, 2)         → 3.14
+  ROUND(3.14159, 0)         → 3.0
+  CEIL(3.1) / CEILING(3.1) → 4      (aufrunden)
+  FLOOR(3.9)                → 3      (abrunden)
+  ABS(-42)                  → 42     (Betrag)
+  MOD(10, 3)                → 1      (Modulo)
+  POWER(2, 8)               → 256    (Potenz)
+  SQRT(16)                  → 4.0    (Wurzel)
+  RANDOM()                  → Zufallszahl [SQLite]
+  RAND()                    → 0.0 bis 1.0 [MySQL]
+
+------------------------------------------------------------------------
+8.3  Datums- und Zeitfunktionen
+------------------------------------------------------------------------
+
+AKTUELLES DATUM/UHRZEIT:
+  CURRENT_DATE              → '2026-06-16'
+  CURRENT_TIME              → '14:30:00'
+  CURRENT_TIMESTAMP         → '2026-06-16 14:30:00'
+  NOW()                     → '2026-06-16 14:30:00' [MySQL]
+  DATE('now')               → '2026-06-16' [SQLite]
+
+TEILE EXTRAHIEREN:
+  strftime('%Y', erstellt)         → '2026' [SQLite]
+  YEAR(erstellt)                   → 2026 [MySQL]
+  MONTH(erstellt)                  → 6 [MySQL]
+  DAY(erstellt)                    → 16 [MySQL]
+  EXTRACT(YEAR FROM erstellt)      → 2026 [Standard/PostgreSQL]
+
+RECHNEN MIT DATUM:
+  DATE('now', '+7 days')           → in 7 Tagen [SQLite]
+  DATE_ADD(NOW(), INTERVAL 7 DAY)  → in 7 Tagen [MySQL]
+  DATE_SUB(NOW(), INTERVAL 1 YEAR) → vor einem Jahr [MySQL]
+
+DIFFERENZ:
+  julianday('now') - julianday(erstellt)  → Tage [SQLite]
+  DATEDIFF(NOW(), erstellt)               → Tage [MySQL]
+
+FORMATIEREN:
+  strftime('%d.%m.%Y', erstellt)   → '16.06.2026' [SQLite]
+  DATE_FORMAT(erstellt, '%d.%m.%Y') → '16.06.2026' [MySQL]
+
+------------------------------------------------------------------------
+8.4  CASE — Bedingungen in Abfragen
+------------------------------------------------------------------------
+
+CASE WHEN:
+  SELECT
+      name,
+      preis,
+      CASE
+          WHEN preis < 10 THEN 'Günstig'
+          WHEN preis < 50 THEN 'Mittel'
+          ELSE 'Teuer'
+      END AS preisklasse
+  FROM produkte;
+
+CASE value (wie switch):
+  SELECT
+      lagerbestand,
+      CASE lagerbestand
+          WHEN 0 THEN 'Ausverkauft'
+          WHEN 1 THEN 'Letztes Exemplar!'
+          ELSE 'Verfügbar'
+      END AS status
+  FROM produkte;
+
+CASE in GROUP BY und ORDER BY:
+  SELECT
+      CASE WHEN preis < 10 THEN 'Budget' ELSE 'Premium' END AS segment,
+      COUNT(*) AS anzahl
+  FROM produkte
+  GROUP BY segment;
+
+------------------------------------------------------------------------
+8.5  Null-Behandlung
+------------------------------------------------------------------------
+
+  COALESCE(wert1, wert2, wert3)
+    → gibt den ersten nicht-NULL Wert zurück
+
+    SELECT name, COALESCE(telefon, email, 'Kein Kontakt') AS kontakt FROM kunden;
+
+  IFNULL(wert, fallback)        → wie COALESCE mit zwei Argumenten [MySQL/SQLite]
+  NULLIF(a, b)                  → gibt NULL zurück wenn a = b, sonst a
+    → nützlich um Division durch Null zu vermeiden:
+       SUM(umsatz) / NULLIF(COUNT(*), 0)
+
+  NVL(wert, fallback)           → wie IFNULL, nur in Oracle
+
+------------------------------------------------------------------------
+8.6  Window Functions (Fensterfunktionen)
+------------------------------------------------------------------------
+
+Window Functions berechnen Werte über eine Gruppe von Zeilen, ohne die
+Zeilen zu aggregieren (im Gegensatz zu GROUP BY).
+
+Verfügbar in: SQLite 3.25+, PostgreSQL, MySQL 8+, SQL Server.
+
+RANK und ROW_NUMBER:
+
+  SELECT
+      name,
+      preis,
+      RANK() OVER (ORDER BY preis DESC) AS rang,
+      ROW_NUMBER() OVER (ORDER BY preis DESC) AS zeile
+  FROM produkte;
+
+  RANK() — gleiche Werte bekommen denselben Rang, dann Lücke (1, 1, 3, 4)
+  DENSE_RANK() — gleiche Werte bekommen denselben Rang, keine Lücke (1, 1, 2, 3)
+  ROW_NUMBER() — immer eindeutig, bei Gleichstand zufällig (1, 2, 3, 4)
+
+PARTITION BY — Rang pro Gruppe:
+
+  SELECT
+      name,
+      kategorie_id,
+      preis,
+      RANK() OVER (PARTITION BY kategorie_id ORDER BY preis DESC) AS rang_in_kategorie
+  FROM produkte;
+  → Rang jedes Produkts innerhalb seiner eigenen Kategorie.
+
+LAG und LEAD — Wert der vorherigen/nächsten Zeile:
+
+  SELECT
+      name,
+      preis,
+      LAG(preis) OVER (ORDER BY preis) AS vorheriger_preis,
+      preis - LAG(preis) OVER (ORDER BY preis) AS unterschied
+  FROM produkte;
+
+Laufende Summe:
+
+  SELECT
+      name,
+      preis,
+      SUM(preis) OVER (ORDER BY preis) AS laufende_summe
+  FROM produkte;
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Schreibe für den Online-Shop:
+1. Alle Produkte mit Preisklasse (CASE: < 10€ = Budget, < 50€ = Standard, sonst Premium)
+2. Den Monat mit dem höchsten Bestellumsatz
+3. Für jeden Kunden: Name und Tage seit seiner letzten Bestellung
+4. Rang jedes Produkts nach Preis innerhalb seiner Kategorie (Window Function)
+5. Die Top-3-Produkte pro Kategorie nach Verkaufsanzahl
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Datenbankdesign und Normalisierung
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Normalisierung — warum?
+------------------------------------------------------------------------
+
+Normalisierung reduziert Redundanz und vermeidet Anomalien:
+
+  Update-Anomalie: Ändert sich eine Kategoriebeschreibung, muss man
+    sie in 1000 Produktzeilen ändern (wenn die Beschreibung direkt
+    im Produkt gespeichert wäre).
+
+  Einfüge-Anomalie: Kategorie existiert nicht ohne Produkt.
+
+  Lösch-Anomalie: Letztes Produkt einer Kategorie löschen →
+    Kategoriedaten gehen verloren.
+
+------------------------------------------------------------------------
+9.2  1. Normalform (1NF) — atomare Werte
+------------------------------------------------------------------------
+
+Jede Spalte enthält nur einen einzelnen Wert (keine Listen, keine Gruppen).
+
+NICHT 1NF:
+  id | name | telefonnummern
+  1  | Max  | 0699123, 01512345   ← zwei Nummern in einer Spalte!
+
+1NF:
+  nutzer:          nutzer_telefone:
+    id | name        nutzer_id | telefon
+    1  | Max         1         | 0699123
+                     1         | 01512345
+
+------------------------------------------------------------------------
+9.3  2. Normalform (2NF) — kein partiell-funktionale Abhängigkeit
+------------------------------------------------------------------------
+
+Gilt nur für Tabellen mit zusammengesetztem Primärschlüssel.
+Jede Nicht-Schlüssel-Spalte muss vom GANZEN Primärschlüssel abhängen.
+
+NICHT 2NF:
+  bestellungen:
+    (bestell_id, produkt_id) | menge | produkt_name  ← hängt nur von produkt_id ab!
+
+2NF: produkt_name in die Produkte-Tabelle auslagern.
+
+------------------------------------------------------------------------
+9.4  3. Normalform (3NF) — keine transitive Abhängigkeit
+------------------------------------------------------------------------
+
+Keine Nicht-Schlüssel-Spalte darf von einer anderen Nicht-Schlüssel-Spalte abhängen.
+
+NICHT 3NF:
+  nutzer:
+    id | name | plz  | stadt     ← stadt hängt von plz ab, nicht von id!
+
+3NF: PLZ-Tabelle auslagern:
+  nutzer: id, name, plz
+  orte: plz, stadt, bundesland
+
+------------------------------------------------------------------------
+9.5  N:M Beziehungen — Zwischentabellen
+------------------------------------------------------------------------
+
+Produkte können mehrere Tags haben, Tags können mehrere Produkte haben.
+Das ist eine N:M-Beziehung — sie braucht eine Zwischentabelle:
+
+  tags:
+    id | name
+    1  | sale
+    2  | neu
+    3  | beliebt
+
+  produkt_tags:
+    produkt_id | tag_id
+    1          | 1
+    1          | 3
+    2          | 2
+    3          | 1
+
+  CREATE TABLE produkt_tags (
+      produkt_id INTEGER NOT NULL,
+      tag_id     INTEGER NOT NULL,
+      PRIMARY KEY (produkt_id, tag_id),            -- zusammengesetzter PK
+      FOREIGN KEY (produkt_id) REFERENCES produkte(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id)     REFERENCES tags(id) ON DELETE CASCADE
+  );
+
+  Abfrage — alle Tags eines Produkts:
+    SELECT t.name
+    FROM tags t
+    INNER JOIN produkt_tags pt ON pt.tag_id = t.id
+    WHERE pt.produkt_id = 1;
+
+  Abfrage — alle Produkte mit einem bestimmten Tag:
+    SELECT p.name
+    FROM produkte p
+    INNER JOIN produkt_tags pt ON pt.produkt_id = p.id
+    INNER JOIN tags t ON pt.tag_id = t.id
+    WHERE t.name = 'sale';
+
+------------------------------------------------------------------------
+9.6  Praktisches Schema für den Online-Shop (vollständig)
+------------------------------------------------------------------------
+
+  CREATE TABLE kategorien (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        VARCHAR(100) NOT NULL,
+      beschreibung TEXT,
+      parent_id   INTEGER REFERENCES kategorien(id)  -- verschachtelte Kategorien!
+  );
+
+  CREATE TABLE produkte (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      kategorie_id INTEGER NOT NULL REFERENCES kategorien(id),
+      name         VARCHAR(200) NOT NULL,
+      beschreibung TEXT,
+      preis        DECIMAL(10,2) NOT NULL CHECK(preis >= 0),
+      lagerbestand INTEGER NOT NULL DEFAULT 0 CHECK(lagerbestand >= 0),
+      aktiv        BOOLEAN NOT NULL DEFAULT 1,
+      erstellt     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      geaendert    DATETIME
+  );
+
+  CREATE TABLE kunden (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      vorname      VARCHAR(100) NOT NULL,
+      nachname     VARCHAR(100) NOT NULL,
+      email        VARCHAR(255) NOT NULL UNIQUE,
+      passwort     VARCHAR(255) NOT NULL,
+      erstellt     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      gelöscht_am  DATETIME
+  );
+
+  CREATE TABLE bestellungen (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      kunden_id   INTEGER NOT NULL REFERENCES kunden(id),
+      status      VARCHAR(50) NOT NULL DEFAULT 'offen'
+                  CHECK(status IN ('offen','bezahlt','versendet','storniert')),
+      gesamt      DECIMAL(10,2) NOT NULL,
+      erstellt    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE bestellpositionen (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      bestell_id   INTEGER NOT NULL REFERENCES bestellungen(id) ON DELETE CASCADE,
+      produkt_id   INTEGER NOT NULL REFERENCES produkte(id),
+      menge        INTEGER NOT NULL CHECK(menge > 0),
+      einzelpreis  DECIMAL(10,2) NOT NULL  -- Preis zum Zeitpunkt des Kaufs!
+  );
+
+  CREATE TABLE tags (
+      id   INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(50) NOT NULL UNIQUE
+  );
+
+  CREATE TABLE produkt_tags (
+      produkt_id INTEGER NOT NULL REFERENCES produkte(id) ON DELETE CASCADE,
+      tag_id     INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (produkt_id, tag_id)
+  );
+
+  -- Nützliche Indizes:
+  CREATE INDEX idx_produkte_kategorie ON produkte(kategorie_id);
+  CREATE INDEX idx_bestellungen_kunde ON bestellungen(kunden_id);
+  CREATE INDEX idx_positionen_bestellung ON bestellpositionen(bestell_id);
+  CREATE INDEX idx_positionen_produkt ON bestellpositionen(produkt_id);
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Designe das vollständige Datenbankschema für eine Bibliotheksverwaltung:
+- Bücher mit mehreren Autoren (N:M), Verlag (1:N), Genre (N:M)
+- Mitglieder können Bücher ausleihen
+- Ausleihen haben Datum, Rückgabedatum, Status
+- Zeige das CREATE TABLE für alle Tabellen, die Fremdschlüssel,
+  die Indizes, und mindestens eine sinnvolle CHECK-Constraint.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Views, Stored Procedures und Trigger
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Views — gespeicherte Abfragen
+------------------------------------------------------------------------
+
+Eine View ist eine gespeicherte SELECT-Abfrage. Sie verhält sich wie
+eine Tabelle, enthält aber keine eigenen Daten — immer frisch aus der
+zugrunde liegenden Abfrage.
+
+  CREATE VIEW aktive_produkte AS
+  SELECT p.id, p.name, p.preis, k.name AS kategorie
+  FROM produkte p
+  INNER JOIN kategorien k ON p.kategorie_id = k.id
+  WHERE p.aktiv = 1;
+
+  -- Verwenden wie eine normale Tabelle:
+  SELECT * FROM aktive_produkte WHERE preis < 30;
+  SELECT COUNT(*) FROM aktive_produkte;
+
+View löschen:
+  DROP VIEW IF EXISTS aktive_produkte;
+
+View aktualisieren (MySQL):
+  CREATE OR REPLACE VIEW aktive_produkte AS ...;
+
+Vorteile von Views:
+  - Komplexe Abfragen werden wiederverwendbar
+  - Sicherheit: Nutzer sieht nur bestimmte Spalten/Zeilen
+  - Abstraktionsschicht: Tabellenstruktur kann sich ändern
+    ohne die Views zu beeinflussen (wenn gut entworfen)
+
+Nachteil: Können Abfragen nicht automatisch beschleunigen.
+  (Materialized Views — PostgreSQL-Feature — können das, sind aber
+   eine gespeicherte Kopie, kein Live-View.)
+
+------------------------------------------------------------------------
+10.2  Stored Procedures und Functions
+------------------------------------------------------------------------
+
+Stored Procedures (Unterstützung variiert stark):
+
+MySQL-Beispiel:
+
+  DELIMITER //
+  CREATE PROCEDURE bestelle_produkt(
+      IN p_kunden_id INTEGER,
+      IN p_produkt_id INTEGER,
+      IN p_menge INTEGER
+  )
+  BEGIN
+      DECLARE v_preis DECIMAL(10,2);
+      DECLARE v_lager INTEGER;
+
+      SELECT preis, lagerbestand INTO v_preis, v_lager
+      FROM produkte WHERE id = p_produkt_id;
+
+      IF v_lager < p_menge THEN
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Nicht genug auf Lager';
+      END IF;
+
+      START TRANSACTION;
+          INSERT INTO bestellungen (kunden_id, gesamt)
+          VALUES (p_kunden_id, v_preis * p_menge);
+
+          UPDATE produkte
+          SET lagerbestand = lagerbestand - p_menge
+          WHERE id = p_produkt_id;
+      COMMIT;
+  END //
+  DELIMITER ;
+
+  -- Aufrufen:
+  CALL bestelle_produkt(1, 5, 2);
+
+Stored Function (gibt Wert zurück):
+
+  CREATE FUNCTION preis_mit_mwst(preis DECIMAL(10,2))
+  RETURNS DECIMAL(10,2) DETERMINISTIC
+  RETURN ROUND(preis * 1.19, 2);
+
+  -- Verwenden:
+  SELECT name, preis_mit_mwst(preis) AS brutto FROM produkte;
+
+SQLite: Keine Stored Procedures. PostgreSQL: PL/pgSQL-Syntax.
+
+------------------------------------------------------------------------
+10.3  Trigger
+------------------------------------------------------------------------
+
+Trigger werden automatisch ausgelöst wenn INSERT, UPDATE oder DELETE
+auf einer Tabelle passiert.
+
+SQLite-Beispiel — geaendert-Timestamp automatisch setzen:
+
+  CREATE TRIGGER produkte_update_ts
+  AFTER UPDATE ON produkte
+  BEGIN
+      UPDATE produkte SET geaendert = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  END;
+
+MySQL-Beispiel — Preisänderungen protokollieren:
+
+  CREATE TRIGGER log_preisaenderung
+  AFTER UPDATE ON produkte
+  FOR EACH ROW
+  BEGIN
+      IF OLD.preis != NEW.preis THEN
+          INSERT INTO preisaenderungen (produkt_id, alter_preis, neuer_preis, geaendert_am)
+          VALUES (NEW.id, OLD.preis, NEW.preis, NOW());
+      END IF;
+  END;
+
+  BEFORE vs. AFTER:
+    BEFORE → läuft vor der eigentlichen Aktion (kann sie noch beeinflussen)
+    AFTER  → läuft nach der eigentlichen Aktion
+
+  NEW und OLD:
+    NEW → die neuen Werte (bei INSERT und UPDATE)
+    OLD → die alten Werte (bei UPDATE und DELETE)
+
+Trigger löschen:
+  DROP TRIGGER IF EXISTS produkte_update_ts;
+
+Einsatzgebiete:
+  ✔ Audit-Logs automatisch erstellen
+  ✔ Berechnete Spalten aktuell halten
+  ✔ Datenintegrität erzwingen (die CHECK nicht kann)
+  ✗ Komplexe Businesslogik — besser in der Anwendung
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+1. Erstelle eine View "bestelluebersicht" die Bestellungen mit Kundennamen,
+   Produktnamen, Menge, Einzelpreis und Gesamtbetrag (menge × preis) anzeigt
+2. Erstelle einen Trigger der beim DELETE eines Kunden automatisch
+   alle seine Bestellungen auf status = 'storniert' setzt
+   (statt on delete cascade — damit die Bestellhistorie bleibt)
+3. Erstelle einen Trigger der bei jedem INSERT in bestellpositionen
+   den lagerbestand des Produkts automatisch reduziert
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Performance und Optimierung
+================================================================================
+
+------------------------------------------------------------------------
+11.1  EXPLAIN — Abfrageplan verstehen
+------------------------------------------------------------------------
+
+  EXPLAIN SELECT * FROM produkte WHERE preis > 50;          [SQLite]
+  EXPLAIN ANALYZE SELECT * FROM produkte WHERE preis > 50;  [PostgreSQL]
+  EXPLAIN SELECT * FROM produkte WHERE preis > 50;          [MySQL]
+
+Was man sehen will:
+  type = "const" oder "ref" → gut (Indexnutzung)
+  type = "ALL"              → schlecht (Full Table Scan — kein Index!)
+
+Vorgehen: Wenn eine Abfrage langsam ist:
+  1. EXPLAIN ausführen
+  2. Prüfen welche Schritte "ALL" oder "seq scan" zeigen
+  3. Für die entsprechenden WHERE/JOIN-Spalten Indizes erstellen
+  4. EXPLAIN erneut ausführen → prüfen ob Index genutzt wird
+
+------------------------------------------------------------------------
+11.2  Häufige Performance-Probleme
+------------------------------------------------------------------------
+
+SELECT * VERMEIDEN:
+  SELECT * FROM produkte;         → lädt alle Spalten, auch die du nicht brauchst
+  SELECT id, name, preis FROM produkte; → nur was nötig ist
+
+N+1 PROBLEM:
+  Für jeden Nutzer eine Extra-Abfrage machen — häufigster Performance-Bug.
+
+  -- Schlecht: Eine Abfrage für Nutzer, dann für JEDEN Nutzer eine für Bestellungen:
+  SELECT * FROM kunden;
+  -- dann in einer Schleife: SELECT * FROM bestellungen WHERE kunden_id = ?
+
+  -- Gut: Ein JOIN:
+  SELECT k.name, COUNT(b.id) AS anzahl
+  FROM kunden k
+  LEFT JOIN bestellungen b ON b.kunden_id = k.id
+  GROUP BY k.id;
+
+LIKE-Suche ohne Index:
+  WHERE name LIKE '%suche%'  → kein Index möglich (beginnt mit %)
+  WHERE name LIKE 'suche%'   → Index wird genutzt (beginnt ohne %)
+  Für Volltextsuche: FULL-TEXT INDEX (MySQL) oder Full-Text-Search-Erweiterungen.
+
+FUNCTIONS IN WHERE:
+  WHERE YEAR(erstellt) = 2026      → kann keinen Index nutzen!
+  WHERE erstellt BETWEEN '2026-01-01' AND '2026-12-31'  → nutzt Index!
+
+UNNÖTIGE SUBQUERIES:
+  Oft durch JOINs oder CTEs ersetzbar — und schneller.
+
+------------------------------------------------------------------------
+11.3  Indizes effektiv nutzen
+------------------------------------------------------------------------
+
+  -- Index für häufige Abfragen:
+  CREATE INDEX idx_produkte_aktiv_preis ON produkte(aktiv, preis);
+  → Für: WHERE aktiv = 1 ORDER BY preis
+
+  -- Covering Index (alle benötigten Spalten im Index):
+  CREATE INDEX idx_produkte_liste ON produkte(aktiv, kategorie_id, preis, name);
+  → SELECT name, preis FROM produkte WHERE aktiv = 1 AND kategorie_id = 2
+    → Alles im Index, Tabelle wird nicht mal gelesen!
+
+  Index-Reihenfolge: Zuerst Gleichheits-Bedingungen, dann Bereichs-Bedingungen,
+  dann Sortierspalten.
+
+    WHERE aktiv = 1 AND kategorie_id = 5 AND preis > 10 ORDER BY preis
+    → Bester Index: (aktiv, kategorie_id, preis)
+
+------------------------------------------------------------------------
+11.4  Pagination effizient umsetzen
+------------------------------------------------------------------------
+
+OFFSET-Pagination (einfach, aber langsam bei großen Seiten):
+  SELECT * FROM produkte ORDER BY id LIMIT 20 OFFSET 10000;
+  → Datenbank muss 10.000 Zeilen lesen und wegwerfen!
+
+Keyset-Pagination (schnell, für große Datenmengen):
+  -- Erste Seite:
+  SELECT * FROM produkte ORDER BY id LIMIT 20;
+  -- Letzte id merken: z.B. 20
+
+  -- Nächste Seite:
+  SELECT * FROM produkte WHERE id > 20 ORDER BY id LIMIT 20;
+  → Direkt zum richtigen Punkt gesprungen — kein Overhead!
+
+Nachteile von Keyset: Keine Seitenzahlen, kann nicht zu Seite 50 springen.
+Vorteile: Extrem schnell, auch bei Millionen Zeilen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+1. Füge 10.000 Test-Produkte ein (verwende eine Schleife oder Subquery)
+   und vergleiche die Zeit für:
+   SELECT * WHERE preis > 50 mit und ohne Index auf preis
+2. Erkläre mit EXPLAIN warum
+   WHERE YEAR(erstellt) = 2026 keinen Index nutzt,
+   WHERE erstellt >= '2026-01-01' aber schon
+3. Implementiere Keyset-Pagination für die Produkt-Liste
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Praktische SQL-Patterns
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Häufige Reporting-Abfragen
+------------------------------------------------------------------------
+
+MONATSWEISE ZUSAMMENFASSUNG:
+
+  SELECT
+      strftime('%Y-%m', erstellt) AS monat,    -- SQLite
+      COUNT(*) AS anzahl_bestellungen,
+      SUM(gesamt) AS umsatz,
+      AVG(gesamt) AS durchschnittlicher_warenkorb
+  FROM bestellungen
+  WHERE status != 'storniert'
+  GROUP BY monat
+  ORDER BY monat;
+
+  MySQL: DATE_FORMAT(erstellt, '%Y-%m') AS monat
+
+WACHSTUM IM VERGLEICH ZUM VORMONAT (Window Functions):
+
+  WITH monats_umsatz AS (
+      SELECT
+          strftime('%Y-%m', erstellt) AS monat,
+          SUM(gesamt) AS umsatz
+      FROM bestellungen
+      GROUP BY monat
+  )
+  SELECT
+      monat,
+      umsatz,
+      LAG(umsatz) OVER (ORDER BY monat) AS vormonat,
+      ROUND((umsatz - LAG(umsatz) OVER (ORDER BY monat))
+          / LAG(umsatz) OVER (ORDER BY monat) * 100, 1) AS wachstum_prozent
+  FROM monats_umsatz;
+
+TOP N PRO GRUPPE:
+
+  -- Top-3-Produkte pro Kategorie nach Verkaufsanzahl:
+  WITH rang AS (
+      SELECT
+          p.name,
+          p.kategorie_id,
+          COUNT(bp.id) AS verkauft,
+          RANK() OVER (PARTITION BY p.kategorie_id ORDER BY COUNT(bp.id) DESC) AS rang
+      FROM produkte p
+      LEFT JOIN bestellpositionen bp ON bp.produkt_id = p.id
+      GROUP BY p.id
+  )
+  SELECT * FROM rang WHERE rang <= 3;
+
+------------------------------------------------------------------------
+12.2  Daten pivotieren (PIVOT)
+------------------------------------------------------------------------
+
+Monatsweise Umsatz pro Kategorie (als Spalten statt Zeilen):
+
+  -- Mit CASE (funktioniert überall):
+  SELECT
+      strftime('%Y-%m', b.erstellt) AS monat,
+      SUM(CASE WHEN k.name = 'Elektronik' THEN bp.einzelpreis * bp.menge ELSE 0 END) AS elektronik,
+      SUM(CASE WHEN k.name = 'Bücher'     THEN bp.einzelpreis * bp.menge ELSE 0 END) AS buecher,
+      SUM(CASE WHEN k.name = 'Kleidung'   THEN bp.einzelpreis * bp.menge ELSE 0 END) AS kleidung
+  FROM bestellungen b
+  INNER JOIN bestellpositionen bp ON bp.bestell_id = b.id
+  INNER JOIN produkte p ON bp.produkt_id = p.id
+  INNER JOIN kategorien k ON p.kategorie_id = k.id
+  GROUP BY monat;
+
+------------------------------------------------------------------------
+12.3  Datenbereinigung und -migration
+------------------------------------------------------------------------
+
+E-Mails normalisieren:
+  UPDATE kunden SET email = LOWER(TRIM(email));
+
+Duplikate finden:
+  SELECT email, COUNT(*) AS anzahl
+  FROM kunden
+  GROUP BY email
+  HAVING COUNT(*) > 1;
+
+Duplikate löschen (die neueren behalten):
+  DELETE FROM kunden
+  WHERE id NOT IN (
+      SELECT MIN(id)
+      FROM kunden
+      GROUP BY email
+  );
+
+Daten aus Tabelle A in Tabelle B migrieren:
+  INSERT INTO neue_kunden (id, vollname, email)
+  SELECT id, vorname || ' ' || nachname, email
+  FROM alte_kunden
+  WHERE aktiv = 1;
+
+------------------------------------------------------------------------
+12.4  Volltext-Suche
+------------------------------------------------------------------------
+
+MySQL FULLTEXT:
+
+  ALTER TABLE produkte ADD FULLTEXT INDEX ft_suche (name, beschreibung);
+
+  SELECT * FROM produkte
+  WHERE MATCH(name, beschreibung) AGAINST('Laptop Gaming' IN BOOLEAN MODE);
+
+  -- Operatoren im BOOLEAN MODE:
+  -- +Laptop   → muss vorkommen
+  -- -defekt   → darf nicht vorkommen
+  -- Laptop*   → beginnt mit "Laptop"
+
+SQLite FTS (Full-Text Search):
+
+  CREATE VIRTUAL TABLE produkte_fts USING fts5(name, beschreibung);
+
+  INSERT INTO produkte_fts SELECT name, beschreibung FROM produkte;
+
+  SELECT * FROM produkte_fts WHERE produkte_fts MATCH 'laptop';
+
+PostgreSQL tsvector/tsquery:
+
+  SELECT name FROM produkte
+  WHERE to_tsvector('german', name || ' ' || COALESCE(beschreibung, ''))
+        @@ to_tsquery('german', 'Laptop & Gaming');
+
+--------------------------------------------------------------------------------
+ABSCHLUSSÜBUNG:
+Baue das vollständige Reporting-Dashboard für den Online-Shop:
+1. Monatliche Umsatz-Übersicht (letzten 12 Monate) mit Wachstum
+2. Top-10-Produkte nach Umsatz gesamt
+3. Top-5-Kunden nach Gesamtumsatz
+4. Produkte die seit 30+ Tagen nicht bestellt wurden
+5. Lagerbestand-Alarm: Produkte mit weniger als 5 Stück auf Lager
+   die in den letzten 30 Tagen bestellt wurden
+6. Stornoquote pro Monat (stornierte Bestellungen / alle Bestellungen * 100)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — SQL
+================================================================================
+
+DDL (STRUKTUR):
+  CREATE TABLE ... (spalte TYP CONSTRAINT, ...)
+  ALTER TABLE ... ADD COLUMN | RENAME COLUMN | DROP COLUMN | MODIFY
+  DROP TABLE | DROP TABLE IF EXISTS | TRUNCATE TABLE
+  CREATE INDEX | DROP INDEX
+  CREATE VIEW | DROP VIEW
+  Constraints: PRIMARY KEY | FOREIGN KEY | NOT NULL | UNIQUE | DEFAULT | CHECK
+
+DML (DATEN ÄNDERN):
+  INSERT INTO tabelle (spalten) VALUES (...), (...), (...)
+  INSERT INTO ... SELECT ... FROM ...
+  INSERT OR IGNORE | ON CONFLICT DO NOTHING | ON DUPLICATE KEY UPDATE
+  UPDATE tabelle SET spalte = wert WHERE bedingung
+  DELETE FROM tabelle WHERE bedingung
+  BEGIN | COMMIT | ROLLBACK | SAVEPOINT
+
+DQL (DATEN ABFRAGEN):
+  SELECT [DISTINCT] spalten FROM tabelle
+  WHERE bedingung
+  GROUP BY spalte HAVING aggregat_bedingung
+  ORDER BY spalte [ASC|DESC]
+  LIMIT n OFFSET m
+
+JOINS:
+  INNER JOIN ... ON ... | LEFT JOIN | RIGHT JOIN | FULL OUTER JOIN
+  CROSS JOIN | SELF JOIN
+
+SUBQUERIES:
+  WHERE x IN (SELECT ...) | WHERE EXISTS (SELECT 1 FROM ...)
+  FROM (SELECT ...) alias | SELECT (SELECT ...) AS alias
+  WITH cte AS (SELECT ...) SELECT ... FROM cte
+
+VERGLEICHE:
+  = | != | <> | < | > | <= | >= | <=> (MySQL)
+  BETWEEN a AND b | IN (...) | NOT IN (...)
+  LIKE '%pattern%' | IS NULL | IS NOT NULL
+
+AGGREGAT-FUNKTIONEN:
+  COUNT(*) | COUNT(spalte) | SUM | AVG | MIN | MAX
+
+WINDOW FUNCTIONS:
+  RANK() OVER (...) | DENSE_RANK() | ROW_NUMBER()
+  LAG(x) OVER (...) | LEAD(x) OVER (...)
+  SUM(x) OVER (...) | AVG(x) OVER (...)
+  PARTITION BY | ORDER BY [innerhalb OVER]
+
+STRING-FUNKTIONEN:
+  LENGTH | UPPER | LOWER | SUBSTR | REPLACE | TRIM | CONCAT | LIKE
+
+ZAHLEN-FUNKTIONEN:
+  ROUND | CEIL | FLOOR | ABS | MOD | SQRT | POWER
+
+DATUM-FUNKTIONEN:
+  CURRENT_DATE | CURRENT_TIME | CURRENT_TIMESTAMP | NOW()
+  YEAR | MONTH | DAY | EXTRACT | DATE_FORMAT | strftime
+
+NULL-BEHANDLUNG:
+  IS NULL | IS NOT NULL | COALESCE(a, b) | IFNULL(a, b) | NULLIF(a, b)
+
+CASE:
+  CASE WHEN ... THEN ... ELSE ... END
+  CASE wert WHEN ... THEN ... ELSE ... END
+
+TYPEN:
+  INTEGER | BIGINT | DECIMAL(m,d) | FLOAT | VARCHAR(n) | TEXT
+  DATE | TIME | DATETIME | TIMESTAMP | BOOLEAN | BLOB | JSON
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN — SQL
+================================================================================
+
+SQLite Dokumentation:
+  https://www.sqlite.org/docs.html
+
+MySQL Dokumentation:
+  https://dev.mysql.com/doc/
+
+PostgreSQL Dokumentation (sehr ausführlich):
+  https://www.postgresql.org/docs/
+
+W3Schools SQL (schnelle Referenz + Live-Editor):
+  https://www.w3schools.com/sql/
+
+SQLZoo (interaktive Übungen):
+  https://sqlzoo.net
+
+Mode SQL Tutorial (für Analytics):
+  https://mode.com/sql-tutorial/
+
+DB Browser for SQLite:
+  https://sqlitebrowser.org
+
+DBeaver (universeller GUI-Client, kostenlos):
+  https://dbeaver.io
+
+Buch-Empfehlung: "Learning SQL" von Alan Beaulieu (O'Reilly)
+Buch-Empfehlung: "SQL Antipatterns" von Bill Karwin (Pragmatic Programmers)
+
+
+################################################################################
+ABSCHLUSS
+################################################################################
+
+SQL ist eine der langlebigsten Technologien in der Softwareentwicklung —
+fast jede Anwendung, die Daten speichert, nutzt irgendeine relationale
+Datenbank. Der Schlüssel ist: verstehen WIE Daten zusammenhängen, bevor
+du anfängst Tabellen zu bauen. Ein gut entworfenes Schema spart mehr
+Zeit als jede Optimierung nachher. Und: joins machen, nicht fürchten.
+================================================================================
+ENDE DES KURSES
+================================================================================
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

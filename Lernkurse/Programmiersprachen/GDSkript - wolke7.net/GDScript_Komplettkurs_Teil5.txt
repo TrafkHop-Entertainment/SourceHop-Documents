@@ -1,0 +1,720 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 5 von 9)
+================================================================================
+
+In diesem Teil bauen wir Multiplayer — von Grund auf. Kein Fertig-Framework,
+keine Magie: wir lernen was tatsächlich über das Netzwerk geht, warum
+Latenz alles komplizierter macht, und wie Godots High-Level-Multiplayer-API
+(MultiplayerAPI) das handhabbar macht.
+
+Voraussetzung: Du verstehst Signals, Autoloads, Szenen-Wechsel (Teile 1–4).
+Du brauchst für die Übungen zwei Instanzen deines Spiels — entweder zwei
+Godot-Instanzen, oder Export + Editor gleichzeitig.
+
+
+################################################################################
+TEIL 5 — MULTIPLAYER GRUNDLAGEN
+################################################################################
+
+
+================================================================================
+MODUL 21: Netzwerk-Grundkonzepte — was wirklich passiert
+================================================================================
+
+------------------------------------------------------------------------
+21.1  Das fundamentale Problem: Latenz
+------------------------------------------------------------------------
+
+Netzwerk-Programmierung ist schwierig, weil Pakete Zeit brauchen.
+Zwischen Berlin und New York: ~90ms RTT (Round Trip Time).
+Bei 60 FPS sind 16ms ein Frame. 90ms = fast 6 Frames Verzögerung.
+
+Das bedeutet: Wenn Spieler A schießt, weiß Spieler B 90ms später davon.
+Wenn du dann prüfst ob der Schuss traf, hat sich Spieler B schon bewegt.
+Das führt zu: "Ich hab eindeutig getroffen!" — "Nein das hat nicht getroffen."
+
+Lösungsansätze:
+  CLIENT PREDICTION   → Client führt Aktionen sofort lokal aus,
+                         Server korrigiert nachträglich
+  SERVER AUTHORITY    → Server entscheidet ALLES, Clients zeigen nur an
+  LAG COMPENSATION    → Server "spult zurück" um zu prüfen was Spieler sah
+
+Für Indie-Spiele: Server Authority ist einfacher und fair genug.
+Für Shooter: du brauchst Lag Compensation (sehr komplex, Modul 28).
+
+------------------------------------------------------------------------
+21.2  Server vs. Peer-to-Peer — wann was?
+------------------------------------------------------------------------
+
+SERVER/CLIENT (dedizierter Server):
+  + Günstig: Server braucht keine Grafikkarte
+  + Fair: Server ist unparteiisch, kein Cheating über Client
+  + Skalierbar: Viele Spieler
+  - Kosten: Server-Miete
+  - Latenz: Alle Pakete durch den Server
+
+PEER-TO-PEER (P2P):
+  + Keine Server-Kosten
+  + Geringere Latenz für lokale Spieler
+  - Einer ist "Host" → wenn er geht, bricht das Spiel ab
+  - Cheating leichter (Host-Authority)
+  - NAT-Traversal-Probleme (Firewalls)
+
+LISTEN-SERVER (Hybrid, häufig für Indie):
+  - Ein Spieler ist gleichzeitig Server UND Client (er spielt mit)
+  - Einfachste Implementierung
+  - Host hat Latenz-Vorteil (0ms zu sich selbst)
+  - Godots Standard-Multiplayer nutzt dieses Modell
+
+Für diesen Kurs: Listen-Server (Peer 1 = Host + Spieler).
+Modul 28 (Teil 6): Dedizierter Server.
+
+------------------------------------------------------------------------
+21.3  Godots MultiplayerAPI — das Grundprinzip
+------------------------------------------------------------------------
+
+Godot hat eine eingebaute High-Level-Multiplayer-API. Sie basiert auf:
+
+  ENetMultiplayerPeer (standard)   → UDP-basiert, reliable/unreliable
+  WebSocketMultiplayerPeer          → Für Web-Exports
+  WebRTCMultiplayerPeer             → Browser P2P
+  Eigener Peer (Advanced)           → Steam, Epic Games, etc.
+
+Jeder verbundene Spieler hat eine eindeutige ID:
+  1          → Immer der Server/Host
+  2, 3, 4... → Clients (zufällig zugewiesen)
+
+  multiplayer.get_unique_id()   → Eigene ID
+  multiplayer.is_server()       → Bin ich der Server?
+  multiplayer.get_peers()       → Array aller verbundenen IDs
+
+--------------------------------------------------------------------------------
+ÜBUNG 21 (konzeptuell — kein Code):
+Beantworte schriftlich:
+1. Was ist RTT und warum macht er Multiplayer schwierig?
+2. Wann nimmst du einen dedizierten Server, wann P2P?
+3. Welche Peer-ID hat immer der Host in Godot?
+4. Was ist Client Prediction und warum braucht man sie?
+5. Erkläre "Server Authority" in einem Satz.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 22: Verbindung aufbauen — Host und Join
+================================================================================
+
+------------------------------------------------------------------------
+22.1  Server erstellen (Host)
+------------------------------------------------------------------------
+
+  # NetworkManager.gd (Autoload)
+  extends Node
+
+  const PORT: int = 7777
+  const MAX_SPIELER: int = 4
+
+  signal spieler_verbunden(id: int)
+  signal spieler_getrennt(id: int)
+  signal verbindung_fehlgeschlagen
+
+  func server_erstellen() -> void:
+      var peer := ENetMultiplayerPeer.new()
+      var fehler := peer.create_server(PORT, MAX_SPIELER)
+      if fehler != OK:
+          push_error("Server konnte nicht erstellt werden: ", fehler)
+          verbindung_fehlgeschlagen.emit()
+          return
+
+      multiplayer.multiplayer_peer = peer
+
+      # Signale verbinden:
+      multiplayer.peer_connected.connect(_on_spieler_verbunden)
+      multiplayer.peer_disconnected.connect(_on_spieler_getrennt)
+
+      print("Server gestartet auf Port ", PORT)
+      print("Eigene ID: ", multiplayer.get_unique_id())   # 1
+
+  func _on_spieler_verbunden(id: int) -> void:
+      print("Spieler verbunden: ", id)
+      spieler_verbunden.emit(id)
+
+  func _on_spieler_getrennt(id: int) -> void:
+      print("Spieler getrennt: ", id)
+      spieler_getrennt.emit(id)
+
+------------------------------------------------------------------------
+22.2  Client verbinden (Join)
+------------------------------------------------------------------------
+
+  func als_client_verbinden(adresse: String) -> void:
+      var peer := ENetMultiplayerPeer.new()
+      var fehler := peer.create_client(adresse, PORT)
+      if fehler != OK:
+          push_error("Verbindung fehlgeschlagen: ", fehler)
+          verbindung_fehlgeschlagen.emit()
+          return
+
+      multiplayer.multiplayer_peer = peer
+
+      # Diese Signale feuern beim Client:
+      multiplayer.connected_to_server.connect(_on_verbunden)
+      multiplayer.connection_failed.connect(_on_fehler)
+      multiplayer.server_disconnected.connect(_on_server_weg)
+
+  func _on_verbunden() -> void:
+      print("Verbunden mit Server! Meine ID: ", multiplayer.get_unique_id())
+
+  func _on_fehler() -> void:
+      print("Verbindung fehlgeschlagen!")
+      verbindung_fehlgeschlagen.emit()
+
+  func _on_server_weg() -> void:
+      print("Server getrennt.")
+      zurueck_zum_hauptmenu()
+
+  func trennen() -> void:
+      multiplayer.multiplayer_peer = null   # Verbindung kappen
+
+------------------------------------------------------------------------
+22.3  Lobby-System
+------------------------------------------------------------------------
+
+  # LobbyManager.gd
+  extends Node
+
+  # Spieler-Daten die alle kennen müssen:
+  var spieler_daten: Dictionary = {}
+  # Format: {peer_id: {"name": String, "farbe": Color, "bereit": bool}}
+
+  func _ready() -> void:
+      NetworkManager.spieler_verbunden.connect(_on_spieler_verbunden)
+      NetworkManager.spieler_getrennt.connect(_on_spieler_getrennt)
+
+  func _on_spieler_verbunden(id: int) -> void:
+      if multiplayer.is_server():
+          # Server schickt neuen Spieler die bestehenden Daten:
+          for bekannte_id in spieler_daten.keys():
+              rpc_id(id, "spieler_daten_empfangen", bekannte_id, spieler_daten[bekannte_id])
+
+  # Eigene Daten an alle senden:
+  func eigene_daten_senden(name: String, farbe: Color) -> void:
+      var daten := {"name": name, "farbe": farbe, "bereit": false}
+      spieler_daten[multiplayer.get_unique_id()] = daten
+      rpc("spieler_daten_empfangen", multiplayer.get_unique_id(), daten)
+
+  @rpc("any_peer", "reliable")
+  func spieler_daten_empfangen(peer_id: int, daten: Dictionary) -> void:
+      spieler_daten[peer_id] = daten
+      lobby_ui_aktualisieren()
+
+  func bereit_toggle() -> void:
+      var eigene_id := multiplayer.get_unique_id()
+      spieler_daten[eigene_id]["bereit"] = not spieler_daten[eigene_id]["bereit"]
+      rpc("spieler_daten_empfangen", eigene_id, spieler_daten[eigene_id])
+      # Server prüft ob alle bereit:
+      if multiplayer.is_server():
+          spiel_starten_wenn_bereit()
+
+  func spiel_starten_wenn_bereit() -> void:
+      for id in spieler_daten:
+          if not spieler_daten[id]["bereit"]:
+              return
+      rpc("spiel_starten")
+
+  @rpc("authority", "reliable")
+  func spiel_starten() -> void:
+      get_tree().change_scene_to_file("res://scenes/SpielLevel.tscn")
+
+------------------------------------------------------------------------
+22.4  RPC — Remote Procedure Calls
+------------------------------------------------------------------------
+
+RPC ist das Herz von Godots Multiplayer. Mit @rpc ruf ich eine Funktion
+auf einem ANDEREN Gerät auf, als ob sie lokal wäre.
+
+Annotations:
+  @rpc                              → Standard (nur Server→Clients)
+  @rpc("any_peer")                  → Jeder darf aufrufen
+  @rpc("authority")                 → Nur Node-Authority darf aufrufen
+  @rpc("call_local")                → Wird AUCH lokal ausgeführt
+  @rpc("reliable")                  → Garantierte Zustellung (TCP-ähnlich)
+  @rpc("unreliable")                → Keine Garantie, schneller (UDP)
+  @rpc("unreliable_ordered")        → Keine Garantie, aber Reihenfolge
+
+Kombinierbar:
+  @rpc("any_peer", "call_local", "reliable")
+
+Aufrufen:
+  rpc("funktion_name", arg1, arg2)          # An alle
+  rpc_id(peer_id, "funktion_name", arg1)    # An einen spezifischen Peer
+
+Beispiel:
+  @rpc("any_peer", "call_local", "reliable")
+  func chat_nachricht(text: String) -> void:
+      # Wird auf JEDEM Client ausgeführt (inkl. dem Sender durch call_local)
+      $ChatBox.add_nachricht(multiplayer.get_remote_sender_id(), text)
+
+  # Aufrufen:
+  func nachricht_senden(text: String) -> void:
+      rpc("chat_nachricht", text)
+
+ACHTUNG: RPC-Parameter müssen serialisierbar sein: int, float, String,
+bool, Array, Dictionary, Vector2/3, Color, PackedArray-Typen.
+Keine Node-Referenzen, keine komplexen Objekte!
+
+------------------------------------------------------------------------
+22.5  MultiplayerSpawner und MultiplayerSynchronizer
+------------------------------------------------------------------------
+
+Godot 4 hat zwei Node-Typen die häufige Netzwerk-Aufgaben automatisieren:
+
+MultiplayerSpawner:
+  → Synchronisiert Spawning und Despawning über alle Peers.
+  → Wenn der Server eine Szene spawnt, spawnt sie automatisch auf allen Clients.
+
+  @onready var spawner: MultiplayerSpawner = $MultiplayerSpawner
+
+  func _ready() -> void:
+      spawner.spawn_function = spiel_objekt_spawnen
+
+  func spieler_spawnen(peer_id: int) -> void:
+      if not multiplayer.is_server():
+          return
+      spawner.spawn(peer_id)   # Triggert spawn_function auf allen
+
+  func spiel_objekt_spawnen(data: int) -> Node:
+      var spieler: CharacterBody3D = spieler_szene.instantiate()
+      spieler.name = str(data)   # Peer-ID als Name
+      spieler.set_multiplayer_authority(data)
+      return spieler
+
+MultiplayerSynchronizer:
+  → Synchronisiert Eigenschaften eines Nodes automatisch.
+  → Konfigurierbar welche Properties wie oft gesynct werden.
+
+  Im Editor: MultiplayerSynchronizer an Spieler-Node hängen
+  → "Synchronizing" → Properties hinzufügen:
+    "position" → unreliable (jedes Frame ok)
+    "hp"       → reliable   (darf nicht verloren gehen)
+    "animation_state" → reliable
+
+  Im Skript (was du NICHT mehr manuell senden musst):
+  # Die Properties werden automatisch gesynct!
+  # Du musst nur die Authority korrekt setzen:
+  func _ready() -> void:
+      set_multiplayer_authority(name.to_int())   # name = peer_id (aus spawner)
+
+--------------------------------------------------------------------------------
+ÜBUNG 22:
+1. Implementiere Host/Join: Ein Hauptmenü mit "Host" und "Join" (IP-Eingabe).
+   Beide öffnen dieselbe Szene.
+2. Baue ein Lobby-System: Spieler-Name eingeben → an alle senden → Liste zeigen.
+3. Implementiere einen Chat per RPC ("any_peer", "call_local", "reliable").
+4. Implementiere "Alle bereit" → Server startet Spiel.
+5. Bonus: MultiplayerSpawner nutzen um Spieler-Chars beim Beitreten zu spawnen.
+   Jeder Spieler hat seine eigene Farbe (aus Lobby-Daten).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 23: Spieler-Synchronisation — State und Input
+================================================================================
+
+------------------------------------------------------------------------
+23.1  Das Autoritäts-Modell
+------------------------------------------------------------------------
+
+Jeder Node in Godot hat eine "Multiplayer Authority" (Standard: 1 = Server).
+Nur die Authority darf den Node kontrollieren. Andere lesen nur.
+
+  node.set_multiplayer_authority(peer_id)   # Node gehört diesem Peer
+  node.get_multiplayer_authority()          # Wer hat die Authority?
+  node.is_multiplayer_authority()           # Bin ICH die Authority?
+
+Für Spieler-Charaktere: Jeder Spieler ist seine eigene Authority.
+
+  func _physics_process(delta: float) -> void:
+      if not is_multiplayer_authority():
+          return   # Nicht mein Charakter — nichts tun!
+
+      # Mein Charakter: Input lesen und bewegen
+      var richtung := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+      velocity.x = richtung.x * speed
+      velocity.z = richtung.y * speed
+      move_and_slide()
+      # MultiplayerSynchronizer schickt position automatisch
+
+------------------------------------------------------------------------
+23.2  Input-Synchronisation (Server Authority)
+------------------------------------------------------------------------
+
+Wenn der Server alles entscheiden soll (gegen Cheating):
+Client schickt nur Input → Server berechnet Bewegung → Server schickt Position.
+
+  # Spieler-Skript:
+  func _physics_process(delta: float) -> void:
+      if is_multiplayer_authority():
+          # Ich bin dieser Spieler: Input lesen und an Server schicken
+          var input := Vector3(
+              Input.get_axis("move_left", "move_right"),
+              0,
+              Input.get_axis("move_up", "move_down")
+          )
+          rpc_id(1, "input_empfangen", input)   # Nur an Server (ID 1)
+
+  @rpc("any_peer", "unreliable")
+  func input_empfangen(input: Vector3) -> void:
+      if not multiplayer.is_server():
+          return   # Nur Server verarbeitet Input
+      var sender_id := multiplayer.get_remote_sender_id()
+      # Input für diesen Spieler speichern:
+      gespeicherter_input[sender_id] = input
+
+  # Server-seitiger Physik-Prozess:
+  func _physics_process(delta: float) -> void:
+      if not multiplayer.is_server():
+          return
+      # Für jeden Spieler mit gespeichertem Input:
+      for spieler_id in spieler_nodes:
+          var spieler: CharacterBody3D = spieler_nodes[spieler_id]
+          var input: Vector3 = gespeicherter_input.get(spieler_id, Vector3.ZERO)
+          spieler.velocity = input * speed
+          spieler.move_and_slide()
+
+------------------------------------------------------------------------
+23.3  Client Prediction mit Reconciliation
+------------------------------------------------------------------------
+
+Das ist der Kern professioneller Multiplayer-Spiele. Komplex, aber lernbar:
+
+  # Auf dem Client:
+  var vorhergesagte_positionen: Array[Vector3] = []  # Ringpuffer
+  var letzter_bestaedigter_frame: int = 0
+
+  func _physics_process(delta: float) -> void:
+      if is_multiplayer_authority():
+          var input := eingabe_lesen()
+          # LOKAL sofort ausführen (Prediction):
+          bewegung_ausfuehren(input, delta)
+          # Input mit Frame-Nummer an Server schicken:
+          rpc_id(1, "input_mit_frame", Engine.get_process_frames(), input)
+          # Position für spätere Reconciliation speichern:
+          vorhergesagte_positionen.append(global_position)
+
+  @rpc("authority", "unreliable")
+  func server_position_korrektur(frame: int, position: Vector3) -> void:
+      # Server hat bestätigt: Bei Frame X war ich bei Position Y
+      var diff := position.distance_to(vorhergesagte_positionen[frame % 60])
+      if diff > 0.1:   # Signifikante Abweichung: neu simulieren
+          global_position = position
+          # Alle Inputs seit Frame nochmal anwenden...
+          # (Vollständige Implementierung in Teil 6, Modul 26)
+
+------------------------------------------------------------------------
+23.4  Projektile und Hit Detection im Multiplayer
+------------------------------------------------------------------------
+
+Schlechte Methode (Client Authority):
+  Client schickt: "Ich hab getroffen"
+  → Server glaubt es einfach → einfach zu cheaten
+
+Gute Methode (Server Authority):
+  Client schickt: "Ich habe um Frame X in Richtung Y geschossen"
+  Server spult seinen State zurück zu Frame X → prüft ob Strahl trifft
+  → nur dann wird Schaden registriert
+
+Einfache Variante (ohne Lag-Compensation, für Indie ausreichend):
+  @rpc("any_peer", "reliable")
+  func schuss_abgefeuert(ursprung: Vector3, richtung: Vector3) -> void:
+      if not multiplayer.is_server():
+          return   # Nur Server verarbeitet
+
+      var sender_id := multiplayer.get_remote_sender_id()
+      # Schuss nur aus dem eigenen Spieler-Node erlauben:
+      var schütze: Node = spieler_nodes.get(sender_id)
+      if not schütze:
+          return
+
+      # Server macht den Raycast:
+      var space := get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(ursprung, ursprung + richtung * 100)
+      query.exclude = [schütze]
+      var ergebnis := space.intersect_ray(query)
+
+      if ergebnis and ergebnis["collider"].has_method("schaden_nehmen"):
+          ergebnis["collider"].schaden_nehmen(25, sender_id)
+
+  # Beim lokalen Spieler:
+  func _unhandled_input(event: InputEvent) -> void:
+      if event.is_action_just_pressed("attack"):
+          var richtung := -kamera.global_transform.basis.z
+          rpc_id(1, "schuss_abgefeuert", kamera.global_position, richtung)
+
+------------------------------------------------------------------------
+23.5  Zustand-Synchronisation und Spieler-Tod
+------------------------------------------------------------------------
+
+Wenn HP sich ändert — Server schickt es an alle:
+  # Nur auf dem Server ausführen:
+  func schaden_nehmen(menge: int, von_spieler: int) -> void:
+      if not multiplayer.is_server():
+          return
+      hp -= menge
+      # An alle schicken:
+      rpc("hp_aktualisieren", hp)
+      if hp <= 0:
+          rpc("spieler_gestorben", von_spieler)
+
+  @rpc("authority", "reliable", "call_local")
+  func hp_aktualisieren(neues_hp: int) -> void:
+      hp = neues_hp
+      hp_bar.value = hp   # Lokal anzeigen
+
+  @rpc("authority", "reliable", "call_local")
+  func spieler_gestorben(killer_id: int) -> void:
+      tod_animation_abspielen()
+      if is_multiplayer_authority():
+          # Nur mein eigener Charakter: Respawn-UI zeigen
+          $RespawnUI.visible = true
+
+--------------------------------------------------------------------------------
+ÜBUNG 23:
+1. Spawne jeden verbundenen Spieler als separaten Node mit eigener Authority.
+   Jeder kann nur seinen eigenen Charakter steuern (is_multiplayer_authority()).
+2. Nutze MultiplayerSynchronizer für Position + Animation-State.
+3. Implementiere Server-Authority für HP: Server zieht HP ab, schickt
+   aktuellen Stand per RPC an alle.
+4. Baue eine Chat-Anzeige die "Spieler X wurde getötet von Spieler Y" zeigt.
+5. Bonus: Respawn-System — nach 5 Sekunden Respawn an einem zufälligen
+   Spawn-Punkt. Server wählt Punkt, schickt Position an Client.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 24: Szenen-Synchronisation und Spielzustand
+================================================================================
+
+------------------------------------------------------------------------
+24.1  Szenen-Wechsel im Multiplayer
+------------------------------------------------------------------------
+
+Alle Clients müssen synchron dieselbe Szene laden:
+
+  # NUR auf Server aufrufen:
+  @rpc("authority", "reliable", "call_local")
+  func alle_szene_wechseln(szenen_pfad: String) -> void:
+      # Kurz warten damit alle Clients vorbereitet sind:
+      await get_tree().create_timer(0.5).timeout
+      get_tree().change_scene_to_file(szenen_pfad)
+
+  # Nach Szenen-Wechsel: Server schickt aktuellen Spielzustand
+  func nach_szenen_laden() -> void:
+      if multiplayer.is_server():
+          await get_tree().process_frame   # Einen Frame warten
+          for peer_id in multiplayer.get_peers():
+              spielzustand_schicken(peer_id)
+
+  func spielzustand_schicken(peer_id: int) -> void:
+      var zustand: Dictionary = {
+          "spieler": {},
+          "score": GameManager.score,
+          "timer": spiel_timer
+      }
+      for spieler_id in spieler_nodes:
+          var s: Node = spieler_nodes[spieler_id]
+          zustand["spieler"][spieler_id] = {
+              "position": s.global_position,
+              "hp": s.hp
+          }
+      rpc_id(peer_id, "spielzustand_empfangen", zustand)
+
+  @rpc("authority", "reliable")
+  func spielzustand_empfangen(zustand: Dictionary) -> void:
+      GameManager.score = zustand["score"]
+      spiel_timer = zustand["timer"]
+      for spieler_id_str in zustand["spieler"]:
+          var spieler_id := int(spieler_id_str)
+          var s_daten: Dictionary = zustand["spieler"][spieler_id_str]
+          if spieler_nodes.has(spieler_id):
+              spieler_nodes[spieler_id].global_position = s_daten["position"]
+              spieler_nodes[spieler_id].hp = s_daten["hp"]
+
+------------------------------------------------------------------------
+24.2  Host Migration
+------------------------------------------------------------------------
+
+Was passiert wenn der Host geht? Zwei Optionen:
+  A) Spiel bricht ab (einfach, oft akzeptabel für Indie)
+  B) Host Migration — ein anderer Spieler wird Host
+
+Option A (Spiel-Ende wenn Host geht):
+  func _on_server_disconnected() -> void:
+      var popup := $HostWegPopup
+      popup.visible = true
+      await popup.ok_pressed
+      get_tree().change_scene_to_file("res://scenes/Hauptmenu.tscn")
+
+Option B (Host Migration, vereinfacht):
+  # Server schickt vor dem Schließen einen Hinweis:
+  func server_schliessen() -> void:
+      var neuer_host := multiplayer.get_peers()[0]   # Erster Client wird Host
+      rpc("host_migration", neuer_host)
+      trennen()
+
+  @rpc("authority", "reliable")
+  func host_migration(neuer_host_id: int) -> void:
+      if multiplayer.get_unique_id() == neuer_host_id:
+          # Ich werde neuer Host — Server neu erstellen:
+          trennen()
+          server_erstellen()
+          # Alle anderen sollen sich reconnecten...
+          rpc("neu_verbinden", get_eigene_ip())
+      # Vollständige Implementation sehr komplex — meist Option A für Indie
+
+------------------------------------------------------------------------
+24.3  Multiplayer-Objekte (Kisten, Türen, Pickups)
+------------------------------------------------------------------------
+
+Für Objekte die sich alle teilen (nicht einem Spieler gehören):
+Server hat Authority, informiert alle über Änderungen.
+
+  extends RigidBody3D   # Eine aufhebbare Kiste
+
+  func _ready() -> void:
+      set_multiplayer_authority(1)   # Server hat Authority
+
+  # Spieler interagiert:
+  @rpc("any_peer", "reliable")
+  func aufheben_anfrage(von_spieler_id: int) -> void:
+      if not multiplayer.is_server():
+          return
+      if wird_getragen:
+          return   # Schon jemand anderes hat sie
+
+      wird_getragen = true
+      traeger_id = von_spieler_id
+      freeze = true
+      rpc("kiste_aufgehoben", von_spieler_id)
+
+  @rpc("authority", "reliable", "call_local")
+  func kiste_aufgehoben(spieler_id: int) -> void:
+      # Auf allen Clients: Kiste folgt Spieler
+      traeger_id = spieler_id
+      freeze = true
+
+  func _process(delta: float) -> void:
+      if not multiplayer.is_server() or not wird_getragen:
+          return
+      # Server bewegt Kiste vor den Träger:
+      var traeger: Node3D = spieler_nodes[traeger_id]
+      global_position = traeger.global_position + traeger.global_transform.basis.z * -1.5
+
+------------------------------------------------------------------------
+24.4  Score, Timer und Spiellogik synchronisieren
+------------------------------------------------------------------------
+
+  # GameManager (Autoload, Server hat Authority)
+  extends Node
+
+  var score: Dictionary = {}   # {peer_id: punkte}
+  var spiel_laeuft: bool = false
+  var spiel_timer: float = 180.0   # 3 Minuten
+
+  func _physics_process(delta: float) -> void:
+      if not multiplayer.is_server() or not spiel_laeuft:
+          return
+      spiel_timer -= delta
+      # Alle 1 Sekunde Timer schicken (nicht jeden Frame!):
+      if Engine.get_physics_frames() % 60 == 0:
+          rpc("timer_aktualisieren", spiel_timer)
+      if spiel_timer <= 0:
+          spiel_beenden()
+
+  @rpc("authority", "reliable", "call_local")
+  func timer_aktualisieren(verbleibend: float) -> void:
+      spiel_timer = verbleibend
+      $TimerLabel.text = "%d:%02d" % [int(spiel_timer / 60), int(spiel_timer) % 60]
+
+  func punkt_fuer_spieler(spieler_id: int, punkte: int) -> void:
+      if not multiplayer.is_server():
+          return
+      score[spieler_id] = score.get(spieler_id, 0) + punkte
+      rpc("score_aktualisieren", score)
+
+  @rpc("authority", "reliable", "call_local")
+  func score_aktualisieren(neuer_score: Dictionary) -> void:
+      score = neuer_score
+      scoreboard_aktualisieren()
+
+  func spiel_beenden() -> void:
+      spiel_laeuft = false
+      var gewinner_id: int = score.keys().reduce(
+          func(a, b): return a if score[a] > score[b] else b
+      )
+      rpc("spiel_vorbei", gewinner_id, score)
+
+  @rpc("authority", "reliable", "call_local")
+  func spiel_vorbei(gewinner_id: int, final_score: Dictionary) -> void:
+      $EndScreen.zeigen(gewinner_id, final_score)
+
+--------------------------------------------------------------------------------
+ÜBUNG 24:
+1. Implementiere synchronisierten Szenen-Wechsel: Alle Spieler wechseln
+   gleichzeitig nach "Alle bereit" in die Spielszene.
+2. Baue einen synchronisierten Countdown-Timer (3 Minuten, sichtbar für alle).
+3. Implementiere ein einfaches Score-System: Spieler einsammeln Coins
+   (Area3D) → Server bestätigt → Score für alle sichtbar.
+4. "Spiel-Ende": Server entscheidet nach Timer-Ende wer gewonnen hat,
+   zeigt Ergebnis-Screen auf allen Clients.
+5. Bonus: Implementiere eine aufhebbare Kiste (Server Authority):
+   Spieler kann sie aufheben und fallen lassen, alle sehen die Bewegung.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 5
+################################################################################
+
+VERBINDUNG:
+  var peer := ENetMultiplayerPeer.new()
+  peer.create_server(PORT, MAX)        → Host
+  peer.create_client(IP, PORT)         → Join
+  multiplayer.multiplayer_peer = peer
+
+SIGNALE (MultiplayerAPI):
+  multiplayer.peer_connected          → Neuer Spieler (Server)
+  multiplayer.peer_disconnected       → Spieler weg (Server)
+  multiplayer.connected_to_server     → Verbunden (Client)
+  multiplayer.connection_failed       → Fehler (Client)
+  multiplayer.server_disconnected     → Server weg (Client)
+
+IDs:
+  multiplayer.get_unique_id()         → Eigene ID (Server=1)
+  multiplayer.is_server()             → Bin ich Server?
+  multiplayer.get_peers()             → Array aller IDs
+  multiplayer.get_remote_sender_id()  → Wer hat das RPC gesendet?
+
+AUTHORITY:
+  node.set_multiplayer_authority(id)  → Node gehört diesem Peer
+  node.is_multiplayer_authority()     → Bin ICH zuständig?
+
+RPC:
+  @rpc("any_peer", "reliable", "call_local")
+  func meine_funktion(arg) → Annotation
+  rpc("meine_funktion", arg)          → An alle
+  rpc_id(id, "meine_funktion", arg)   → An einen
+
+SYNCHRONIZER:
+  MultiplayerSpawner   → Automatisches Spawn/Despawn
+  MultiplayerSynchronizer → Automatische Property-Sync
+
+DAUMENREGELN:
+  → Server entscheidet bei Schaden, Kollision, Loot
+  → Client prediction für eigene Bewegung (Reaktionszeit)
+  → Unreliable für Position, Reliable für HP/State
+  → Nie Client-Aussagen blind vertrauen
+
+================================================================================
+ENDE TEIL 5 — Weiter mit Teil 6: Advanced Multiplayer (Dedizierter Server,
+  Anti-Cheat, Steam P2P, Lag Compensation)
+================================================================================

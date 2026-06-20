@@ -1,0 +1,1303 @@
+================================================================================
+GODOT SHADER KOMPLETTKURS — GODOT 4 EDITION (Teil 4 von 4)
+================================================================================
+
+
+################################################################################
+TEIL 4 — PROFI-LEVEL
+################################################################################
+
+
+================================================================================
+MODUL 17: Compute Shader — GPU-Berechnungen ohne Rendering
+================================================================================
+
+Compute Shader laufen komplett außerhalb der Rendering-Pipeline. Sie haben
+keinen Vertex- oder Fragment-Shader — sie rechnen einfach. Das macht sie
+ideal für Simulationen, Partikel-Systeme, Fluid-Simulation, KI-Berechnungen,
+und alles was massiv parallel laufen soll.
+
+------------------------------------------------------------------------
+17.1  Was ist ein Compute Shader?
+------------------------------------------------------------------------
+
+Ein Compute Shader ist ein GPU-Programm das auf beliebigen Daten arbeitet:
+  - Liest/schreibt in Puffer (Arrays auf der GPU)
+  - Liest/schreibt in Texturen
+  - Arbeitet in "Work Groups" (parallele Ausführungsgruppen)
+  - Kein Vertex/Fragment — nur Berechnungen
+
+Godot 4 stellt Compute Shader über RenderingDevice bereit — die Low-Level
+GPU-API. Das ist nicht shader_type compute; — Compute Shader haben ihre
+eigene Syntax (.glsl Dateien) und werden über GDScript gesteuert.
+
+DATEI: mein_compute.glsl
+  #[compute]
+  #version 450
+
+  layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+  // Eingabe/Ausgabe Puffer:
+  layout(set = 0, binding = 0, std430) restrict buffer InputBuffer {
+      float daten[];
+  } input_buffer;
+
+  layout(set = 0, binding = 1, std430) restrict buffer OutputBuffer {
+      float ergebnis[];
+  } output_buffer;
+
+  void main() {
+      uint index = gl_GlobalInvocationID.x;
+      output_buffer.ergebnis[index] = input_buffer.daten[index] * 2.0;
+  }
+
+------------------------------------------------------------------------
+17.2  Compute Shader von GDScript aus starten
+------------------------------------------------------------------------
+
+  # GDScript:
+  extends Node
+
+  var rd: RenderingDevice
+
+  func _ready() -> void:
+      rd = RenderingServer.create_local_rendering_device()
+
+      # Shader laden und kompilieren:
+      var shader_datei := load("res://mein_compute.glsl") as RDShaderFile
+      var shader_spirv := shader_datei.get_spirv()
+      var shader := rd.shader_create_from_spirv(shader_spirv)
+
+      # Eingabe-Daten erstellen:
+      var eingabe := PackedFloat32Array()
+      for i in 64:
+          eingabe.append(float(i))
+
+      # GPU-Puffer erstellen:
+      var eingabe_bytes := eingabe.to_byte_array()
+      var eingabe_puffer := rd.storage_buffer_create(eingabe_bytes.size(), eingabe_bytes)
+      var ausgabe_puffer := rd.storage_buffer_create(eingabe_bytes.size())
+
+      # Uniform Set erstellen (verbindet Shader mit Puffern):
+      var uniforms: Array[RDUniform] = []
+
+      var u_ein := RDUniform.new()
+      u_ein.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+      u_ein.binding = 0
+      u_ein.add_id(eingabe_puffer)
+      uniforms.append(u_ein)
+
+      var u_aus := RDUniform.new()
+      u_aus.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+      u_aus.binding = 1
+      u_aus.add_id(ausgabe_puffer)
+      uniforms.append(u_aus)
+
+      var uniform_set := rd.uniform_set_create(uniforms, shader, 0)
+
+      # Compute Pipeline erstellen und ausführen:
+      var pipeline := rd.compute_pipeline_create(shader)
+      var compute_list := rd.compute_list_begin()
+      rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
+      rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+      rd.compute_list_dispatch(compute_list, 1, 1, 1)  # 1 Work Group × 64 = 64 Threads
+      rd.compute_list_end()
+
+      # GPU-Arbeit abschicken und warten:
+      rd.submit()
+      rd.sync()
+
+      # Ergebnis zurücklesen:
+      var ergebnis_bytes := rd.buffer_get_data(ausgabe_puffer)
+      var ergebnis := ergebnis_bytes.to_float32_array()
+      print(ergebnis)  # Sollte [0, 2, 4, 6, ... 126] sein
+
+------------------------------------------------------------------------
+17.3  GPU-Partikel mit Compute Shader
+------------------------------------------------------------------------
+
+Das mächtigste Anwendungsgebiet: Physik-Simulation für Millionen von
+Partikeln auf der GPU.
+
+  #[compute]
+  #version 450
+
+  layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+  struct Partikel {
+      vec3 position;
+      float lebensdauer;
+      vec3 geschwindigkeit;
+      float max_lebensdauer;
+  };
+
+  layout(set = 0, binding = 0, std430) restrict buffer PartikelBuffer {
+      Partikel partikel[];
+  } partikel_buffer;
+
+  layout(set = 0, binding = 1, std140) uniform Einstellungen {
+      float delta_time;
+      vec3 schwerkraft;
+      vec3 emit_position;
+  } einstellungen;
+
+  float rand(uint seed) {
+      seed = (seed ^ 61u) ^ (seed >> 16u);
+      seed *= 9u;
+      seed = seed ^ (seed >> 4u);
+      seed *= 0x27d4eb2du;
+      seed = seed ^ (seed >> 15u);
+      return float(seed) / 4294967295.0;
+  }
+
+  void main() {
+      uint index = gl_GlobalInvocationID.x;
+      Partikel p = partikel_buffer.partikel[index];
+
+      p.lebensdauer -= einstellungen.delta_time;
+
+      if (p.lebensdauer <= 0.0) {
+          // Partikel neu spawnen:
+          p.position = einstellungen.emit_position;
+          p.lebensdauer = 2.0 + rand(index * 73u + uint(einstellungen.delta_time * 1000.0)) * 3.0;
+          p.max_lebensdauer = p.lebensdauer;
+          float angle = rand(index * 17u) * 6.28318;
+          float speed = 2.0 + rand(index * 31u) * 3.0;
+          p.geschwindigkeit = vec3(cos(angle) * speed, 5.0 + rand(index * 53u) * 3.0, sin(angle) * speed);
+      } else {
+          // Physik:
+          p.geschwindigkeit += einstellungen.schwerkraft * einstellungen.delta_time;
+          p.position += p.geschwindigkeit * einstellungen.delta_time;
+      }
+
+      partikel_buffer.partikel[index] = p;
+  }
+
+Die Partikel-Positionen werden dann per MultiMeshInstance3D auf dem Bildschirm
+dargestellt — GDScript liest den Puffer und aktualisiert das MultiMesh.
+
+------------------------------------------------------------------------
+17.4  Textur als Compute-Ausgabe
+------------------------------------------------------------------------
+
+Compute Shader können direkt in Texturen schreiben — ideal für prozedurale
+Texturgenerierung, Fluid-Simulationen, oder Game-of-Life:
+
+  #[compute]
+  #version 450
+
+  layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+  layout(set = 0, binding = 0, rgba8) uniform restrict writeonly image2D ausgabe;
+  layout(set = 0, binding = 1) uniform sampler2D eingabe;
+
+  uniform vec2 aufloesung;
+  uniform float zeit;
+
+  void main() {
+      ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+      vec2 uv = vec2(pixel) / aufloesung;
+
+      // Game of Life Schritt:
+      float nachbarn = 0.0;
+      for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+              if (dx == 0 && dy == 0) continue;
+              vec2 neighbor_uv = uv + vec2(dx, dy) / aufloesung;
+              nachbarn += texture(eingabe, neighbor_uv).r;
+          }
+      }
+      float zelle = texture(eingabe, uv).r;
+      float naechste = 0.0;
+      if (zelle > 0.5) {
+          naechste = (nachbarn >= 2.0 && nachbarn <= 3.0) ? 1.0 : 0.0;
+      } else {
+          naechste = (nachbarn == 3.0) ? 1.0 : 0.0;
+      }
+
+      imageStore(ausgabe, pixel, vec4(vec3(naechste), 1.0));
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 17:
+1. Schreibe einen einfachen Compute Shader der ein Array von Zahlen sortiert
+   (Bitonic Sort — ein paralleler Sortieralgorithmus der auf GPUs funktioniert).
+2. Game of Life: Implementiere den vollständigen Compute-basierten Game-of-Life.
+   GDScript: zwei Texturen (Ping-Pong), abwechselnd lesen und schreiben.
+   Ergebnis auf einem Sprite2D anzeigen.
+3. Fluid-Simulation Light: Einfache "Druckwellen"-Simulation in 2D via
+   Compute. Jede Zelle teilt ihren Druck mit Nachbarn.
+4. Partikel-Feuer: Den Partikel-Compute-Shader von oben implementieren,
+   MultiMeshInstance3D als Renderer, INSTANCE_CUSTOM für Lebensdauer → Farbe.
+5. Bonus: GPU Pathfinding — A* auf der GPU via Compute Shader für ein
+   Grid-basiertes Spiel mit 1000+ gleichzeitigen Agenten.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: Shader + GDScript — Kommunikation und Steuerung
+================================================================================
+
+Gute Spiel-Effekte entstehen wenn Shader und GDScript nahtlos zusammenarbeiten.
+Hier lernst du alle Muster dieser Kommunikation.
+
+------------------------------------------------------------------------
+18.1  ShaderMaterial zur Laufzeit erstellen
+------------------------------------------------------------------------
+
+  # Shader aus Datei:
+  var shader := preload("res://effekte/feuer.gdshader") as Shader
+  var mat := ShaderMaterial.new()
+  mat.shader = shader
+  $MeshInstance3D.material_override = mat
+
+  # Shader aus Code-String (für dynamisch generierte Shader):
+  var shader := Shader.new()
+  shader.code = """
+  shader_type spatial;
+  render_mode unshaded;
+  uniform vec3 farbe = vec3(1.0, 0.0, 0.0);
+  void fragment() { ALBEDO = farbe; }
+  """
+  var mat := ShaderMaterial.new()
+  mat.shader = shader
+
+------------------------------------------------------------------------
+18.2  Uniforms effizient setzen
+------------------------------------------------------------------------
+
+Jeder set_shader_parameter()-Aufruf hat Overhead. Minimiere Updates:
+
+  # SCHLECHT — jedes Frame für alle Objekte:
+  func _process(delta):
+      for node in alle_objekte:
+          node.material.set_shader_parameter("time", Time.get_ticks_msec() / 1000.0)
+
+  # GUT — TIME ist Built-in, kein Update nötig
+  # Setze nur was sich wirklich ändert:
+  func auf_treffer(schaden: float) -> void:
+      $Sprite2D.material.set_shader_parameter("flash_intensitaet", 1.0)
+
+  func _process(delta: float) -> void:
+      var aktuell: float = $Sprite2D.material.get_shader_parameter("flash_intensitaet")
+      if aktuell > 0.0:
+          $Sprite2D.material.set_shader_parameter("flash_intensitaet",
+              move_toward(aktuell, 0.0, delta * 3.0))
+
+BATCH-UPDATES — alle Parameter in einem Zug:
+  func update_material(mat: ShaderMaterial, params: Dictionary) -> void:
+      for key in params:
+          mat.set_shader_parameter(key, params[key])
+
+  update_material(mat, {
+      "farbe": Color(1, 0.5, 0),
+      "intensitaet": 2.0,
+      "textur": noise_textur
+  })
+
+------------------------------------------------------------------------
+18.3  Shader-Parameter cachen
+------------------------------------------------------------------------
+
+get_shader_parameter() lesen ist teuer. Cachen spart Performance:
+
+  # NICHT get_shader_parameter() jedes Frame aufrufen:
+  var _flash_intensitaet: float = 0.0  # Lokale Kopie
+
+  func auf_treffer() -> void:
+      _flash_intensitaet = 1.0
+      mat.set_shader_parameter("flash_intensitaet", _flash_intensitaet)
+
+  func _process(delta: float) -> void:
+      if _flash_intensitaet > 0.0:
+          _flash_intensitaet = move_toward(_flash_intensitaet, 0.0, delta * 3.0)
+          mat.set_shader_parameter("flash_intensitaet", _flash_intensitaet)
+
+------------------------------------------------------------------------
+18.4  Shader-Varianten mit #define
+------------------------------------------------------------------------
+
+Mit #define kannst du einen Shader zu verschiedenen Varianten konfigurieren,
+ohne mehrere Shader-Dateien zu pflegen:
+
+  # Im Shader:
+  shader_type spatial;
+
+  #ifdef ENABLE_EMISSION
+  uniform float emission_staerke = 1.0;
+  #endif
+
+  void fragment() {
+      ALBEDO = vec3(0.8, 0.3, 0.1);
+      #ifdef ENABLE_EMISSION
+      EMISSION = ALBEDO * emission_staerke;
+      #endif
+  }
+
+  # In GDScript: define aktivieren:
+  var mat := ShaderMaterial.new()
+  mat.shader = shader
+  # Kein direkter #define-Support in Godot 4 über ShaderMaterial.
+  # Stattdessen: Uniform als "switch" nutzen oder separater Shader.
+
+  # Besser in Godot 4: Shader-Code dynamisch patchen:
+  var basis_code := (preload("res://shader.gdshader") as Shader).code
+  var variante_code := "#define ENABLE_EMISSION\n" + basis_code
+  var variante_shader := Shader.new()
+  variante_shader.code = variante_code
+
+------------------------------------------------------------------------
+18.5  Shader-Animation über Tween
+------------------------------------------------------------------------
+
+Tweens machen Shader-Animationen elegant:
+
+  @onready var mat: ShaderMaterial = $Sprite2D.material
+
+  func verblassen_aus() -> void:
+      var tween := create_tween()
+      tween.tween_method(func(v): mat.set_shader_parameter("alpha", v), 1.0, 0.0, 1.5)
+      await tween.finished
+      queue_free()
+
+  func treffer_flash() -> void:
+      var tween := create_tween()
+      tween.tween_method(
+          func(v): mat.set_shader_parameter("flash", v),
+          1.0, 0.0, 0.3
+      ).set_ease(Tween.EASE_OUT)
+
+  func spawn_animation() -> void:
+      var tween := create_tween()
+      # Dissolve von außen nach innen:
+      tween.tween_method(
+          func(v): mat.set_shader_parameter("dissolve", v),
+          1.0, 0.0, 0.8
+      ).set_trans(Tween.TRANS_BACK)
+
+------------------------------------------------------------------------
+18.6  Material-Pool — Shader-Materials wiederverwenden
+------------------------------------------------------------------------
+
+ShaderMaterials sind Ressourcen — wenn mehrere Objekte dasselbe Material
+teilen, teilen sie auch die Uniform-Werte. Für individuelle Shader-Parameter
+pro Objekt brauchst du separate Instanzen:
+
+  # Geteilt (alle Objekte haben gleiche Parameter — oft falsch für Spieler):
+  var shared_mat := preload("res://materials/feind.tres")
+  # ALLE Feinde, die dieses Material nutzen, ändern sich gleichzeitig!
+
+  # Individuell (jede Instanz eigene Kopie):
+  func _ready() -> void:
+      material = material.duplicate()  # Eigene Kopie erstellen!
+
+  # Oder direkt im Inspector: "Material" → "Lokal machen"
+
+WICHTIG: material.duplicate() kostet Speicher. Wenn tausende Objekte
+eigene Materialien brauchen, ist ShaderMaterial.set_shader_parameter()
+pro Objekt teuer → Dann ist es besser Uniforms via INSTANCE_CUSTOM
+(MultiMesh) zu übergeben.
+
+------------------------------------------------------------------------
+18.7  Visual Shader und Code-Shader kombinieren
+------------------------------------------------------------------------
+
+Godot 4 hat einen Visual Shader Editor (node-basiert, kein Code).
+Visual Shader exportiert GDShader-Code — du kannst jederzeit wechseln:
+
+  # Inspector → ShaderMaterial → Shader → VisualShader
+  # Visual Shader bearbeiten...
+  # Dann: Rechtsklick → "Als Text anzeigen" → Code sehen
+
+Code und Visual Shader können nicht direkt gemischt werden — aber du
+kannst den generierten Code kopieren und manuell erweitern.
+
+--------------------------------------------------------------------------------
+ÜBUNG 18:
+1. Baue ein "Material-Manager"-System:
+     - Eine Klasse MaterialManager (Autoload) die Shader-Materials cached
+     - get_material(name: String) → ShaderMaterial (shared oder duplicated)
+     - update_global_param(name, wert) → setzt Parameter auf ALLEN Instanzen
+       eines bestimmten Shaders gleichzeitig (z.B. globale Tageszeit-Helligkeit)
+2. Treffer-System mit Tween:
+     - Jede Figur hat ihr eigenes Material (duplicate())
+     - Bei Treffer: Flash-Tween (weiß → original, 0.3s)
+     - Bei niedrigem HP: Rot-Puls als Loop-Tween
+     - Bei Tod: Dissolve-Tween, dann queue_free()
+3. Shader-LOD (Level of Detail):
+     - Nahe Objekte: vollständiger Shader (Normal Map, AO, Detail-Textur)
+     - Mittlere Distanz: Vereinfachter Shader (nur Albedo + Roughness)
+     - Ferne Objekte: unshaded, nur ALBEDO
+     - GDScript: Distanz zur Kamera überwachen, material_override wechseln
+4. Dynamischer Tag/Nacht-Zyklus:
+     - Global uniform float tageszeit (0.0 = Mitternacht, 0.5 = Mittag, 1.0 = Mitternacht)
+     - Alle Materialien in der Szene reagieren: EMISSION erhöht sich bei Nacht
+       für Leuchtobjekte, ALBEDO wird blauer/dunkler
+     - GDScript: tageszeit per RenderingServer.global_shader_parameter_set() setzen
+5. Bonus: Shader-Hot-Reload:
+     - GDScript überwacht die .gdshader-Datei auf Änderungen (FileSystemWatcher)
+     - Bei Änderung: Shader automatisch neu laden ohne Spielneustart
+     - Useful für Shader-Entwicklung!
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 19: Performance-Optimierung für Shader
+================================================================================
+
+Ein schlechter Shader kann ein Spiel von 60fps auf 10fps bringen. Dieses
+Modul erklärt wie Shader-Performance funktioniert und wie du optimierst.
+
+------------------------------------------------------------------------
+19.1  Wie GPU-Performance gemessen wird
+------------------------------------------------------------------------
+
+DIE ZWEI HAUPT-BOTTLENECKS:
+
+  FILLRATE BOUND: Zu viele Operationen pro Pixel.
+    → Fragment Shader ist zu komplex
+    → Zu viele Texture-Samples
+    → Zu viele mathematische Operationen
+    Symptom: Performance skaliert mit Bildschirmauflösung.
+
+  VERTEX BOUND: Zu viele Vertices oder zu komplexer Vertex Shader.
+    → Zu viele Objekte, zu hohe Polygon-Zahl
+    Symptom: Performance skaliert mit Polygon-Zahl (nicht Auflösung).
+
+  BANDWIDTH BOUND: Zu viel Datentransfer zwischen GPU-Teilen.
+    → Sehr große Texturen, viele Texture-Reads pro Pixel
+    Symptom: Texture-Cache-Misses, schlechtes MIP-Mapping.
+
+GODOT 4 PROFILER: Debug → Profiler → GPU zeigt Render-Zeit pro Frame.
+Renderdoc (externes Tool) für tiefe GPU-Analyse.
+
+------------------------------------------------------------------------
+19.2  Mathematik optimieren
+------------------------------------------------------------------------
+
+  // TEUER: Division
+  float erg = wert / 3.14159;
+  // GÜNSTIG: Multiplikation (1/3.14159 vorberechnen):
+  const float INV_PI = 0.31831;
+  float erg = wert * INV_PI;
+
+  // TEUER: pow(x, 2.0)
+  float erg = pow(helligkeit, 2.0);
+  // GÜNSTIG: direkte Multiplikation:
+  float erg = helligkeit * helligkeit;
+
+  // TEUER: pow(x, 3.0)
+  float erg = pow(wert, 3.0);
+  // GÜNSTIG:
+  float erg = wert * wert * wert;
+
+  // TEUER: sqrt(x) dann Division
+  float len = sqrt(dot(v, v));
+  v = v / len;
+  // GÜNSTIG: normalize() (GPU hat hardware-normalize)
+  v = normalize(v);
+
+  // TEUER: if/else mit divergenter Ausführung
+  if (UV.x > 0.5) { farbe = rot; } else { farbe = blau; }
+  // GÜNSTIG: Branchless (beide Zweige immer ausführen, mix wählt):
+  float wechsel = step(0.5, UV.x);
+  farbe = mix(blau, rot, wechsel);
+
+------------------------------------------------------------------------
+19.3  Texture-Sampling optimieren
+------------------------------------------------------------------------
+
+  // Weniger Samples = schneller. Statt 9 Samples für Blur:
+  // → Nutze zwei-Pass Blur (horizontal + vertikal, je 5 Samples statt 25)
+  // → Oder: Downsampling (auf halbe Auflösung, dann samplen)
+
+  // SCHLECHTES MIP-MAPPING: Textur in Kacheln aufgeteilt (fract(UV * 8))
+  // erzeugt abrupte MIP-Level-Wechsel → artifacts
+  // LÖSUNG: textureGrad() nutzen oder MIPs manuell steuern
+
+  // CACHE-EFFIZIENZ: Texturen in der richtigen Reihenfolge samplen.
+  // Benachbarte Pixel sollten benachbarte UV-Koordinaten haben.
+  // Starke UV-Transformation (Rotation um 45°) verschlechtert Cache-Nutzung.
+
+  // TEXTUR-FORMATE:
+  // RGBA8: Standard, 4 Bytes/Pixel
+  // BC4/BC5 (DXT): Komprimiert, für Graustufenmasken und Normal Maps ideal
+  // In Godot: Import → Compress Mode → VRAM (BC/ETC/ASTC je nach Plattform)
+
+------------------------------------------------------------------------
+19.4  Render Modes für Performance
+------------------------------------------------------------------------
+
+  // vertex_lighting: Beleuchtung im Vertex Shader (1× pro Vertex statt 1× pro Pixel)
+  // → Guter Kompromiss für einfache, nicht nahe Objekte
+  render_mode vertex_lighting;
+
+  // unshaded: Kein Beleuchtungs-Pass — schnellstmöglich
+  render_mode unshaded;
+
+  // depth_prepass_alpha: Für transparente Objekte — verhindert unnötiges Rendering
+  render_mode depth_prepass_alpha;
+
+  // specular_disabled: Kein Specular-Highlight berechnen
+  render_mode specular_disabled;
+
+------------------------------------------------------------------------
+19.5  Shader-Komplexität reduzieren
+------------------------------------------------------------------------
+
+VARYINGS NUTZEN: Berechnungen die linear interpoliert werden können,
+im Vertex Shader machen (läuft seltener):
+
+  // TEUER (fragment, 1× pro Pixel):
+  void fragment() {
+      vec3 welt_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;  // FALSCH – VERTEX ist hier nicht verfügbar
+  }
+
+  // RICHTIG und GÜNSTIG (einmal pro Vertex):
+  varying vec3 welt_pos;
+  void vertex() {
+      welt_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+  }
+  void fragment() {
+      // welt_pos ist bereits fertig (interpoliert)
+  }
+
+KONSTANTE UNIFORMS: Werte die sich nie ändern als Konstanten definieren:
+  // LANGSAM: Uniform der nie geändert wird (trotzdem Overhead):
+  uniform float pi = 3.14159;
+
+  // SCHNELL: Echte Konstante (kompiliert direkt ein):
+  const float PI = 3.14159;
+  const float TWO_PI = 6.28318;
+  const float INV_PI = 0.31831;
+
+EARLY DISCARD: Bei Alpha-Cutout so früh wie möglich discard nutzen:
+  void fragment() {
+      float alpha = texture(albedo, UV).a;
+      if (alpha < 0.1) discard;  // FRÜH — vor teuren Berechnungen
+      // ... teure Normal Map, PBR-Berechnungen ...
+  }
+
+------------------------------------------------------------------------
+19.6  Draw Calls minimieren
+------------------------------------------------------------------------
+
+Shader selbst sind nicht der einzige Performance-Faktor. Draw Calls
+(CPU → GPU Kommunikation) kosten ebenfalls:
+
+  PROBLEM: 1000 Objekte = bis zu 1000 Draw Calls
+  LÖSUNG:
+    MultiMeshInstance3D  → Viele gleiche Objekte in einem Draw Call
+    GPUParticles3D       → Tausende Partikel auf der GPU
+    StaticBody + Merge   → Statische Szenen verschmelzen
+    Occlusion Culling    → Verdeckte Objekte gar nicht senden
+
+GODOT 4 AUTO-BATCHING: Ähnliche 2D-Sprites werden automatisch gebatcht.
+Das funktioniert nur wenn:
+  - Gleiche Textur oder TextureAtlas
+  - Gleiche Shader/Material
+  - Gleicher Z-Index
+  - Keine Group-Nodes dazwischen
+
+→ CanvasItem → Texture → Immer Atlas verwenden (AtlasTexture oder Sprite Sheet)
+
+------------------------------------------------------------------------
+19.7  Shader-Kompilierung und Varianten
+------------------------------------------------------------------------
+
+Godot kompiliert Shader zur Laufzeit (beim ersten Anzeigen) — das kann
+zu "Shader Stutter" führen (kurzes Einfrieren):
+
+  LÖSUNG 1: Shader vorwärmen
+    # Projekt-Einstellungen → Rendering → Shaders → Shader Pre-Compilation
+    # Oder manuell: RenderingServer.call_on_render_thread(
+    #     func(): mesh.get_active_material(0)  # Triggert Kompilierung)
+
+  LÖSUNG 2: Cache nutzen
+    # Projekt-Einstellungen → Rendering → Shaders → Shader Cache
+    # Kompilierte Shader werden gecacht → nach erstem Lauf kein Stutter mehr
+
+  LÖSUNG 3: Shader-Varianten reduzieren
+    # Jede Render Mode Kombination ist eine Variante → mehr Varianten = mehr Kompilierung
+    # Halte render_mode einfach
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+1. Profiling-Session: Nehme eine Szene mit 500+ Objekten und aktiviere den
+   GPU-Profiler. Identifiziere die teuersten Shader. Optimiere einen davon
+   (Math vereinfachen, Varying einsetzen, Sampling reduzieren).
+2. Konvertiere einen fragment()-schweren Shader (viele Berechnungen) so dass
+   alle konstanten und linear-interpolierbaren Werte im vertex() berechnet werden.
+   Messe die Frametime-Differenz.
+3. Implementiere einen zweistufigen Blur (horizontal pass + vertical pass) mit
+   SubViewport, statt einem 2D-Gaussblur in einem einzigen Fragment Shader.
+   Vergleiche: 9-Sample-Blur vs. 2×5-Sample-Blur bei 1080p.
+4. MultiMesh-Benchmark: 10.000 Grass-Instanzen mit Vertex-Shader-Wind vs.
+   10.000 einzelne MeshInstance3D-Nodes. Frametime-Vergleich dokumentieren.
+5. Bonus: Shader-LOD-System: 3 Shader-Varianten (Full/Medium/Low),
+   automatische Umschaltung basierend auf Distanz zur Kamera.
+   Benchmarke mit 200 Objekten auf verschiedenen Distanzen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Prozedurale Textur-Generierung
+================================================================================
+
+Alle Texturen die du dir vorstellen kannst, kannst du auch im Shader
+generieren. Das spart Speicher und erlaubt unendliche Variation.
+
+------------------------------------------------------------------------
+20.1  Marmor-Textur
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode unshaded;
+
+  uniform vec3 farbe_a : source_color = vec3(0.9, 0.9, 0.85);
+  uniform vec3 farbe_b : source_color = vec3(0.2, 0.2, 0.3);
+  uniform float maserung = 10.0;
+  uniform float turbulenzt = 3.0;
+
+  float rand(vec2 p) {
+      return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(rand(i), rand(i+vec2(1,0)), u.x),
+                 mix(rand(i+vec2(0,1)), rand(i+vec2(1,1)), u.x), u.y);
+  }
+
+  float fbm(vec2 p) {
+      float v = 0.0; float a = 0.5;
+      for (int i = 0; i < 5; i++) {
+          v += a * noise(p); p *= 2.0; a *= 0.5;
+      }
+      return v;
+  }
+
+  void fragment() {
+      vec2 p = UV * maserung;
+      float n = fbm(p) * turbulenzt;
+      float streifen = sin(p.x + n) * 0.5 + 0.5;
+      ALBEDO = mix(farbe_a, farbe_b, streifen);
+  }
+
+------------------------------------------------------------------------
+20.2  Holz-Textur
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform vec3 holz_hell : source_color = vec3(0.8, 0.6, 0.3);
+  uniform vec3 holz_dunkel : source_color = vec3(0.4, 0.25, 0.1);
+  uniform float ringe = 8.0;
+  uniform float maserung_staerke = 0.3;
+
+  float rand(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  float noise(vec2 p) { /* ... standard value noise ... */ return rand(p); }
+
+  void fragment() {
+      vec2 p = UV - 0.5;
+
+      // Maserung: leichte Störung der Kreisringe
+      float maser_noise = noise(UV * 4.0) * maserung_staerke;
+      float radius = length(p) + maser_noise;
+
+      // Kreisringe:
+      float ring = fract(radius * ringe);
+      ring = smoothstep(0.4, 0.6, ring);  // Weiche Übergänge
+
+      ALBEDO = mix(holz_hell, holz_dunkel, ring);
+      ROUGHNESS = 0.6;
+  }
+
+------------------------------------------------------------------------
+20.3  Brick / Ziegel-Textur
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform vec3 ziegel_farbe : source_color = vec3(0.7, 0.3, 0.2);
+  uniform vec3 fuge_farbe : source_color = vec3(0.8, 0.75, 0.7);
+  uniform float fuge_breite = 0.05;
+  uniform vec2 ziegel_groesse = vec2(2.0, 1.0);  // Breite, Höhe
+
+  float rand(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+  void fragment() {
+      vec2 p = UV * ziegel_groesse;
+      vec2 zeile = floor(p);
+
+      // Jede zweite Zeile versetzt (klassisches Ziegelmuster):
+      float versatz = mod(zeile.y, 2.0) * 0.5;
+      p.x += versatz;
+
+      vec2 zelle = floor(p);
+      vec2 lokal = fract(p);
+
+      // Fuge:
+      float fuge_x = step(1.0 - fuge_breite, lokal.x);
+      float fuge_y = step(1.0 - fuge_breite, lokal.y);
+      float ist_fuge = max(fuge_x, fuge_y);
+
+      // Zufällige Farb-Variation pro Ziegel:
+      float variation = rand(zelle) * 0.1 - 0.05;
+      vec3 ziegel = ziegel_farbe + vec3(variation);
+
+      ALBEDO = mix(ziegel, fuge_farbe, ist_fuge);
+      ROUGHNESS = mix(0.8, 0.9, ist_fuge);
+  }
+
+------------------------------------------------------------------------
+20.4  Prozedurale Normal Map
+------------------------------------------------------------------------
+
+Statt einer Normal-Map-Textur kannst du Normalen aus Höhen-Daten ableiten:
+
+  // Höhenfunktion (z.B. Noise):
+  float hoehe(vec2 uv) {
+      return noise(uv * 8.0);
+  }
+
+  void fragment() {
+      // Gradient der Höhe = Normale:
+      float eps = TEXTURE_PIXEL_SIZE.x;  // Für 3D: kleinen float-Wert nehmen
+      float h_x = hoehe(UV + vec2(eps, 0.0)) - hoehe(UV - vec2(eps, 0.0));
+      float h_y = hoehe(UV + vec2(0.0, eps)) - hoehe(UV - vec2(0.0, eps));
+
+      vec3 normal = normalize(vec3(-h_x, -h_y, 0.05));  // 0.05 = Stärke
+      NORMAL_MAP = normal * 0.5 + 0.5;  // In 0-1 Raum
+
+      ALBEDO = vec3(0.6, 0.5, 0.4);  // Stein-Grau
+      ROUGHNESS = 0.9;
+  }
+
+------------------------------------------------------------------------
+20.5  Generative Texturen auf der CPU (ImageTexture)
+------------------------------------------------------------------------
+
+Für Texturen die sich nicht animieren, ist CPU-Generierung oft
+sinnvoller (einmalig generiert, dann als Textur gecacht):
+
+  # GDScript:
+  func generiere_noise_textur(groesse: int) -> ImageTexture:
+      var image := Image.create(groesse, groesse, false, Image.FORMAT_RGB8)
+
+      for y in groesse:
+          for x in groesse:
+              var uv := Vector2(float(x) / groesse, float(y) / groesse)
+              # FastNoiseLite nutzen:
+              var noise := FastNoiseLite.new()
+              noise.noise_type = FastNoiseLite.TYPE_PERLIN
+              var wert := noise.get_noise_2d(x * 0.1, y * 0.1) * 0.5 + 0.5
+              image.set_pixel(x, y, Color(wert, wert, wert))
+
+      return ImageTexture.create_from_image(image)
+
+  # Oder direkt mit FastNoiseLite → NoiseTexture2D (automatisch):
+  var noise_tex := NoiseTexture2D.new()
+  noise_tex.noise = FastNoiseLite.new()
+  noise_tex.width = 512
+  noise_tex.height = 512
+  mat.set_shader_parameter("rauschen", noise_tex)
+
+--------------------------------------------------------------------------------
+ÜBUNG 20:
+1. Generiere eine vollständige "Backsteinwand"-Textur prozedural:
+     - Ziegel mit zufälliger Farb-Variation
+     - Normale aus Höhen-Gradient (Ziegel etwas erhoben, Fugen vertieft)
+     - AO in den Fugen (dunklere Fugen)
+2. "Planetenoberfläche": Mehrere Schichten FBM-Noise, verschiedene Farben für
+   Höhenebenen (Wasser, Sand, Gras, Fels, Schnee). Normal Map aus Gradient.
+3. Animierte "Lava"-Textur: FBM-Noise mit TIME animiert, Farbpalette von
+   Schwarz → Dunkelrot → Orange → Gelb basierend auf Noise-Wert.
+4. "Stoff/Textil"-Textur: Sich kreuzende Linien mit leichter Unregelmäßigkeit
+   (Noise auf die Linien-Position), Variation in Fadendicke.
+5. Bonus: "Planetare Atmosphäre" für einen Sky Shader:
+     shader_type sky;
+     Implementiere Rayleigh-Streuung (blauer Himmel tagsüber, roter Sonnenuntergang)
+     basierend auf der Sonne-Richtung (uniform vec3 sonne_richtung).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 21: Post-Processing-Pipeline — SubViewport und Screen-Effekte
+================================================================================
+
+Professionelle Post-Processing-Pipelines kombinieren mehrere Passes
+in einer definierten Reihenfolge. Hier bauen wir eine vollständige Pipeline.
+
+------------------------------------------------------------------------
+21.1  Die Pipeline-Architektur
+------------------------------------------------------------------------
+
+Eine typische Post-Processing-Kette:
+
+  [3D-Szene]
+      ↓ SubViewport (Szene rendern)
+  [Bloom-Pass]     → helle Pixel extrahieren + Blur
+      ↓
+  [Tone Mapping]   → HDR → LDR konvertieren
+      ↓
+  [Color Grading]  → LUT oder Farbkorrektur
+      ↓
+  [Vignette + Film Grain]
+      ↓
+  [Chromatic Aberration]
+      ↓
+  [Endausgabe]
+
+In Godot 4 gibt es zwei Wege:
+
+  WEG A: Compositor (Godot 4.3+)
+    → Neue offizielle API für Post-Processing
+    → CompositorEffect-Klasse, läuft im Render-Thread
+    → Zugriff auf alle Buffer (Color, Depth, Normal, Velocity)
+
+  WEG B: SubViewport-Kette (älterer Ansatz, aber überall nutzbar)
+    → Mehrere SubViewports, jeder liest den vorherigen
+    → Einfacher zu verstehen, aber mehr Overhead
+
+------------------------------------------------------------------------
+21.2  Bloom via SubViewport (Zwei-Pass)
+------------------------------------------------------------------------
+
+Szene-Setup:
+  SubViewportContainer
+  └── SubViewport (Name: "SzeneViewport")
+      └── ... (Spielszene)
+
+  SubViewportContainer
+  └── SubViewport (Name: "BlurHViewport")
+      └── ColorRect → ShaderMaterial (Horizontaler Blur)
+
+  SubViewportContainer
+  └── SubViewport (Name: "BlurVViewport")
+      └── ColorRect → ShaderMaterial (Vertikaler Blur)
+
+  ColorRect (Vollbild) → ShaderMaterial (Bloom-Kombination)
+
+SHADER: Horizontaler Gaussian Blur
+  shader_type canvas_item;
+  render_mode unshaded;
+  uniform sampler2D screen_tex : hint_default_white;
+  uniform float blur_groesse = 1.0;
+  uniform vec2 aufloesung = vec2(1920.0, 1080.0);
+
+  void fragment() {
+      vec2 pixel_step = vec2(blur_groesse, 0.0) / aufloesung;
+      vec3 blur = vec3(0.0);
+      // Gaussian weights:
+      float gewichte[5] = {0.227027, 0.194595, 0.121621, 0.054054, 0.016216};
+
+      blur += texture(screen_tex, SCREEN_UV).rgb * gewichte[0];
+      for (int i = 1; i < 5; i++) {
+          blur += texture(screen_tex, SCREEN_UV + pixel_step * float(i)).rgb * gewichte[i];
+          blur += texture(screen_tex, SCREEN_UV - pixel_step * float(i)).rgb * gewichte[i];
+      }
+      COLOR = vec4(blur, 1.0);
+  }
+
+SHADER: Bloom-Kombination
+  shader_type canvas_item;
+  render_mode unshaded;
+  uniform sampler2D szene_tex : hint_default_white;
+  uniform sampler2D bloom_tex : hint_default_white;
+  uniform float bloom_staerke = 0.5;
+  uniform float schwellwert = 0.8;
+
+  void fragment() {
+      vec3 szene = texture(szene_tex, SCREEN_UV).rgb;
+      vec3 bloom = texture(bloom_tex, SCREEN_UV).rgb;
+
+      // Nur helle Bereiche des Bloom:
+      float helligkeit = dot(bloom, vec3(0.299, 0.587, 0.114));
+      bloom *= smoothstep(schwellwert, 1.0, helligkeit);
+
+      COLOR = vec4(szene + bloom * bloom_staerke, 1.0);
+  }
+
+------------------------------------------------------------------------
+21.3  CompositorEffect (Godot 4.3+)
+------------------------------------------------------------------------
+
+Der neue offizielle Weg für Post-Processing:
+
+  # GDScript (CompositorEffect-Ressource):
+  class_name MeinPostEffect extends CompositorEffect
+
+  func _init() -> void:
+      effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_POST_TRANSPARENT
+
+  func _render_callback(effect_callback_type: int, render_data: RenderData) -> void:
+      var render_scene_buffers := render_data.get_render_scene_buffers()
+      if render_scene_buffers == null:
+          return
+
+      var size := render_scene_buffers.get_internal_size()
+      if size.x == 0 or size.y == 0:
+          return
+
+      # Render-Thread Shader ausführen:
+      RenderingServer.call_on_render_thread(_render_effects.bind(render_scene_buffers))
+
+  func _render_effects(render_scene_buffers: RenderSceneBuffersRD) -> void:
+      # Zugriff auf Color-Buffer, Depth-Buffer, etc.
+      var rd := RenderingServer.get_rendering_device()
+      # ... ComputeShader auf den Buffern ausführen ...
+
+  # Im WorldEnvironment:
+  # compositor_effects = [MeinPostEffect.new()]
+
+------------------------------------------------------------------------
+21.4  Depth Buffer auslesen
+------------------------------------------------------------------------
+
+Der Depth Buffer speichert die Tiefe jedes Pixels (0=nahe, 1=fern).
+Er ermöglicht viele Effekte:
+
+  shader_type spatial;
+  render_mode blend_mix, depth_draw_never;
+
+  uniform sampler2D DEPTH_TEXTURE : hint_depth_texture, filter_nearest;
+  uniform float nah = 0.1;    // Camera near plane
+  uniform float fern = 100.0; // Camera far plane
+
+  float linear_tiefe(float depth, float n, float f) {
+      return (2.0 * n * f) / (f + n - depth * (f - n));
+  }
+
+  void fragment() {
+      float depth = texture(DEPTH_TEXTURE, SCREEN_UV).r;
+      float lin_depth = linear_tiefe(depth * 2.0 - 1.0, nah, fern);
+
+      // Beispiel: Wasserrand-Effekt (weicher Übergang zu Land)
+      float fragment_depth = linear_tiefe(FRAGCOORD.z * 2.0 - 1.0, nah, fern);
+      float tiefe_differenz = lin_depth - fragment_depth;
+      float rand_maske = smoothstep(0.0, 0.5, tiefe_differenz);
+
+      ALPHA = rand_maske * 0.7;
+      ALBEDO = vec3(0.1, 0.4, 0.6);
+  }
+
+------------------------------------------------------------------------
+21.5  Motion Blur
+------------------------------------------------------------------------
+
+Motion Blur benötigt Velocity-Buffer (Godot 4 → WorldEnvironment → Motion Blur).
+Für einen manuellen Ansatz:
+
+  shader_type canvas_item;
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  uniform sampler2D vorheriger_frame : hint_default_white;
+  uniform float blur_staerke = 0.1;
+
+  void fragment() {
+      vec4 aktuell = texture(SCREEN_TEXTURE, SCREEN_UV);
+      vec4 vorher = texture(vorheriger_frame, SCREEN_UV);
+      COLOR = mix(aktuell, vorher, blur_staerke);
+      // vorheriger_frame wird jedes Frame mit dem aktuellen Frame aktualisiert
+      // (per SubViewport oder RenderingServer)
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 21:
+1. Vollständige Bloom-Pipeline bauen:
+     - SubViewport für Szene
+     - Brightness-Extract-Pass (nur Pixel > Schwellwert)
+     - 2× Downscale (auf 1/2, dann 1/4 der Auflösung)
+     - Horizontaler + Vertikaler Blur-Pass
+     - Upscale + Kombination mit Original
+2. Depth-of-Field: Nutze den Depth Buffer um nahe und ferne Objekte unscharf zu machen.
+     - Schärfenzone per uniform float fokus_distanz / schärfentiefe
+     - Gaussian Blur Stärke proportional zur Tiefenabweichung vom Fokus
+3. "Gott-Strahlen" (Light Shafts): Von einer Lichtquelle ausgehende Strahlen.
+     - Technik: Radial Blur vom Lichtquellen-Punkt (in Bildschirmkoordinaten)
+     - Nur für helle Bereiche (Schwellwert-Maske)
+4. Baue eine "LUT-Color-Grading"-Pipeline:
+     - Erstelle eine 3D-LUT (Godot 4: 256×16-Textur als 3D-LUT approximiert)
+     - Wende die LUT auf das fertige Bild an (in einem Post-Processing-Pass)
+     - Exportiere deine LUT aus Davinci Resolve oder Lightroom
+5. Bonus: Implementiere einen kompletten Compositor-basierten Post-Effect
+   (Godot 4.3+) mit CompositorEffect, der einen Screen-Space Ambient Occlusion
+   approximiert (SSAO-Lite).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 22: Abschlussprojekte
+================================================================================
+
+Drei vollständige Projekte die alle Kenntnisse aus dem Kurs kombinieren.
+Jedes Projekt ist eigenständig und kann als Portfolio-Stück dienen.
+
+------------------------------------------------------------------------
+PROJEKT A: Stilisierte Wasseroberfläche (3D)
+------------------------------------------------------------------------
+
+ZIEL: Eine überzeugende, performante Wasser-Oberfläche für ein 3D-Spiel.
+
+TECHNIKEN:
+  - Vertex Shader: Gerstner-Wellen (physikalisch korrektere Wellen als Sinus)
+  - Fragment Shader: PBR-Wasser mit Fresnel, animierten Normal Maps, Schaum
+  - Depth Buffer: Wasserrand-Effekt (Schaum nahe der Küste)
+  - Screen Texture: Refraktion des Hintergrunds
+  - Emission: Schaumkämme leuchten leicht bei Nacht
+
+GERSTNER-WELLEN (realistischere Wellen):
+  // Gerstner-Welle für einen einzelnen Richtungsvektor:
+  vec3 gerstner_welle(vec2 dir, float amplitude, float wellenzahl, float geschwindigkeit, vec2 pos) {
+      dir = normalize(dir);
+      float phase = dot(dir, pos) * wellenzahl - TIME * geschwindigkeit;
+      vec3 offset;
+      offset.x = dir.x * amplitude * cos(phase);
+      offset.z = dir.y * amplitude * cos(phase);
+      offset.y = amplitude * sin(phase);
+      return offset;
+  }
+
+  void vertex() {
+      vec2 p = VERTEX.xz;
+
+      // Mehrere überlagerte Gerstner-Wellen:
+      vec3 welle = gerstner_welle(vec2(1.0, 0.5), 0.15, 2.0, 1.5, p);
+      welle     += gerstner_welle(vec2(-0.3, 1.0), 0.08, 3.5, 2.0, p);
+      welle     += gerstner_welle(vec2(0.7, -0.8), 0.05, 5.0, 2.5, p);
+
+      VERTEX += welle;
+
+      // Normal aus Wellen-Gradient (analytisch):
+      // (Vereinfacht — für Produktion numerisch oder via Normal Map):
+  }
+
+  void fragment() {
+      // (Vollständiger Fragment Shader aus Modul 15, erweitert um Depth + Screen)
+      // ...
+  }
+
+SCHRITTE ZUM FERTIGSTELLEN:
+  1. Plane-Mesh mit genug Vertices (32×32 oder mehr für Wellen)
+  2. Vertex-Shader mit Gerstner-Wellen
+  3. Fragment-Shader: Basis-Farbe + Normal Maps + Fresnel
+  4. DEPTH_TEXTURE für Wasserrand-Schaum einbinden
+  5. SCREEN_TEXTURE für Refraktion
+  6. GDScript: Wasser-Parameter (Windrichtung, Wellenstaerke) per Tageszeit anpassen
+
+------------------------------------------------------------------------
+PROJEKT B: SciFi-HUD (2D)
+------------------------------------------------------------------------
+
+ZIEL: Ein vollständiges futuristisches HUD aus Shadern.
+
+KOMPONENTEN:
+  1. RADAR-DISPLAY: Runder Radar mit rotierendem Strahl, Blips, Scanlinien
+  2. HP/ENERGIE-BALKEN: Kreisförmige SDF-Balken mit Leucht-Effekt
+  3. SCANLINES-OVERLAY: Vollbild-Scanlines und Vignette
+  4. ZIELERFASSUNG: Eckige SDF-Kanten die sich um ein Ziel schließen
+
+SHADER: Radar (kombiniert aus Modul 7 und 9)
+  shader_type canvas_item;
+  render_mode blend_add, unshaded;
+  uniform vec3 radar_farbe : source_color = vec3(0.0, 0.8, 0.3);
+  uniform sampler2D blip_textur : hint_default_white;
+  // ... (vollständige Implementation aus Modul 7)
+
+SHADER: HUD-Balken
+  shader_type canvas_item;
+  render_mode unshaded;
+  uniform float wert : hint_range(0.0, 1.0) = 0.8;
+  uniform vec3 farbe_voll : source_color = vec3(0.0, 0.8, 1.0);
+  uniform vec3 farbe_kritisch : source_color = vec3(1.0, 0.2, 0.0);
+
+  void fragment() {
+      vec2 p = UV - 0.5;
+      // Kreisring-SDF:
+      float ring = abs(length(p) - 0.4) - 0.04;
+      float ist_ring = smoothstep(0.01, 0.0, ring);
+
+      // Füllstand:
+      float winkel = atan(p.x, -p.y) / 6.28318 + 0.5;
+      float gefuellt = step(winkel, wert);
+
+      vec3 farbe = mix(farbe_kritisch, farbe_voll, smoothstep(0.0, 0.3, wert));
+      COLOR = vec4(farbe * ist_ring * gefuellt, ist_ring * gefuellt);
+  }
+
+GDScript: HUD aktualisieren:
+  @onready var hp_mat: ShaderMaterial = $HUD/HPBalken.material
+  @onready var energy_mat: ShaderMaterial = $HUD/EnergyBalken.material
+
+  func update_hud(hp: float, hp_max: float, energie: float, energie_max: float) -> void:
+      hp_mat.set_shader_parameter("wert", hp / hp_max)
+      energy_mat.set_shader_parameter("wert", energie / energie_max)
+
+------------------------------------------------------------------------
+PROJEKT C: Cel-Shading-Spielwelt (3D)
+------------------------------------------------------------------------
+
+ZIEL: Komplette 3D-Szene im Cel-Shading-Stil.
+
+SHADER-SET:
+  1. CEL-SHADER: Für alle Figuren und Objekte (Toon-Shading mit hartem Licht)
+  2. OUTLINE: Inverted-Hull auf allen Charakteren (variable Dicke, Distanz-basiert)
+  3. HATCHING: Schraffur in Schatten-Bereichen (wenn n_dot_l < 0.3)
+  4. SKY: Flaches Himmels-Gradient (unshaded, kein PBR)
+
+CEL-SHADER mit Hatching:
+  shader_type spatial;
+  render_mode unshaded;
+
+  uniform sampler2D hatching_textur : hint_default_white;
+
+  void fragment() {
+      ALBEDO = farbe.rgb;
+  }
+
+  void light() {
+      float n_dot_l = max(0.0, dot(NORMAL, LIGHT));
+      float toon_schatten = step(0.4, n_dot_l);
+      float toon_mitte = step(0.7, n_dot_l);
+      float toon_licht = step(0.95, n_dot_l);
+
+      float hatching = 0.0;
+      if (toon_schatten < 0.5) {
+          // Schraffur in dunklen Bereichen:
+          hatching = texture(hatching_textur, UV * 3.0).r;
+          hatching = step(0.5, hatching);
+      }
+
+      vec3 lichtfarbe = vec3(0.1 + toon_schatten * 0.4 + toon_mitte * 0.3 + toon_licht * 0.2);
+      lichtfarbe = mix(lichtfarbe * 0.5, lichtfarbe, 1.0 - hatching * 0.5);
+
+      DIFFUSE_LIGHT += ALBEDO * lichtfarbe * LIGHT_COLOR * ATTENUATION;
+  }
+
+OUTLINE mit Distanz-basierter Dicke:
+  shader_type spatial;
+  render_mode cull_front, unshaded;
+
+  uniform float basis_dicke = 0.02;
+  uniform float distanz_skalierung = 0.1;
+
+  void vertex() {
+      // Outline dicker in der Ferne (bleibt sichtbar):
+      float distanz = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
+      float dicke = basis_dicke + distanz * distanz_skalierung * 0.001;
+      VERTEX += NORMAL * dicke;
+  }
+
+  void fragment() {
+      ALBEDO = vec3(0.0);  // Schwarze Outline
+  }
+
+SCHRITTE:
+  1. Alle Meshes: Cel-Shader + Outline-Duplicates
+  2. Lichtquellen: Nur eine direktionale Lichtquelle (klarer Look)
+  3. Hintergrund: Sky Shader (flacher Farbverlauf)
+  4. Post-Processing: Leichte Vignette, keine anderen Effekte (würde den Stil brechen)
+  5. Optional: Outline-Farbe per Objekt variieren (Gegner = rote Outline bei Alarm)
+
+--------------------------------------------------------------------------------
+ABSCHLUSS-CHECKLISTE (was du nach diesem Kurs können solltest):
+--------------------------------------------------------------------------------
+
+□ canvas_item Shader schreiben (UV, TEXTURE, TIME, Uniforms)
+□ Farbmanipulation: HSV, Luminanz, Blend-Modes
+□ SDFs für 2D-Formen (Kreis, Rechteck, Union/Subtraktion)
+□ Prozedurale Muster: Value Noise, FBM, Worley, Wellen
+□ Animierte 2D-Effekte: Scrolling, Dissolve, Glow
+□ Post-Processing: SCREEN_TEXTURE, Vignette, Bloom
+□ spatial Shader schreiben (ALBEDO, ROUGHNESS, METALLIC, EMISSION)
+□ PBR verstehen: Metallic/Roughness, Fresnel, Rim Light
+□ Normal Maps, Triplanar Mapping, Detail Textures
+□ Vertex Shader: Wellen, Billboard, Gerstner-Wellen
+□ Umwelt-Shader: Wasser, Gras, Laub, Schnee
+□ Fortgeschrittene Effekte: Dissolve, Outline, Hologramm, Cel-Shading
+□ Compute Shader: RenderingDevice API, Partikel-Simulation
+□ Shader + GDScript: set_shader_parameter, Tweens, Material-Pool
+□ Performance: Vertex vs. Fragment, Sampling optimieren, Draw Calls
+□ Prozedurale Texturen: Marmor, Holz, Ziegel, Planet
+□ Post-Processing-Pipeline: SubViewport, Bloom, Depth Buffer, Motion Blur
+□ Mindestens eines der drei Abschlussprojekte vollständig umgesetzt
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 4
+################################################################################
+
+COMPUTE SHADER SETUP:
+  Shader: res://shader.glsl (Endung .glsl, nicht .gdshader!)
+  layout(local_size_x=64, ...) in;
+  gl_GlobalInvocationID.x  → Thread-Index
+
+  GDScript:
+    rd = RenderingServer.create_local_rendering_device()
+    shader = rd.shader_create_from_spirv(spirv)
+    puffer = rd.storage_buffer_create(size, data)
+    rd.compute_list_dispatch(list, groups_x, groups_y, groups_z)
+    rd.submit(); rd.sync()
+
+GLOBAL SHADER PARAMETERS (für alle Materials gleichzeitig):
+  RenderingServer.global_shader_parameter_add("name", RS.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+  RenderingServer.global_shader_parameter_set("name", wert)
+  # Im Shader: global uniform float name;
+
+PERFORMANCE-REGELN:
+  1. Berechnung, die pro-Vertex reicht → vertex() statt fragment()
+  2. Konstanten sind schneller als Uniforms (wenn sich Wert nie ändert)
+  3. step/mix statt if/else (branchless)
+  4. Wenige Texture-Samples (max 8-12 pro Pass)
+  5. MultiMesh für viele gleiche Objekte
+  6. discard früh (vor teuren Berechnungen)
+
+DEPTH TEXTURE:
+  uniform sampler2D DEPTH_TEXTURE : hint_depth_texture, filter_nearest;
+  float depth = texture(DEPTH_TEXTURE, SCREEN_UV).r;
+  // Lineary: (2*n*f)/(f+n - depth*(f-n))
+
+COMPOSITOR EFFECT (Godot 4.3+):
+  class_name MeinEffect extends CompositorEffect
+  func _render_callback(type, render_data): ...
+  # Im WorldEnvironment: compositor_effects = [MeinEffect.new()]
+
+================================================================================
+VOLLSTÄNDIGE KURSÜBERSICHT — ALLE MODULE
+================================================================================
+
+TEIL 1: GRUNDLAGEN
+  Modul  1: GPU, Pipeline, Shader-Typen, Godot-Integration
+  Modul  2: Typen, Vektoren, Swizzling, Built-in Funktionen
+  Modul  3: CanvasItem-Shader, Textur, Alpha, Render Modes
+  Modul  4: Uniforms, TIME, Varyings, GDScript-Kommunikation
+  Modul  5: Texture Sampling, UV-Manipulation, Screen Texture
+
+TEIL 2: 2D-SHADER MEISTERN
+  Modul  6: HSV, Farbton, Sättigung, Color Grading, Blend Modes
+  Modul  7: Signed Distance Functions (SDFs), Formen, Kombinationen
+  Modul  8: Prozedurale Muster: Noise, FBM, Worley, Wellen
+  Modul  9: Animierte Shader: TIME, Scrolling, Sprite-Sheet, Übergänge
+  Modul 10: Post-Processing 2D: Vignette, Bloom, Grain, SubViewport
+
+TEIL 3: 3D-SHADER
+  Modul 11: Spatial Shader, PBR-Parameter, Texturierung, Transparenz
+  Modul 12: Beleuchtung und PBR: Metallic, Roughness, Emission, Rim, Light()
+  Modul 13: Normal Maps, Triplanar, Parallax Mapping, Detail Maps
+  Modul 14: Vertex Shader: Wellen, Billboard, Instancing, MultiMesh
+  Modul 15: Umwelt-Shader: Wasser, Gras, Laub, Schnee
+  Modul 16: Fortgeschrittene Effekte: Dissolve, Outline, Hologramm, Cel-Shading
+
+TEIL 4: PROFI-LEVEL
+  Modul 17: Compute Shader, RenderingDevice, GPU-Partikel, Texturen
+  Modul 18: Shader + GDScript: Laufzeit, Tweens, Varianten, Caching
+  Modul 19: Performance: Profiling, Math, Sampling, Draw Calls, Stutter
+  Modul 20: Prozedurale Texturen: Marmor, Holz, Ziegel, Planet, Sky
+  Modul 21: Post-Processing-Pipeline: Bloom, Depth, Motion Blur, Compositor
+  Modul 22: Abschlussprojekte: Wasser, SciFi-HUD, Cel-Shading
+
+================================================================================
+ENDE DES KOMPLETTKURSES — Viel Erfolg mit deinen Shadern!
+================================================================================

@@ -1,0 +1,1770 @@
+================================================================================
+JAVA KOMPLETTKURS — TEIL 4 von 4
+Threads · Netzwerk · Reflection · Module · Testing · Build-Tools · Projekt
+================================================================================
+
+================================================================================
+MODUL 19: Threads und Nebenläufigkeit
+================================================================================
+
+------------------------------------------------------------------------
+19.1  Warum Nebenläufigkeit?
+------------------------------------------------------------------------
+
+Moderne CPUs haben mehrere Kerne. Ein Single-Thread-Programm nutzt immer
+nur einen. Nebenläufigkeit erlaubt es, mehrere Aufgaben gleichzeitig zu
+erledigen:
+  - Hintergrundoperationen (Datei laden während UI reaktiv bleibt)
+  - Server die viele Clients gleichzeitig bedienen
+  - Berechnungen auf mehrere Kerne aufteilen
+
+Aber Nebenläufigkeit bringt Risiken: Race Conditions, Deadlocks, Starvation.
+
+------------------------------------------------------------------------
+19.2  Threads erstellen und starten
+------------------------------------------------------------------------
+
+Weg 1 — Thread-Klasse erweitern:
+  class MeinThread extends Thread {
+      @Override
+      public void run() {
+          for (int i = 0; i < 5; i++) {
+              System.out.println(getName() + ": " + i);
+              try { Thread.sleep(100); } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+              }
+          }
+      }
+  }
+
+  MeinThread t = new MeinThread();
+  t.setName("Worker-1");
+  t.start();   // startet den Thread — NICHT run() direkt aufrufen!
+               // run() direkt aufrufen läuft im aktuellen Thread!
+
+Weg 2 — Runnable Interface (bevorzugt):
+  Runnable aufgabe = () -> {
+      for (int i = 0; i < 5; i++) {
+          System.out.println(Thread.currentThread().getName() + ": " + i);
+      }
+  };
+
+  Thread t = new Thread(aufgabe);
+  t.setName("Worker-2");
+  t.start();
+
+  // Kurzform:
+  new Thread(() -> System.out.println("Hallo aus Thread!")).start();
+
+Weg 3 — Callable und Future (mit Rückgabewert):
+  Callable<Integer> aufgabe = () -> {
+      Thread.sleep(1000);  // simuliere Arbeit
+      return 42;
+  };
+
+  ExecutorService executor = Executors.newSingleThreadExecutor();
+  Future<Integer> future = executor.submit(aufgabe);
+
+  System.out.println("Mache andere Dinge...");
+  int ergebnis = future.get();  // blockiert bis Ergebnis fertig
+  System.out.println("Ergebnis: " + ergebnis);
+
+  executor.shutdown();
+
+------------------------------------------------------------------------
+19.3  Thread-Lebenszyklus
+------------------------------------------------------------------------
+
+Zustände eines Threads:
+  NEW          → Thread erzeugt, start() noch nicht aufgerufen
+  RUNNABLE     → läuft oder wartet auf CPU-Zeit
+  BLOCKED      → wartet auf Monitor-Lock
+  WAITING      → wartet auf notify() oder join()
+  TIMED_WAITING → wartet mit Timeout (sleep, wait(timeout))
+  TERMINATED   → run() hat geendet
+
+Thread-Methoden:
+  t.start()              → Thread starten (einmalig!)
+  t.join()               → warte bis Thread beendet ist
+  t.join(1000)           → warte maximal 1000ms
+  t.interrupt()          → Thread Unterbrechung signalisieren
+  t.isAlive()            → läuft Thread noch?
+  t.isDaemon()           → ist es ein Daemon-Thread?
+  t.setDaemon(true)      → als Daemon markieren (MUSS vor start() sein!)
+  t.getPriority()        → Priorität (1-10, Standard: 5)
+  t.setPriority(8)       → höhere Priorität
+
+  Thread.currentThread() → Referenz auf aktuellen Thread
+  Thread.sleep(ms)       → aktuellen Thread pausieren (InterruptedException!)
+  Thread.yield()         → andere Threads ran lassen (Hinweis an Scheduler)
+  Thread.interrupted()   → prüft und LÖSCHT Unterbrechungs-Flag
+  Thread.currentThread().isInterrupted() → prüft ohne zu löschen
+
+Daemon-Threads:
+  JVM endet wenn ALLE Nicht-Daemon-Threads fertig sind.
+  Daemon-Threads werden dann automatisch beendet.
+  Für Hintergrundaufgaben (Garbage Collector ist selbst ein Daemon).
+
+------------------------------------------------------------------------
+19.4  Synchronisation — das Race-Condition-Problem
+------------------------------------------------------------------------
+
+Ohne Synchronisation können mehrere Threads gleichzeitig auf Daten
+zugreifen und sich gegenseitig überschreiben:
+
+  class Zähler {
+      private int wert = 0;
+
+      public void inkrement() {
+          wert++;   // NICHT atomar! Lesen + Erhöhen + Schreiben = 3 Schritte
+                    // zwei Threads können gleichzeitig lesen → gleicher Wert
+                    // dann beide schreiben → ein Inkrement geht verloren!
+      }
+
+      public int getWert() { return wert; }
+  }
+
+  Zähler z = new Zähler();
+  // 1000 Threads erhöhen z → Ergebnis NICHT zuverlässig 1000!
+
+Lösung 1 — synchronized Methode:
+  class Zähler {
+      private int wert = 0;
+
+      public synchronized void inkrement() {  // nur ein Thread zur Zeit!
+          wert++;
+      }
+
+      public synchronized int getWert() { return wert; }
+  }
+
+Lösung 2 — synchronized Block (feinkörniger):
+  class Zähler {
+      private int wert = 0;
+      private final Object lock = new Object();
+
+      public void inkrement() {
+          synchronized (lock) {   // nur dieser Block ist geschützt
+              wert++;
+          }
+          // anderer Code hier läuft ungeschützt/schneller
+      }
+  }
+
+  // Das Objekt selbst als Lock:
+  synchronized (this) { ... }
+
+Lösung 3 — AtomicInteger (schneller, lock-frei):
+  import java.util.concurrent.atomic.*;
+
+  class Zähler {
+      private AtomicInteger wert = new AtomicInteger(0);
+
+      public void inkrement() { wert.incrementAndGet(); }
+      public int getWert() { return wert.get(); }
+  }
+
+  Weitere atomare Typen:
+  AtomicLong, AtomicBoolean, AtomicReference<T>
+  AtomicIntegerArray, AtomicLongArray
+
+  Atomare Operationen:
+  get(), set(v), getAndSet(v), compareAndSet(erwartet, neu),
+  incrementAndGet(), decrementAndGet(), getAndIncrement(), addAndGet(delta)
+
+------------------------------------------------------------------------
+19.5  volatile — Sichtbarkeit ohne Synchronisation
+------------------------------------------------------------------------
+
+  private volatile boolean laufe = true;
+
+  // Thread 1:
+  while (laufe) { /* arbeite */ }
+
+  // Thread 2:
+  laufe = false;   // ohne volatile könnte Thread 1 den neuen Wert
+                   // nie sehen (JVM darf den Wert cachen)!
+
+  volatile garantiert: Schreibzugriff eines Threads ist sofort für
+  alle anderen Threads sichtbar. Keine Reihenfolge-Optimierungen.
+
+  volatile ist KEIN Ersatz für synchronized:
+  volatile laufe++ ist IMMER NOCH nicht atomar!
+
+------------------------------------------------------------------------
+19.6  ExecutorService — Thread-Pool-Verwaltung
+------------------------------------------------------------------------
+
+Statt Threads direkt zu erstellen, benutzt man ExecutorService.
+Er verwaltet einen Pool von Threads:
+
+  // Vordefinierte Factories:
+  ExecutorService single    = Executors.newSingleThreadExecutor();     // 1 Thread
+  ExecutorService fixed     = Executors.newFixedThreadPool(4);         // 4 Threads
+  ExecutorService cached    = Executors.newCachedThreadPool();         // wächst bei Bedarf
+  ScheduledExecutorService sched = Executors.newScheduledThreadPool(2); // für Zeitplanung
+
+  // Aufgaben einreichen:
+  executor.execute(runnable);                // kein Rückgabewert
+  Future<T> f = executor.submit(callable);   // mit Rückgabewert
+  Future<?> f = executor.submit(runnable);   // Runnable mit Future
+
+  // Viele Aufgaben auf einmal:
+  List<Callable<Integer>> aufgaben = ...;
+  List<Future<Integer>> futures = executor.invokeAll(aufgaben);  // warte auf alle
+  Integer ergebnis = executor.invokeAny(aufgaben);               // erstes fertige
+
+  // Herunterfahren:
+  executor.shutdown();            // bestehende Aufgaben fertig, keine neuen
+  executor.shutdownNow();         // interrupt alle Threads, sofort stoppen
+  executor.awaitTermination(60, TimeUnit.SECONDS); // warte auf Abschluss
+
+  // Zeitplanung:
+  sched.schedule(runnable, 5, TimeUnit.SECONDS);          // einmal nach 5s
+  sched.scheduleAtFixedRate(r, 0, 1, TimeUnit.SECONDS);   // jede Sekunde
+  sched.scheduleWithFixedDelay(r, 0, 1, TimeUnit.SECONDS); // 1s nach letztem Ende
+
+------------------------------------------------------------------------
+19.7  CompletableFuture — asynchrone Programmierung
+------------------------------------------------------------------------
+
+CompletableFuture ist der moderne Weg für asynchrone Aufgaben (Java 8+):
+
+  // Asynchron starten:
+  CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+      Thread.sleep(1000);
+      return "Ergebnis!";
+  });
+
+  // Ketten:
+  CompletableFuture<Integer> kette = CompletableFuture
+      .supplyAsync(() -> "Hallo")              // liefert String
+      .thenApply(s -> s.length())              // String → Integer
+      .thenApply(n -> n * 2);                  // Integer → Integer
+
+  // Seiteneffekt:
+  future.thenAccept(s -> System.out.println("Fertig: " + s));
+
+  // Mehrere kombinieren:
+  CompletableFuture<String> f1 = CompletableFuture.supplyAsync(() -> "A");
+  CompletableFuture<String> f2 = CompletableFuture.supplyAsync(() -> "B");
+
+  CompletableFuture.allOf(f1, f2).thenRun(() -> System.out.println("Beide fertig!"));
+  CompletableFuture.anyOf(f1, f2).thenAccept(r -> System.out.println("Erstes: " + r));
+
+  // Mit Fehlerbehandlung:
+  future
+      .thenApply(s -> s.toUpperCase())
+      .exceptionally(e -> "Fehler: " + e.getMessage())
+      .thenAccept(System.out::println);
+
+  // Wert holen (blockierend):
+  String wert = future.get();           // checked Exception
+  String wert2 = future.join();         // unchecked Exception (bevorzugt)
+
+------------------------------------------------------------------------
+19.8  Deadlocks vermeiden
+------------------------------------------------------------------------
+
+Ein Deadlock entsteht wenn Thread A auf Lock 1 wartet (den Thread B hält)
+und Thread B auf Lock 2 wartet (den Thread A hält):
+
+  // Thread A:
+  synchronized (lock1) {
+      synchronized (lock2) { /* tue etwas */ }
+  }
+
+  // Thread B (gleichzeitig):
+  synchronized (lock2) {
+      synchronized (lock1) { /* tue etwas */ }  // DEADLOCK!
+  }
+
+Verhindern:
+  1. Immer in der GLEICHEN Reihenfolge sperren (lock1 vor lock2)
+  2. Locks zeitgesteuert: lock.tryLock(timeout, unit)
+  3. Weniger Locks — Lock auf höherer Ebene
+  4. Lock-freie Programmierung mit Atomics
+
+------------------------------------------------------------------------
+19.9  Concurrent Collections
+------------------------------------------------------------------------
+
+  ConcurrentHashMap<K,V>      → Thread-sichere HashMap (segmentiertes Locking)
+  CopyOnWriteArrayList<T>     → Thread-sicher für viele Leser, wenig Schreiber
+  CopyOnWriteArraySet<T>
+  BlockingQueue<T>            → Thread-sichere Queue mit Blockierung
+  LinkedBlockingQueue<T>
+  ArrayBlockingQueue<T>       → begrenzte Queue
+  PriorityBlockingQueue<T>
+  ConcurrentLinkedQueue<T>    → lock-frei
+
+  BlockingQueue für Producer-Consumer:
+  BlockingQueue<String> queue = new ArrayBlockingQueue<>(100);
+
+  // Producer:
+  queue.put("Aufgabe 1");    // blockiert wenn voll
+  queue.offer("A", 5, TimeUnit.SECONDS); // mit Timeout
+
+  // Consumer:
+  String aufgabe = queue.take();   // blockiert wenn leer
+  String aufgabe2 = queue.poll(5, TimeUnit.SECONDS); // mit Timeout
+
+------------------------------------------------------------------------
+19.10  Lock und Condition (java.util.concurrent.locks)
+------------------------------------------------------------------------
+
+Explizite Locks als Alternative zu synchronized:
+
+  ReentrantLock lock = new ReentrantLock();
+
+  lock.lock();
+  try {
+      // kritischer Bereich
+  } finally {
+      lock.unlock();   // MUSS in finally! Sonst bleibt Lock gesperrt bei Exception
+  }
+
+  // Versuch mit Timeout:
+  if (lock.tryLock(1, TimeUnit.SECONDS)) {
+      try { /* ... */ } finally { lock.unlock(); }
+  } else {
+      System.out.println("Konnte Lock nicht bekommen");
+  }
+
+  ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
+  // Mehrere Leser gleichzeitig OK, Schreiber exklusiv:
+  rwLock.readLock().lock();   // Lesen: viele gleichzeitig
+  rwLock.readLock().unlock();
+  rwLock.writeLock().lock();  // Schreiben: exklusiv
+  rwLock.writeLock().unlock();
+
+  // Condition für feinere Kommunikation:
+  Condition bedingung = lock.newCondition();
+  bedingung.await();           // wie wait()
+  bedingung.signal();          // wie notify()
+  bedingung.signalAll();       // wie notifyAll()
+
+Virtual Threads (Project Loom — seit Java 21):
+  // Virtuelle Threads sind leichtgewichtig — Millionen gleichzeitig möglich!
+  Thread vt = Thread.ofVirtual().name("VT-1").start(() -> {
+      System.out.println("Virtueller Thread: " + Thread.currentThread());
+  });
+
+  ExecutorService vtExec = Executors.newVirtualThreadPerTaskExecutor();
+  vtExec.submit(() -> System.out.println("Virtueller Thread aus Pool"));
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+Implementiere ein Producer-Consumer-System:
+- ProducerConsumer.java mit BlockingQueue<String> (Kapazität 10)
+- 3 Producer-Threads (je 20 Nachrichten erzeugen, dann "FERTIG" senden)
+- 2 Consumer-Threads (nehmen Nachrichten, zählen mit AtomicInteger)
+- Consumer stoppen wenn alle Producer "FERTIG" gemeldet haben
+- Ergebnisse: Anzahl verarbeitete Nachrichten, Gesamtzeit
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Netzwerk und HTTP
+================================================================================
+
+------------------------------------------------------------------------
+20.1  HttpClient (seit Java 11)
+------------------------------------------------------------------------
+
+Der moderne Java HTTP-Client — keine externen Bibliotheken nötig:
+
+  import java.net.http.*;
+  import java.net.URI;
+
+  HttpClient client = HttpClient.newBuilder()
+      .version(HttpClient.Version.HTTP_2)
+      .connectTimeout(Duration.ofSeconds(10))
+      .followRedirects(HttpClient.Redirect.NORMAL)
+      .build();
+
+  // GET-Request:
+  HttpRequest request = HttpRequest.newBuilder()
+      .uri(URI.create("https://api.example.com/daten"))
+      .header("Accept", "application/json")
+      .header("Authorization", "Bearer TOKEN")
+      .timeout(Duration.ofSeconds(30))
+      .GET()
+      .build();
+
+  // Synchron:
+  HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+  System.out.println("Status: " + response.statusCode());
+  System.out.println("Body: " + response.body());
+  System.out.println("Headers: " + response.headers().map());
+
+  // Asynchron:
+  CompletableFuture<HttpResponse<String>> futureResponse = client.sendAsync(
+      request, HttpResponse.BodyHandlers.ofString()
+  );
+  futureResponse
+      .thenApply(HttpResponse::body)
+      .thenAccept(System.out::println)
+      .join();
+
+  // POST-Request mit JSON-Body:
+  HttpRequest postRequest = HttpRequest.newBuilder()
+      .uri(URI.create("https://api.example.com/person"))
+      .header("Content-Type", "application/json")
+      .POST(HttpRequest.BodyPublishers.ofString("""
+              {"name": "Anna", "alter": 25}
+              """))
+      .build();
+
+  // Datei herunterladen:
+  HttpRequest downloadRequest = HttpRequest.newBuilder()
+      .uri(URI.create("https://example.com/datei.pdf"))
+      .build();
+  HttpResponse<Path> fileResponse = client.send(
+      downloadRequest,
+      HttpResponse.BodyHandlers.ofFile(Path.of("heruntergeladen.pdf"))
+  );
+
+  // Verschiedene BodyHandlers:
+  HttpResponse.BodyHandlers.ofString()              // als String
+  HttpResponse.BodyHandlers.ofString(UTF_8)         // mit Charset
+  HttpResponse.BodyHandlers.ofByteArray()           // als byte[]
+  HttpResponse.BodyHandlers.ofFile(path)            // in Datei
+  HttpResponse.BodyHandlers.ofInputStream()         // als Stream
+  HttpResponse.BodyHandlers.discarding()            // ignorieren
+
+------------------------------------------------------------------------
+20.2  Sockets — Niedrigere Ebene
+------------------------------------------------------------------------
+
+TCP-Server (ServerSocket):
+  import java.net.*;
+  import java.io.*;
+
+  try (ServerSocket server = new ServerSocket(8080)) {
+      System.out.println("Server wartet auf Port 8080...");
+
+      while (true) {
+          Socket client = server.accept();  // blockiert bis Client verbindet
+          // Jeden Client in eigenem Thread:
+          new Thread(() -> behandleClient(client)).start();
+      }
+  }
+
+  static void behandleClient(Socket client) {
+      try (client;
+           BufferedReader reader = new BufferedReader(
+               new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
+           PrintWriter writer = new PrintWriter(
+               new OutputStreamWriter(client.getOutputStream(), StandardCharsets.UTF_8), true)) {
+
+          String zeile;
+          while ((zeile = reader.readLine()) != null) {
+              System.out.println("Empfangen: " + zeile);
+              writer.println("Echo: " + zeile);
+          }
+      } catch (IOException e) {
+          e.printStackTrace();
+      }
+  }
+
+TCP-Client:
+  try (Socket socket = new Socket("localhost", 8080);
+       PrintWriter out = new PrintWriter(
+           new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+       BufferedReader in = new BufferedReader(
+           new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+
+      out.println("Hallo Server!");
+      String antwort = in.readLine();
+      System.out.println("Server antwortet: " + antwort);
+  }
+
+UDP-Socket:
+  // Sender:
+  try (DatagramSocket socket = new DatagramSocket()) {
+      byte[] daten = "Hallo UDP!".getBytes(StandardCharsets.UTF_8);
+      DatagramPacket paket = new DatagramPacket(
+          daten, daten.length,
+          InetAddress.getByName("localhost"), 9090
+      );
+      socket.send(paket);
+  }
+
+  // Empfänger:
+  try (DatagramSocket socket = new DatagramSocket(9090)) {
+      byte[] puffer = new byte[1024];
+      DatagramPacket paket = new DatagramPacket(puffer, puffer.length);
+      socket.receive(paket);  // blockiert
+      String nachricht = new String(paket.getData(), 0, paket.getLength(), StandardCharsets.UTF_8);
+      System.out.println("Empfangen: " + nachricht);
+  }
+
+------------------------------------------------------------------------
+20.3  URL und URI
+------------------------------------------------------------------------
+
+  URI uri = URI.create("https://user:pass@example.com:8080/pfad?q=suche#anker");
+  uri.getScheme()      → "https"
+  uri.getUserInfo()    → "user:pass"
+  uri.getHost()        → "example.com"
+  uri.getPort()        → 8080
+  uri.getPath()        → "/pfad"
+  uri.getQuery()       → "q=suche"
+  uri.getFragment()    → "anker"
+  uri.isAbsolute()     → true
+
+  // URL-Encoding:
+  URLEncoder.encode("Hallo Welt!", StandardCharsets.UTF_8)  → "Hallo+Welt%21"
+  URLDecoder.decode("Hallo+Welt%21", StandardCharsets.UTF_8) → "Hallo Welt!"
+
+------------------------------------------------------------------------
+20.4  JSON verarbeiten (ohne externe Bibliothek)
+------------------------------------------------------------------------
+
+Java hat keine eingebaute JSON-Bibliothek. In der Praxis nutzt man:
+  - Jackson (am weitesten verbreitet)
+  - Gson (Google, einfacher)
+  - JSON-B (Jakarta EE Standard)
+
+Eigene einfache JSON-Verarbeitung:
+  // Für einfache Fälle ohne Bibliothek:
+  String json = """
+      {"name": "Anna", "alter": 25, "aktiv": true}
+      """;
+
+  // Manuelles Parsen (ohne Bibliothek — nur für Lernzwecke):
+  // Besser: Jackson einbinden und nutzen:
+
+  // Mit Jackson (Maven-Dependency: com.fasterxml.jackson.core:jackson-databind):
+  // ObjectMapper mapper = new ObjectMapper();
+  // Person person = mapper.readValue(json, Person.class);
+  // String jsonOut = mapper.writeValueAsString(person);
+
+--------------------------------------------------------------------------------
+ÜBUNG 20:
+Schreibe WetterClient.java:
+- Nutze HttpClient um die Open-Meteo API abzufragen (kostenlos, kein API-Key nötig):
+  https://api.open-meteo.com/v1/forecast?latitude=48.2&longitude=14.0&current_weather=true
+- Gib den JSON-Response aus (als String reicht)
+- Parse manuell aus dem String: Temperatur und Windgeschwindigkeit
+  (String.contains, substring oder einfache Regex)
+- Asynchrone Version mit CompletableFuture
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 21: Reflection und Annotations
+================================================================================
+
+------------------------------------------------------------------------
+21.1  Reflection — Klassen zur Laufzeit untersuchen
+------------------------------------------------------------------------
+
+Reflection erlaubt es, Klassen, Methoden und Felder zur LAUFZEIT zu
+untersuchen und aufzurufen — ohne sie zur Compile-Zeit zu kennen.
+
+  Class<?> klasse = String.class;          // Klassen-Literal
+  Class<?> klasse = "Hallo".getClass();    // Von Instanz
+  Class<?> klasse = Class.forName("java.lang.String"); // Von Name (kann Exception!)
+
+  // Klasseninformationen:
+  klasse.getName()              → "java.lang.String"
+  klasse.getSimpleName()        → "String"
+  klasse.getPackageName()       → "java.lang"
+  klasse.getSuperclass()        → Class<?> der Oberklasse
+  klasse.getInterfaces()        → Class<?>[] aller Interfaces
+  klasse.isInterface()          → boolean
+  klasse.isAbstract()           → (Modifier.isAbstract(klasse.getModifiers()))
+  klasse.isEnum()               → boolean
+  klasse.isRecord()             → boolean
+  klasse.isArray()              → boolean
+
+  // Felder:
+  Field[] felder = klasse.getDeclaredFields();   // alle (auch private)
+  Field[] öffentlich = klasse.getFields();       // nur public (auch geerbt)
+  Field feld = klasse.getDeclaredField("name");  // einzelnes Feld
+
+  feld.setAccessible(true);         // private Felder zugänglich machen
+  Object wert = feld.get(objekt);   // Wert lesen
+  feld.set(objekt, neuerWert);      // Wert setzen
+
+  // Methoden:
+  Method[] methoden = klasse.getDeclaredMethods();
+  Method methode = klasse.getDeclaredMethod("setName", String.class);
+  methode.setAccessible(true);
+  Object ergebnis = methode.invoke(objekt, "Anna");  // aufrufen
+
+  // Konstruktoren:
+  Constructor<?>[] konstruktoren = klasse.getDeclaredConstructors();
+  Constructor<?> konstr = klasse.getDeclaredConstructor(String.class);
+  Object neuesObjekt = konstr.newInstance("Parameter");
+
+  // Instanz ohne Konstruktor zu kennen:
+  Class<?> cls = Class.forName("com.beispiel.Person");
+  Object obj = cls.getDeclaredConstructor(String.class, int.class)
+      .newInstance("Anna", 25);
+
+Praktisches Beispiel — generischer toString():
+  public static String autoToString(Object obj) {
+      Class<?> cls = obj.getClass();
+      StringBuilder sb = new StringBuilder(cls.getSimpleName() + "{");
+      for (Field field : cls.getDeclaredFields()) {
+          field.setAccessible(true);
+          try {
+              sb.append(field.getName()).append("=").append(field.get(obj)).append(", ");
+          } catch (IllegalAccessException e) { /* ignorieren */ }
+      }
+      return sb.append("}").toString();
+  }
+
+------------------------------------------------------------------------
+21.2  Annotations — Metadaten für Code
+------------------------------------------------------------------------
+
+Annotations sind Metadaten (Informationen über Code, keine Funktionalität).
+
+Eingebaute Annotations:
+  @Override           → Compiler prüft ob Methode wirklich überschrieben wird
+  @Deprecated         → markiert als veraltet
+  @SuppressWarnings   → unterdrückt Compiler-Warnungen
+  @FunctionalInterface → prüft ob genau eine abstrakte Methode
+  @SafeVarargs        → unterdrückt Warnung bei generischen Varargs
+  @Retention          → wann ist die Annotation verfügbar?
+  @Target             → wo darf sie angewendet werden?
+  @Documented         → in Javadoc einschließen
+  @Inherited          → Unterklassen erben die Annotation
+
+  @SuppressWarnings("unchecked")      → einzelne Warnung
+  @SuppressWarnings({"unchecked", "rawtypes"})  → mehrere
+
+Eigene Annotation erstellen:
+  import java.lang.annotation.*;
+
+  @Retention(RetentionPolicy.RUNTIME)   // RUNTIME = zur Laufzeit verfügbar
+  @Target({ElementType.METHOD, ElementType.FIELD})  // wo erlaubt
+  public @interface Validiere {
+      int minLänge() default 0;
+      int maxLänge() default Integer.MAX_VALUE;
+      boolean pflichtfeld() default true;
+      String nachricht() default "Validierungsfehler";
+  }
+
+  RetentionPolicy Optionen:
+    SOURCE    → nur im Quellcode, wird beim Kompilieren entfernt (@Override)
+    CLASS     → in .class-Datei, aber nicht zur Laufzeit (Default)
+    RUNTIME   → auch zur Laufzeit zugänglich (für Reflection)
+
+  ElementType Optionen:
+    TYPE, FIELD, METHOD, PARAMETER, CONSTRUCTOR,
+    LOCAL_VARIABLE, ANNOTATION_TYPE, PACKAGE,
+    TYPE_PARAMETER, TYPE_USE (Java 8)
+    MODULE (Java 9)
+
+Annotation verwenden:
+  class Person {
+      @Validiere(minLänge=2, maxLänge=50, nachricht="Name zu kurz")
+      private String name;
+
+      @Validiere(pflichtfeld=false, maxLänge=100)
+      private String email;
+  }
+
+Annotation zur Laufzeit lesen (Reflection):
+  for (Field feld : Person.class.getDeclaredFields()) {
+      Validiere v = feld.getAnnotation(Validiere.class);
+      if (v != null) {
+          feld.setAccessible(true);
+          String wert = (String) feld.get(person);
+
+          if (v.pflichtfeld() && (wert == null || wert.isBlank())) {
+              throw new RuntimeException("Pflichtfeld fehlt: " + feld.getName());
+          }
+          if (wert != null && wert.length() < v.minLänge()) {
+              throw new RuntimeException(v.nachricht() + " (Feld: " + feld.getName() + ")");
+          }
+      }
+  }
+
+Repeatable Annotations (seit Java 8):
+  @Repeatable(Rollen.class)
+  @Retention(RetentionPolicy.RUNTIME)
+  @interface Rolle {
+      String wert();
+  }
+
+  @interface Rollen {
+      Rolle[] value();
+  }
+
+  @Rolle("admin")
+  @Rolle("user")
+  class AdminUser { }
+
+------------------------------------------------------------------------
+21.3  Annotation Processing (Compile-Time)
+------------------------------------------------------------------------
+
+Mit javax.annotation.processing.AbstractProcessor kannst du
+Annotationen zur Compile-Zeit verarbeiten — z.B. Code generieren.
+Das ist was Lombok, MapStruct, Dagger etc. machen.
+Zu komplex für diesen Kurs, aber wissen was es ist: wichtig!
+
+--------------------------------------------------------------------------------
+ÜBUNG 21:
+Schreibe ein Mini-Validierungsframework:
+- Annotation @NotNull, @MinLength(int), @MaxLength(int), @Range(min, max)
+- Klasse Validator mit statischer Methode validiere(Object obj) → List<String>
+  (gibt Fehlermeldungen zurück)
+- Klasse Benutzer mit annotierten Feldern (name, passwort, alter)
+- In main: Validierungen testen (gültige und ungültige Objekte)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 22: Java Module System (JPMS)
+================================================================================
+
+------------------------------------------------------------------------
+22.1  Was sind Module?
+------------------------------------------------------------------------
+
+Seit Java 9 gibt es das Java Platform Module System (JPMS).
+Es löst das "Classpath-Hell"-Problem: Du weißt nicht welche Klassen
+welchen anderen Klassen zugänglich sind.
+
+Module ermöglichen:
+  - Starke Kapselung: Pakete können explizit versteckt werden
+  - Klare Abhängigkeiten: Module erklären was sie brauchen
+  - Kleinere JREs: nur benötigte Module einschließen (jlink)
+
+------------------------------------------------------------------------
+22.2  module-info.java
+------------------------------------------------------------------------
+
+Jedes Modul hat eine module-info.java im Root-Verzeichnis:
+
+  module com.beispiel.rechner {
+      // Was das Modul braucht:
+      requires java.base;          // implizit — immer da
+      requires java.sql;
+      requires com.beispiel.util;
+
+      // Was das Modul anderen anbietet:
+      exports com.beispiel.rechner.api;         // öffentliche API
+      exports com.beispiel.rechner.model;
+
+      // Nur für spezifische Module:
+      exports com.beispiel.intern to com.beispiel.test;
+
+      // Service Provider Interface:
+      uses com.beispiel.RechnerPlugin;
+      provides com.beispiel.RechnerPlugin with com.beispiel.BasicPlugin;
+
+      // Für Reflection erlauben:
+      opens com.beispiel.rechner.model;         // für Reflection (Hibernate etc.)
+      opens com.beispiel.rechner.model to com.fasterxml.jackson.databind;
+  }
+
+Verzeichnisstruktur:
+  projekt/
+    src/
+      com.beispiel.rechner/
+        module-info.java
+        com/beispiel/rechner/
+          Main.java
+          api/
+            RechnerAPI.java
+          model/
+            Berechnung.java
+
+Kompilieren mit Modulen:
+  javac -d out --module-source-path src -m com.beispiel.rechner
+  java --module-path out -m com.beispiel.rechner/com.beispiel.rechner.Main
+
+------------------------------------------------------------------------
+22.3  Modulare JRE mit jlink
+------------------------------------------------------------------------
+
+  jlink --module-path $JAVA_HOME/jmods:out \
+        --add-modules com.beispiel.rechner \
+        --output min-jre
+
+  Erzeugt eine minimale JRE-Distribution die nur die nötigen Module enthält.
+  Ergebnis: oft < 50MB statt ~200MB voller JDK.
+
+------------------------------------------------------------------------
+22.4  Unnamed Module und Automatic Module
+------------------------------------------------------------------------
+
+  Unnamed Module: Klassen auf dem Classpath (ohne module-info.java)
+    → können auf alle Module zugreifen, sind für Module nicht sichtbar
+    → Rückwärtskompatibilität
+
+  Automatic Module: JARs auf dem Modulpfad ohne module-info.java
+    → Name aus JAR-Dateiname (dash → dot)
+    → exportiert alle Pakete, liest alle anderen Module
+
+  In der Praxis: Bibliotheken die noch kein Modulsystem nutzen,
+  kommen als Automatic Module auf den Modulpfad.
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 23: Testing mit JUnit 5
+================================================================================
+
+------------------------------------------------------------------------
+23.1  JUnit 5 — Aufbau und Grundlagen
+------------------------------------------------------------------------
+
+JUnit 5 besteht aus drei Teilen:
+  JUnit Platform  → Launcher, Test-Engine-API
+  JUnit Jupiter   → neue Annotations und API (das was du benutzt)
+  JUnit Vintage   → Rückwärtskompatibilität mit JUnit 4/3
+
+Maven-Dependency:
+  <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.0</version>
+      <scope>test</scope>
+  </dependency>
+
+------------------------------------------------------------------------
+23.2  Grundlegende Annotationen
+------------------------------------------------------------------------
+
+  @Test              → Testmethode
+  @BeforeEach        → vor JEDEM Test ausführen (Initialisierung)
+  @AfterEach         → nach JEDEM Test (Aufräumen)
+  @BeforeAll         → einmal VOR allen Tests (muss static sein)
+  @AfterAll          → einmal NACH allen Tests (muss static sein)
+  @Disabled          → Test deaktivieren
+  @Disabled("Grund") → mit Begründung
+  @DisplayName       → lesbarer Name für den Test
+  @Nested            → innere Testklassen zur Gruppierung
+  @Tag("schnell")    → Tags für Filterung
+
+  class KontoTest {
+
+      private Konto konto;
+
+      @BeforeEach
+      void setUp() {
+          konto = new Konto("Anna", "DE1234");
+          konto.einzahlen(1000.0);
+      }
+
+      @Test
+      @DisplayName("Einzahlen erhöht Kontostand")
+      void testEinzahlen() {
+          konto.einzahlen(500.0);
+          assertEquals(1500.0, konto.getKontostand(), 0.001);
+      }
+
+      @Test
+      @DisplayName("Abheben mit ausreichend Guthaben")
+      void testAbhebenErfolgreich() {
+          boolean ergebnis = konto.abheben(200.0);
+          assertTrue(ergebnis);
+          assertEquals(800.0, konto.getKontostand(), 0.001);
+      }
+
+      @Test
+      @DisplayName("Abheben mit unzureichend Guthaben schlägt fehl")
+      void testAbhebenFehlgeschlagen() {
+          boolean ergebnis = konto.abheben(2000.0);
+          assertFalse(ergebnis);
+          assertEquals(1000.0, konto.getKontostand());  // unverändert
+      }
+  }
+
+------------------------------------------------------------------------
+23.3  Assertions — alle verfügbaren Prüfungen
+------------------------------------------------------------------------
+
+  import static org.junit.jupiter.api.Assertions.*;
+
+  assertEquals(erwärtet, tatsächlich)
+  assertEquals(3.14, wert, 0.001)       // mit Delta für double
+  assertNotEquals(unerwärtet, tatsächlich)
+  assertTrue(bedingung)
+  assertFalse(bedingung)
+  assertNull(objekt)
+  assertNotNull(objekt)
+  assertSame(erwärtet, tatsächlich)       // == Referenzgleichheit
+  assertNotSame(a, b)
+  assertArrayEquals(erw[], tats[])
+  assertIterableEquals(erw, tats)         // Inhalt zweier Iterables
+  assertThrows(ExceptionKlasse, () -> { /* Code der Exception wirft */ })
+  assertDoesNotThrow(() -> { /* Code der keine Exception werfen soll */ })
+  assertTimeout(Duration.ofSeconds(1), () -> { /* zeitbegrenzter Code */ })
+  assertAll("Gruppe", () -> assert1, () -> assert2, ...)  // alle zusammen
+
+  // assertThrows Beispiel:
+  @Test
+  void testNegativerBetrag() {
+      IllegalArgumentException exc = assertThrows(
+          IllegalArgumentException.class,
+          () -> konto.einzahlen(-100.0)
+      );
+      assertTrue(exc.getMessage().contains("positiv"));
+  }
+
+  // assertAll — mehrere Assertions zusammen:
+  @Test
+  void testKontoDaten() {
+      assertAll("Konto-Grunddaten",
+          () -> assertEquals("Anna", konto.getInhaber()),
+          () -> assertEquals("DE1234", konto.getKontonummer()),
+          () -> assertEquals(1000.0, konto.getKontostand())
+      );
+  }
+
+------------------------------------------------------------------------
+23.4  Parametrisierte Tests
+------------------------------------------------------------------------
+
+  @ParameterizedTest
+  @ValueSource(ints = {-1, 0, -100, Integer.MIN_VALUE})
+  void testNegativeBeträge(int betrag) {
+      assertThrows(IllegalArgumentException.class, () -> konto.einzahlen(betrag));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "100.0, 900.0",
+      "500.0, 500.0",
+      "1000.0, 0.0"
+  })
+  void testAbheben(double betrag, double erwartetesGuthaben) {
+      konto.abheben(betrag);
+      assertEquals(erwartetesGuthaben, konto.getKontostand(), 0.001);
+  }
+
+  @ParameterizedTest
+  @MethodSource("liefereTestDaten")
+  void testMitMethodSource(String name, int alter, boolean istVolljährig) {
+      Person p = new Person(name, alter);
+      assertEquals(istVolljährig, p.istVolljährig());
+  }
+
+  static Stream<Arguments> liefereTestDaten() {
+      return Stream.of(
+          Arguments.of("Anna", 20, true),
+          Arguments.of("Ben", 17, false),
+          Arguments.of("Clara", 18, true)
+      );
+  }
+
+  @ParameterizedTest
+  @EnumSource(Wochentag.class)
+  void testMitEnum(Wochentag tag) {
+      assertNotNull(tag.name());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value=Wochentag.class, names={"SAMSTAG","SONNTAG"})
+  void testNurWochenende(Wochentag tag) {
+      assertTrue(tag == Wochentag.SAMSTAG || tag == Wochentag.SONNTAG);
+  }
+
+------------------------------------------------------------------------
+23.5  Nested Tests und Tags
+------------------------------------------------------------------------
+
+  @DisplayName("Konto-Tests")
+  class KontoTest {
+
+      @Nested
+      @DisplayName("Einzahlungs-Tests")
+      class EinzahlungsTests {
+          @Test void testPositiverBetrag() { ... }
+          @Test void testNullBetrag() { ... }
+      }
+
+      @Nested
+      @DisplayName("Abhebungs-Tests")
+      class AbhebungsTests {
+          @Test void testAusreichendGuthaben() { ... }
+          @Test void testZuWenigGuthaben() { ... }
+      }
+  }
+
+  // Tags für Filterung beim Ausführen:
+  @Tag("integration")
+  @Tag("langsam")
+  @Test void testMitDatenbank() { ... }
+
+  @Tag("unit")
+  @Tag("schnell")
+  @Test void testPureLogik() { ... }
+
+------------------------------------------------------------------------
+23.6  Mocking — Test-Doubles erstellen
+------------------------------------------------------------------------
+
+Mockito ist die Standard-Mock-Bibliothek für Java:
+
+  <!-- Maven dependency -->
+  <!-- <dependency>
+       <groupId>org.mockito</groupId>
+       <artifactId>mockito-junit-jupiter</artifactId>
+       <version>5.4.0</version>
+       <scope>test</scope>
+  </dependency> -->
+
+  @ExtendWith(MockitoExtension.class)
+  class ServiceTest {
+
+      @Mock
+      KontoRepository repository;    // Fake-Implementierung
+
+      @InjectMocks
+      KontoService service;          // echte Klasse mit injiziertem Mock
+
+      @Test
+      void testFindePerson() {
+          // Verhalten definieren (stubbing):
+          when(repository.findById("DE1234"))
+              .thenReturn(Optional.of(new Konto("Anna", "DE1234")));
+
+          // Testen:
+          Optional<Konto> konto = service.findByNummer("DE1234");
+          assertTrue(konto.isPresent());
+          assertEquals("Anna", konto.get().getInhaber());
+
+          // Verifizieren ob Methode aufgerufen wurde:
+          verify(repository, times(1)).findById("DE1234");
+          verify(repository, never()).findAll();
+      }
+  }
+
+------------------------------------------------------------------------
+23.7  Testabdeckung (Code Coverage)
+------------------------------------------------------------------------
+
+Mit JaCoCo (Java Code Coverage Library):
+
+Maven-Plugin in pom.xml:
+  <plugin>
+      <groupId>org.jacoco</groupId>
+      <artifactId>jacoco-maven-plugin</artifactId>
+      <version>0.8.10</version>
+  </plugin>
+
+  mvn test jacoco:report   → HTML-Bericht unter target/site/jacoco/
+
+Ziel: Hohe Coverage, aber nicht 100% als Selbstzweck — gute Tests
+sind wichtiger als Coverage-Zahlen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 23:
+Schreibe Tests für die Konto-Klasse aus Modul 7:
+- Mindestens 15 Tests
+- @BeforeEach für Setup
+- Teste alle Grenzfälle (0, negativ, genau genug, zu wenig Geld)
+- Parametrisierte Tests für Einzahlungs-Beträge
+- Nested-Klassen für Einzahlung, Abhebung, toString
+- Test für Exception-Nachrichten (assertThrows + getMessage)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 24: Build-Tools und Packaging
+================================================================================
+
+------------------------------------------------------------------------
+24.1  Maven — das Standard-Build-Tool
+------------------------------------------------------------------------
+
+Maven benutzt Convention over Configuration: Wenn du die Standard-
+Verzeichnisstruktur verwendest, musst du wenig konfigurieren.
+
+Standardstruktur:
+  meinprojekt/
+    pom.xml                    ← Maven-Konfiguration
+    src/
+      main/
+        java/
+          com/beispiel/
+            Main.java
+        resources/
+          config.properties
+      test/
+        java/
+          com/beispiel/
+            MainTest.java
+        resources/
+    target/                    ← generiert (nicht in Git!)
+      classes/
+      test-classes/
+      meinprojekt-1.0.jar
+
+Minimales pom.xml:
+  <?xml version="1.0" encoding="UTF-8"?>
+  <project xmlns="http://maven.apache.org/POM/4.0.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+           http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+      <modelVersion>4.0.0</modelVersion>
+
+      <!-- Projekt-Koordinaten: GroupId:ArtifactId:Version -->
+      <groupId>com.beispiel</groupId>
+      <artifactId>meinprojekt</artifactId>
+      <version>1.0-SNAPSHOT</version>
+      <packaging>jar</packaging>
+
+      <properties>
+          <maven.compiler.source>21</maven.compiler.source>
+          <maven.compiler.target>21</maven.compiler.target>
+          <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+      </properties>
+
+      <dependencies>
+          <!-- JUnit 5 -->
+          <dependency>
+              <groupId>org.junit.jupiter</groupId>
+              <artifactId>junit-jupiter</artifactId>
+              <version>5.10.0</version>
+              <scope>test</scope>     <!-- nur für Tests -->
+          </dependency>
+      </dependencies>
+
+      <build>
+          <plugins>
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-surefire-plugin</artifactId>
+                  <version>3.1.2</version>
+              </plugin>
+          </plugins>
+      </build>
+  </project>
+
+Wichtige Maven-Befehle:
+  mvn compile          → Kompilieren
+  mvn test             → Tests ausführen
+  mvn package          → JAR erstellen (in target/)
+  mvn install          → JAR in lokales Repository installieren
+  mvn clean            → target/ löschen
+  mvn clean package    → aufräumen und neu bauen
+  mvn dependency:tree  → Abhängigkeitsbaum anzeigen
+  mvn dependency:resolve → alle Dependencies herunterladen
+  mvn verify           → alle Phasen bis verify
+
+Maven-Scopes für Dependencies:
+  compile     → wird mitgebaut (Standard)
+  test        → nur für Tests
+  provided    → zur Compile-Zeit, aber nicht im JAR (Server liefert es)
+  runtime     → nicht zum Kompilieren, aber zur Laufzeit
+  import      → für BOM-POMs
+
+Executable JAR (mit allen Dependencies — Fat JAR / Uber JAR):
+  <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-assembly-plugin</artifactId>
+      <version>3.6.0</version>
+      <configuration>
+          <archive>
+              <manifest>
+                  <mainClass>com.beispiel.Main</mainClass>
+              </manifest>
+          </archive>
+          <descriptorRefs>
+              <descriptorRef>jar-with-dependencies</descriptorRef>
+          </descriptorRefs>
+      </configuration>
+      <executions>
+          <execution>
+              <phase>package</phase>
+              <goals><goal>single</goal></goals>
+          </execution>
+      </executions>
+  </plugin>
+
+  mvn package → erzeugt meinprojekt-1.0-SNAPSHOT-jar-with-dependencies.jar
+  java -jar target/meinprojekt-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+------------------------------------------------------------------------
+24.2  Gradle — Alternative zu Maven
+------------------------------------------------------------------------
+
+Gradle ist flexibler und oft schneller als Maven.
+Nutzt Groovy oder Kotlin DSL statt XML.
+
+build.gradle (Groovy DSL):
+  plugins {
+      id 'java'
+      id 'application'
+  }
+
+  group = 'com.beispiel'
+  version = '1.0'
+
+  application {
+      mainClass = 'com.beispiel.Main'
+  }
+
+  repositories {
+      mavenCentral()
+  }
+
+  dependencies {
+      testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+      testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+  }
+
+  test {
+      useJUnitPlatform()
+  }
+
+  java {
+      toolchain {
+          languageVersion = JavaLanguageVersion.of(21)
+      }
+  }
+
+Wichtige Gradle-Befehle:
+  ./gradlew build         → kompilieren + testen + JAR
+  ./gradlew test          → Tests
+  ./gradlew run           → Anwendung starten (mit 'application' Plugin)
+  ./gradlew clean         → Ausgaben löschen
+  ./gradlew dependencies  → Abhängigkeitsbaum
+
+------------------------------------------------------------------------
+24.3  JAR-Dateien — Java Archive
+------------------------------------------------------------------------
+
+JAR ist ein ZIP-Archiv mit .class-Dateien und Ressourcen.
+
+  // JAR selbst erstellen (ohne Maven):
+  javac -d out src/**/*.java
+  jar --create --file meinapp.jar --main-class com.Main -C out .
+
+  // JAR starten (wenn Main-Class gesetzt):
+  java -jar meinapp.jar
+
+MANIFEST.MF — JAR-Metadaten:
+  Manifest-Version: 1.0
+  Main-Class: com.beispiel.Main
+  Class-Path: lib/bibliothek.jar
+  Created-By: 21 (Oracle Corporation)
+
+  // Beim JAR-Erstellen angeben:
+  jar --create --file app.jar --manifest=MANIFEST.MF -C out .
+
+JAR-Inhalt ansehen:
+  jar --list --file app.jar     // Inhalt auflisten
+  jar --extract --file app.jar  // entpacken
+
+------------------------------------------------------------------------
+24.4  Continuous Integration
+------------------------------------------------------------------------
+
+Mit GitHub Actions (Beispiel für Maven):
+  # .github/workflows/build.yml
+  name: Java CI mit Maven
+  on: [push, pull_request]
+  jobs:
+    build:
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/checkout@v3
+      - name: Java 21 einrichten
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Mit Maven bauen
+        run: mvn clean verify
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 25: ABSCHLUSSPROJEKT — Kontoverwaltungs-CLI-Anwendung
+================================================================================
+
+------------------------------------------------------------------------
+25.1  Beschreibung und Anforderungen
+------------------------------------------------------------------------
+
+Du baust eine vollständige Konsolenanwendung zur Kontoverwaltung.
+Das Projekt zeigt, dass du alle Konzepte des Kurses beherrschst.
+
+Funktionale Anforderungen:
+  - Konten erstellen (Giro, Spar, Kredit)
+  - Einzahlen, Abheben, Überweisen
+  - Kontostand abfragen
+  - Kontoauszug (letzte N Transaktionen)
+  - Alle Konten auflisten (sortierbar nach Inhaber, Kontostand)
+  - Konten in Datei speichern und laden (JSON oder Properties)
+
+Technische Anforderungen:
+  - Mindestens 3 Klassen-Hierarchien (Konto-Typen)
+  - Generics (z.B. Repository<T, ID>)
+  - Collections Framework (Map für Konten, List für Transaktionen)
+  - Stream API für Auswertungen
+  - Optional für null-sichere Rückgaben
+  - Eigene Exceptions (KontoException, ÜberweisungException)
+  - Datei-I/O (Persistenz)
+  - Mindestens 20 JUnit-Tests
+  - Maven/Gradle Projekt
+
+------------------------------------------------------------------------
+25.2  Projektstruktur
+------------------------------------------------------------------------
+
+  kontverwaltung/
+    pom.xml
+    src/
+      main/java/com/konto/
+        Main.java                     ← Einstiegspunkt
+        app/
+          KontoAnwendung.java         ← Haupt-Anwendungslogik
+          CLI.java                    ← Konsolen-Interface
+        model/
+          Konto.java                  ← abstrakte Basisklasse
+          GiroKonto.java              ← extends Konto
+          SparKonto.java              ← extends Konto (mit Zinsen)
+          KreditKonto.java            ← extends Konto (mit Limit)
+          Transaktion.java            ← record
+          TransaktionsTyp.java        ← enum
+        repository/
+          KontoRepository.java        ← Interface
+          InMemoryKontoRepository.java ← Implementierung
+        service/
+          KontoService.java           ← Geschäftslogik
+          ÜberweisungsService.java
+        exception/
+          KontoException.java
+          ÜberweisungException.java
+          KontoNichtGefundenException.java
+        util/
+          KontoNummernGenerator.java
+          DateiPersistenz.java
+      test/java/com/konto/
+        model/KontoTest.java
+        service/KontoServiceTest.java
+        repository/KontoRepositoryTest.java
+
+------------------------------------------------------------------------
+25.3  Kern-Implementierung
+------------------------------------------------------------------------
+
+// model/Transaktion.java
+record Transaktion(
+    String id,
+    TransaktionsTyp typ,
+    double betrag,
+    String beschreibung,
+    LocalDateTime zeitpunkt,
+    double kontostandNach
+) {
+    public static Transaktion einzahlung(double betrag, double kontostandNach) {
+        return new Transaktion(
+            UUID.randomUUID().toString(),
+            TransaktionsTyp.EINZAHLUNG,
+            betrag,
+            "Einzahlung",
+            LocalDateTime.now(),
+            kontostandNach
+        );
+    }
+
+    public static Transaktion abhebung(double betrag, double kontostandNach) {
+        return new Transaktion(
+            UUID.randomUUID().toString(),
+            TransaktionsTyp.ABHEBUNG,
+            betrag,
+            "Abhebung",
+            LocalDateTime.now(),
+            kontostandNach
+        );
+    }
+
+    public static Transaktion überweisung(double betrag, String zielKonto, boolean istAusgang, double kontostandNach) {
+        return new Transaktion(
+            UUID.randomUUID().toString(),
+            istAusgang ? TransaktionsTyp.ÜBERWEISUNG_AUSGANG : TransaktionsTyp.ÜBERWEISUNG_EINGANG,
+            betrag,
+            istAusgang ? "Überweisung an " + zielKonto : "Überweisung von " + zielKonto,
+            LocalDateTime.now(),
+            kontostandNach
+        );
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%s] %s: %.2f€ (Stand: %.2f€) — %s",
+            zeitpunkt.format(DateTimeFormatter.ofPattern("dd.MM.yy HH:mm")),
+            typ, betrag, kontostandNach, beschreibung);
+    }
+}
+
+// model/Konto.java
+public abstract class Konto {
+    protected final String kontonummer;
+    protected String inhaber;
+    protected double kontostand;
+    protected final LocalDate eröffnet;
+    protected final List<Transaktion> transaktionen;
+
+    protected Konto(String kontonummer, String inhaber) {
+        if (kontonummer == null || kontonummer.isBlank())
+            throw new KontoException(kontonummer, "Kontonummer darf nicht leer sein");
+        if (inhaber == null || inhaber.isBlank())
+            throw new KontoException(kontonummer, "Inhaber darf nicht leer sein");
+
+        this.kontonummer = kontonummer;
+        this.inhaber = inhaber.trim();
+        this.kontostand = 0.0;
+        this.eröffnet = LocalDate.now();
+        this.transaktionen = new ArrayList<>();
+    }
+
+    public void einzahlen(double betrag) {
+        if (betrag <= 0)
+            throw new KontoException(kontonummer, "Betrag muss positiv sein");
+        kontostand += betrag;
+        transaktionen.add(Transaktion.einzahlung(betrag, kontostand));
+    }
+
+    public abstract boolean abheben(double betrag);
+
+    protected void registriereAbhebung(double betrag) {
+        transaktionen.add(Transaktion.abhebung(betrag, kontostand));
+    }
+
+    public List<Transaktion> getLetzteTransaktionen(int anzahl) {
+        int von = Math.max(0, transaktionen.size() - anzahl);
+        return Collections.unmodifiableList(transaktionen.subList(von, transaktionen.size()));
+    }
+
+    public double getJahresSumme(int jahr) {
+        return transaktionen.stream()
+            .filter(t -> t.zeitpunkt().getYear() == jahr)
+            .filter(t -> t.typ() == TransaktionsTyp.EINZAHLUNG ||
+                         t.typ() == TransaktionsTyp.ÜBERWEISUNG_EINGANG)
+            .mapToDouble(Transaktion::betrag)
+            .sum();
+    }
+
+    // Getter:
+    public String getKontonummer() { return kontonummer; }
+    public String getInhaber()     { return inhaber; }
+    public double getKontostand()  { return kontostand; }
+    public LocalDate getEröffnet() { return eröffnet; }
+    public List<Transaktion> getTransaktionen() { return Collections.unmodifiableList(transaktionen); }
+
+    @Override
+    public String toString() {
+        return String.format("[%s] %s — Inhaber: %s, Stand: %.2f€",
+            getClass().getSimpleName(), kontonummer, inhaber, kontostand);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Konto k)) return false;
+        return Objects.equals(kontonummer, k.kontonummer);
+    }
+
+    @Override
+    public int hashCode() { return Objects.hash(kontonummer); }
+}
+
+// model/GiroKonto.java
+public class GiroKonto extends Konto {
+    private double dispoLimit;    // negativer Kontostand bis zu diesem Limit erlaubt
+
+    public GiroKonto(String kontonummer, String inhaber, double dispoLimit) {
+        super(kontonummer, inhaber);
+        this.dispoLimit = dispoLimit;
+    }
+
+    @Override
+    public boolean abheben(double betrag) {
+        if (betrag <= 0) throw new KontoException(kontonummer, "Betrag muss positiv sein");
+        if (kontostand - betrag < -dispoLimit) return false;
+        kontostand -= betrag;
+        registriereAbhebung(betrag);
+        return true;
+    }
+}
+
+// model/SparKonto.java
+public class SparKonto extends Konto {
+    private double jahreszins;   // z.B. 0.025 = 2,5%
+    private int maxAbhebungenProMonat;
+    private int abhebungenDiesenMonat;
+
+    public SparKonto(String kontonummer, String inhaber, double jahreszins) {
+        super(kontonummer, inhaber);
+        this.jahreszins = jahreszins;
+        this.maxAbhebungenProMonat = 3;
+        this.abhebungenDiesenMonat = 0;
+    }
+
+    public void zinsenGutschreiben() {
+        double zinsen = kontostand * jahreszins;
+        einzahlen(zinsen);
+    }
+
+    @Override
+    public boolean abheben(double betrag) {
+        if (betrag <= 0) throw new KontoException(kontonummer, "Betrag muss positiv sein");
+        if (abhebungenDiesenMonat >= maxAbhebungenProMonat)
+            throw new KontoException(kontonummer, "Max. Abhebungen pro Monat erreicht");
+        if (betrag > kontostand) return false;
+        kontostand -= betrag;
+        abhebungenDiesenMonat++;
+        registriereAbhebung(betrag);
+        return true;
+    }
+}
+
+// repository/KontoRepository.java
+public interface KontoRepository<T extends Konto> {
+    void speichern(T konto);
+    Optional<T> findByNummer(String kontonummer);
+    Optional<T> findByInhaber(String inhaber);
+    List<T> findAlle();
+    boolean löschen(String kontonummer);
+    int anzahl();
+}
+
+// repository/InMemoryKontoRepository.java
+public class InMemoryKontoRepository implements KontoRepository<Konto> {
+    private final Map<String, Konto> konten = new LinkedHashMap<>();
+
+    @Override
+    public void speichern(Konto konto) {
+        Objects.requireNonNull(konto, "Konto darf nicht null sein");
+        konten.put(konto.getKontonummer(), konto);
+    }
+
+    @Override
+    public Optional<Konto> findByNummer(String kontonummer) {
+        return Optional.ofNullable(konten.get(kontonummer));
+    }
+
+    @Override
+    public Optional<Konto> findByInhaber(String inhaber) {
+        return konten.values().stream()
+            .filter(k -> k.getInhaber().equalsIgnoreCase(inhaber))
+            .findFirst();
+    }
+
+    @Override
+    public List<Konto> findAlle() {
+        return Collections.unmodifiableList(new ArrayList<>(konten.values()));
+    }
+
+    @Override
+    public boolean löschen(String kontonummer) {
+        return konten.remove(kontonummer) != null;
+    }
+
+    @Override
+    public int anzahl() { return konten.size(); }
+}
+
+// service/KontoService.java
+public class KontoService {
+    private final KontoRepository<Konto> repository;
+    private final KontoNummernGenerator generator;
+
+    public KontoService(KontoRepository<Konto> repository) {
+        this.repository = Objects.requireNonNull(repository);
+        this.generator = new KontoNummernGenerator();
+    }
+
+    public GiroKonto erstelleGiroKonto(String inhaber, double dispo) {
+        String nummer = generator.generiere("DE");
+        GiroKonto konto = new GiroKonto(nummer, inhaber, dispo);
+        repository.speichern(konto);
+        return konto;
+    }
+
+    public SparKonto erstelleSparKonto(String inhaber, double zinsen) {
+        String nummer = generator.generiere("SP");
+        SparKonto konto = new SparKonto(nummer, inhaber, zinsen);
+        repository.speichern(konto);
+        return konto;
+    }
+
+    public void überweise(String vonNummer, String nachNummer, double betrag) {
+        Konto von = repository.findByNummer(vonNummer)
+            .orElseThrow(() -> new KontoNichtGefundenException(vonNummer));
+        Konto nach = repository.findByNummer(nachNummer)
+            .orElseThrow(() -> new KontoNichtGefundenException(nachNummer));
+
+        if (!von.abheben(betrag))
+            throw new ÜberweisungException(vonNummer, nachNummer,
+                "Nicht genug Guthaben für Überweisung von " + betrag + "€");
+
+        nach.einzahlen(betrag);
+    }
+
+    public List<Konto> alleKontenNachKontostand() {
+        return repository.findAlle().stream()
+            .sorted(Comparator.comparingDouble(Konto::getKontostand).reversed())
+            .collect(Collectors.toList());
+    }
+
+    public Map<String, Double> gesamtKontostandProInhaber() {
+        return repository.findAlle().stream()
+            .collect(Collectors.groupingBy(
+                Konto::getInhaber,
+                Collectors.summingDouble(Konto::getKontostand)
+            ));
+    }
+
+    public double gesamtKontostand() {
+        return repository.findAlle().stream()
+            .mapToDouble(Konto::getKontostand)
+            .sum();
+    }
+
+    public Optional<Konto> reichstesKonto() {
+        return repository.findAlle().stream()
+            .max(Comparator.comparingDouble(Konto::getKontostand));
+    }
+}
+
+------------------------------------------------------------------------
+25.4  Projektausbau und Ideen
+------------------------------------------------------------------------
+
+Wenn du das Projekt fertig hast, kannst du es erweitern:
+
+  1. Datenpersistenz:
+     Speichere Konten als Properties oder JSON in Dateien.
+     Lade sie beim Programmstart und speichere bei Beendigung.
+
+  2. REST-API (mit Javalin oder Spark — leichtgewichtige Frameworks):
+     Statt CLI ein HTTP-API bauen. POST /konten, GET /konten/{nr}, etc.
+
+  3. Datenbank (JDBC):
+     Statt InMemoryRepository eine JDBC-Implementierung bauen
+     (SQLite als Datenbank ist einfach zu starten).
+
+  4. Verschlüsselung:
+     PIN für jedes Konto, verschlüsselt gespeichert (javax.crypto).
+
+  5. Grafische Oberfläche:
+     JavaFX für eine einfache Desktop-GUI.
+
+  6. Docker:
+     Das JAR in einem Docker-Container verpacken.
+
+================================================================================
+ANHANG A: Java-Versionen und ihre wichtigsten Features
+================================================================================
+
+  Java 8  (2014, LTS): Lambdas, Streams, Optional, java.time, default Methoden
+  Java 9  (2017):      Module System, jshell, Factory-Methoden für Collections
+  Java 10 (2018):      var (lokale Typinferenz)
+  Java 11 (2018, LTS): HttpClient, String-Methoden (isBlank, strip), var in Lambdas
+  Java 12 (2019):      switch Expressions (Preview)
+  Java 13 (2019):      Text Blocks (Preview)
+  Java 14 (2020):      switch Expressions stabil, Records (Preview), instanceof Pattern
+  Java 15 (2020):      Text Blocks stabil, sealed classes (Preview)
+  Java 16 (2021):      Records stabil, instanceof Pattern stabil, Stream.toList()
+  Java 17 (2021, LTS): sealed classes stabil, Pattern Matching in switch (Preview)
+  Java 18 (2022):      UTF-8 als Standard, Simple Web Server
+  Java 19 (2022):      Virtual Threads (Preview), Structured Concurrency (Incubator)
+  Java 20 (2023):      Scoped Values (Incubator)
+  Java 21 (2023, LTS): Virtual Threads stabil, Pattern Matching switch stabil,
+                        Record Patterns, Sequenced Collections
+
+================================================================================
+ANHANG B: Wichtige Java-Standard-Pakete
+================================================================================
+
+  java.lang           → Automatisch importiert: String, Math, System, Object,
+                         Thread, Exception, Integer, Double, Boolean, ...
+  java.util           → Collections, Arrays, Scanner, Random, Date, Optional, ...
+  java.util.function  → Predicate, Function, Consumer, Supplier, ...
+  java.util.stream    → Stream, Collectors, IntStream, ...
+  java.util.concurrent → ExecutorService, Future, CompletableFuture, Atomic..., ...
+  java.io             → File, InputStream, OutputStream, Reader, Writer, ...
+  java.nio            → Buffer, Channel, Selector
+  java.nio.file       → Path, Files, Paths, ...
+  java.nio.charset    → StandardCharsets, Charset
+  java.net            → Socket, ServerSocket, URL, URI, HttpURLConnection
+  java.net.http       → HttpClient, HttpRequest, HttpResponse (Java 11+)
+  java.time           → LocalDate, LocalTime, LocalDateTime, ZonedDateTime, Duration, ...
+  java.time.format    → DateTimeFormatter
+  java.math           → BigInteger, BigDecimal, MathContext
+  java.text           → DecimalFormat, SimpleDateFormat, MessageFormat
+  java.security       → Kryptographie, MessageDigest, ...
+  java.reflect        → Class, Method, Field, Constructor
+  java.lang.annotation → Annotation, Retention, Target, ...
+  javax.crypto        → Cipher, SecretKey, ...
+
+================================================================================
+ANHANG C: Häufige Coding-Konventionen
+================================================================================
+
+  KlassenNamen:        UpperCamelCase   (Person, KontoVerwaltung)
+  methodeNamen:        lowerCamelCase   (berechneZinsen, getKontostand)
+  variableNamen:       lowerCamelCase   (kontostand, maxBetrag)
+  KONSTANTEN:          SCREAMING_SNAKE  (MAX_GROESSE, PI)
+  paketeNamen:         allelklein       (com.beispiel.modell)
+  interface Namen:     wie Klassen, oft Adjektiv (-able) oder Nomen
+
+  Einrückung:          4 Leerzeichen (oder 1 Tab)
+  Maximale Zeilenlänge: 80-120 Zeichen
+  Geschweifte Klammer: auf gleicher Zeile (K&R-Stil)
+    if (bedingung) {   // öffnende Klammer NICHT auf neue Zeile!
+        ...
+    } else {
+
+  Imports: niemals Wildcard-Imports in Produktionscode:
+    import java.util.*;    // schlecht — unklar welche Klassen benutzt werden
+    import java.util.List; // gut
+
+================================================================================
+GLÜCKWUNSCH — DU HAST DEN JAVA KOMPLETTKURS ABGESCHLOSSEN!
+================================================================================
+
+Du kennst jetzt:
+  ✓ Die JVM, JDK, JRE und den Kompilierungsprozess
+  ✓ Alle primitiven Datentypen und ihre Besonderheiten
+  ✓ Strings, StringBuilder, Formatierung
+  ✓ Kontrollfluss: if/else, switch (klassisch + modern), alle Schleifen
+  ✓ Arrays (1D, 2D, jagged) und die Arrays-Klasse
+  ✓ Methoden, Overloading, Rekursion, Scope
+  ✓ OOP: Kapselung, Vererbung, Polymorphismus, Abstraktion
+  ✓ Interfaces, Default-Methoden, Functional Interfaces
+  ✓ Enums, Records, Sealed Classes
+  ✓ Generics mit Bounds und Wildcards
+  ✓ Innere Klassen, Autoboxing, Wrapper-Klassen
+  ✓ Das gesamte Collections Framework
+  ✓ Exception-Hierarchie und Best Practices
+  ✓ Moderne Datei-I/O mit NIO.2
+  ✓ Lambda-Ausdrücke und Method References
+  ✓ Die komplette Streams API
+  ✓ Optional und null-sichere Programmierung
+  ✓ Threads, Synchronisation, ExecutorService, CompletableFuture
+  ✓ HTTP-Client, Sockets, Netzwerk-Grundlagen
+  ✓ Reflection und eigene Annotations
+  ✓ Das Java Module System
+  ✓ Testing mit JUnit 5 (Assertions, Parametrisiert, Mockito)
+  ✓ Maven und Gradle Build-Tools
+  ✓ Ein vollständiges Abschlussprojekt
+
+Nächste Schritte:
+  → Spring Boot: Das beliebteste Java-Framework für Web-Anwendungen
+  → Jakarta EE: Enterprise-Java-Standard
+  → Hibernate/JPA: ORM für Datenbanken
+  → Kotlin: Moderne JVM-Sprache, kompatibel mit Java
+  → Reactive Programming: Project Reactor, RxJava
+
+================================================================================

@@ -1,0 +1,1387 @@
+================================================================================
+MODUL 1: Was ist HTML überhaupt?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Das Grundprinzip
+------------------------------------------------------------------------
+
+HTML (HyperText Markup Language) ist keine Programmiersprache — es ist
+eine Auszeichnungssprache. Du beschreibst dem Browser, WAS etwas ist,
+nicht wie es aussehen soll (das ist CSS' Job).
+
+Der Browser bekommt eine .html-Datei, liest sie von oben nach unten und
+baut daraus einen sogenannten DOM (Document Object Model) — einen Baum
+aus Objekten, mit dem du per JS interagieren kannst.
+
+HTML besteht aus Tags (Elementen):
+
+  <p>Das ist ein Absatz.</p>
+
+  ↑ Öffnender Tag    ↑ Inhalt    ↑ Schließender Tag
+
+Manche Tags brauchen keinen schließenden Tag (sogenannte void elements):
+
+  <br>        Zeilenumbruch
+  <hr>        Horizontale Linie
+  <img>       Bild
+  <input>     Eingabefeld
+  <meta>      Metadaten
+  <link>      Externe Ressource (CSS usw.)
+
+Attribute geben Tags zusätzliche Informationen:
+
+  <a href="https://example.com" target="_blank">Klick mich</a>
+       ↑ Attributname  ↑ Attributwert
+
+------------------------------------------------------------------------
+1.2  Das Grundgerüst — jede HTML-Seite
+------------------------------------------------------------------------
+
+  <!DOCTYPE html>
+  <html lang="de">
+
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Seitentitel</title>
+    </head>
+
+    <body>
+      <!-- Hier kommt der sichtbare Inhalt -->
+    </body>
+
+  </html>
+
+Zeile für Zeile erklärt:
+
+  <!DOCTYPE html>
+    Pflicht. Teilt dem Browser mit: "Das ist HTML5." Ohne das schaltet
+    der Browser in den "Quirks Mode" und verhält sich komisch.
+
+  <html lang="de">
+    Wurzelelement. Jede HTML-Seite hat genau eines. Das lang-Attribut
+    ist wichtig für Screenreader und Suchmaschinen.
+
+  <head>
+    Unsichtbarer Kopfbereich. Enthält Metadaten, CSS-Links, den Titel.
+    Alles hier wird nicht direkt angezeigt, ist aber wichtig.
+
+  <meta charset="utf-8">
+    Zeichenkodierung. IMMER setzen, sonst werden Umlaute falsch
+    dargestellt. UTF-8 deckt praktisch alle Zeichen der Welt ab.
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    Pflicht für mobile Darstellung. Ohne das zeigt das Smartphone die
+    Seite winzig verkleinert an.
+
+  <title>
+    Titel im Browser-Tab. Auch für Suchmaschinen sehr wichtig.
+
+  <body>
+    Alles Sichtbare. Hier lebt dein Inhalt.
+
+Aus deinem Code (index.html):
+  <base href="/TrafkSite/">   ← Setzt den Basispfad für alle relativen URLs
+  Die <meta description> und <meta author> Tags sind SEO-Metadaten.
+
+------------------------------------------------------------------------
+1.3  Kommentare
+------------------------------------------------------------------------
+
+  <!-- Das ist ein Kommentar. Wird nicht angezeigt. -->
+
+  <!--
+    Mehrzeilige Kommentare
+    funktionieren auch.
+  -->
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle eine leere HTML-Datei mit dem korrekten Grundgerüst.
+Setze den Titel auf "Meine erste Seite" und füge einen Kommentar
+in den body ein, der beschreibt, was du vorhast.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Text-Elemente
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Überschriften — h1 bis h6
+------------------------------------------------------------------------
+
+Es gibt 6 Ebenen. Immer hierarchisch verwenden:
+
+  <h1>Haupttitel — genau einmal pro Seite</h1>
+  <h2>Abschnittsüberschrift</h2>
+  <h3>Unterabschnitt</h3>
+  <h4>Unter-Unterabschnitt</h4>
+  <h5>Selten gebraucht</h5>
+  <h6>Noch seltener</h6>
+
+Wichtige Regel: h1 nur einmal pro Seite (für SEO und Screenreader).
+h2 für die wichtigsten Abschnitte, h3 für Unterabschnitte — nicht
+einfach willkürlich wählen weil man eine bestimmte Größe will.
+Größe = CSS-Sache, nicht HTML-Sache.
+
+Aus deinem Code:
+  <h1>Projects</h1>          ← Gut, klar was das ist
+  <h1>Founder and only Member</h1>
+
+------------------------------------------------------------------------
+2.2  Absätze und Zeilenumbrüche
+------------------------------------------------------------------------
+
+  <p>Das ist ein Absatz. Browser ignorieren extra Leerzeilen und
+  Einrückungen im HTML-Quellcode — alles wird zu einem einzigen
+  Textblock zusammengefasst.</p>
+
+  <p>Das ist ein zweiter Absatz. Zwischen Absätzen ist automatisch
+  etwas Abstand (Margin), wenn kein CSS dagegen arbeitet.</p>
+
+  Zeilenumbruch innerhalb eines Absatzes:<br>
+  Diese Zeile kommt nach dem Umbruch.
+
+Wann br, wann p?
+  <p> für inhaltlich getrennte Textblöcke (Absätze).
+  <br> nur innerhalb eines Absatzes wenn du wirklich einen harten
+  Zeilenumbruch brauchst — z.B. in Gedichten, Adressen.
+  Niemals <br><br> für Abstand benutzen — dafür ist margin in CSS.
+
+------------------------------------------------------------------------
+2.3  Inline-Textelemente — Betonung und Bedeutung
+------------------------------------------------------------------------
+
+  <strong>Wichtiger Text</strong>   — semantisch wichtig, fett dargestellt
+  <em>Betonter Text</em>            — semantische Betonung, kursiv dargestellt
+  <b>Fett</b>                       — nur visuell fett, keine semantische Bedeutung
+  <i>Kursiv</i>                     — nur visuell kursiv, keine sem. Bedeutung
+  <u>Unterstrichen</u>              — vermeiden! Sieht aus wie ein Link
+  <s>Durchgestrichen</s>            — für "nicht mehr gültig"
+  <mark>Markiert</mark>             — wie Textmarker, gelb hervorgehoben
+  <small>Kleingedrucktes</small>    — Copyright, Fußnoten
+  <sub>Tiefgestellt</sub>           — H₂O
+  <sup>Hochgestellt</sup>           — x²
+
+Aus deinem Code (index.html):
+  <p><i>Beyond the familiar...</i></p>
+  ← Benutzt <i> für Kursivschrift. Wenn der Text eine inhaltliche
+    Betonung ist, wäre <em> semantisch korrekter.
+
+------------------------------------------------------------------------
+2.4  Code, Vorformatierter Text, Zitate
+------------------------------------------------------------------------
+
+  <code>console.log("inline code")</code>
+    Inline-Code im Text. Vom Browser normalerweise mit Monospace-Font.
+
+  <pre>
+    Vorformatierter Text.
+    Leerzeichen und Zeilenumbrüche
+    werden exakt so angezeigt wie geschrieben.
+  </pre>
+
+  <pre><code>
+    function hallo() {
+      console.log("Hallo");
+    }
+  </code></pre>
+  → Kombination für Code-Blöcke (pre für Formatierung, code für Semantik)
+
+  <blockquote cite="https://quelle.de">
+    Ein langes Zitat, das als eigener Block dargestellt wird.
+  </blockquote>
+
+  <q>Ein kurzes Inline-Zitat</q>   → Browser fügt Anführungszeichen hinzu
+
+  <abbr title="Hypertext Markup Language">HTML</abbr>
+    Abkürzungen — Tooltip zeigt den Langtext beim Hovern
+
+  <time datetime="2026-06-13">13. Juni 2026</time>
+    Maschinenlesbares Datum — wichtig für Suchmaschinen
+
+  <address>
+    Daniel Raberger<br>
+    contact.trafkhop@proton.me
+  </address>
+  → Kontaktinformation — nicht nur für Adressen, auch für Emails etc.
+
+------------------------------------------------------------------------
+2.5  Horizontale Linie und Zeilenumbruch
+------------------------------------------------------------------------
+
+  <hr>   → Thematische Trennung (semantisch — nicht nur für Optik!)
+  <wbr>  → "Word Break Opportunity" — Möglicher Zeilenumbruch in langem Wort
+             Beispiel: Super<wbr>langes<wbr>Wort kann hier umbrechen
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Schreibe einen kurzen HTML-Abschnitt über eines deiner Projekte.
+Benutze h2 als Titel, einen p-Absatz als Beschreibung,
+<strong> für das wichtigste Wort, und <time> für das Erscheinungsdatum.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Listen
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Ungeordnete Liste (ul)
+------------------------------------------------------------------------
+
+  <ul>
+    <li>Erstes Element</li>
+    <li>Zweites Element</li>
+    <li>Drittes Element</li>
+  </ul>
+
+  Standardmäßig mit Bullet-Points. ul = unordered list, li = list item.
+
+Aus deinem Code:
+  <ul>
+    <li><a href="..."><p class="do">Daniel Raberger - HoppiTex</p></a></li>
+  </ul>
+
+------------------------------------------------------------------------
+3.2  Geordnete Liste (ol)
+------------------------------------------------------------------------
+
+  <ol>
+    <li>Zuerst das</li>
+    <li>Dann das</li>
+    <li>Zuletzt das</li>
+  </ol>
+
+  Attribute für ol:
+    start="3"     → Startet bei 3 statt 1
+    reversed      → Countdown (5, 4, 3, 2, 1)
+    type="A"      → A, B, C statt 1, 2, 3
+    type="a"      → a, b, c
+    type="I"      → Römische Zahlen (I, II, III)
+    type="i"      → kleine römische Zahlen
+
+  Einzelne li können mit value="5" einen bestimmten Wert bekommen.
+
+------------------------------------------------------------------------
+3.3  Definitionsliste (dl)
+------------------------------------------------------------------------
+
+Für Glossare, Metadaten, Key-Value-Paare:
+
+  <dl>
+    <dt>HTML</dt>
+    <dd>HyperText Markup Language — Auszeichnungssprache für Webseiten</dd>
+
+    <dt>CSS</dt>
+    <dd>Cascading Style Sheets — Gestaltungssprache für Webseiten</dd>
+
+    <dt>TrafkHop</dt>
+    <dd>Entertainment-Studio gegründet 2025</dd>
+    <dd>Erstellt Spiele und schreibt Geschichten</dd>  ← Mehrere dd erlaubt
+  </dl>
+
+  dl = definition list
+  dt = definition term
+  dd = definition description
+
+------------------------------------------------------------------------
+3.4  Verschachtelte Listen
+------------------------------------------------------------------------
+
+  <ul>
+    <li>Projekte
+      <ul>
+        <li>RSA — Raufbold3bs Scratch Archive</li>
+        <li>TrafkSite
+          <ul>
+            <li>Header</li>
+            <li>Footer</li>
+          </ul>
+        </li>
+        <li>TrafkTux</li>
+      </ul>
+    </li>
+    <li>Mitglieder</li>
+  </ul>
+
+  Wichtig: Das verschachtelte ul/ol kommt INNERHALB des li, nicht danach.
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Erstelle eine verschachtelte Liste deiner Projekte mit Unterpunkten.
+Nutze ol für die Reihenfolge nach Wichtigkeit, ul für die Features.
+Füge eine dl mit 3 Begriffen hinzu, die dein Studio beschreiben.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Links und Navigation
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Der <a>-Tag — Anker
+------------------------------------------------------------------------
+
+  <a href="https://example.com">Externer Link</a>
+
+  href (hypertext reference) — das Ziel des Links.
+
+Verschiedene href-Typen:
+
+  href="https://..."              → Absolute URL (externe Seite)
+  href="/projekte/index.html"     → Absolute Pfad (selbe Domain)
+  href="projekte/index.html"      → Relativer Pfad (vom aktuellen Ordner)
+  href="../index.html"            → Einen Ordner nach oben
+  href="#abschnitt1"              → Anker (springt zu Element mit id="abschnitt1")
+  href=""                         → Seite neu laden
+  href="mailto:contact@test.de"   → Email-Programm öffnen
+  href="tel:+43123456789"         → Telefon-App öffnen
+  href="javascript:void(0)"       → Nichts tun (vermeiden, besser preventDefault)
+
+Aus deinem Code (footer.html):
+  <a href="mailto:contact.trafkhop@proton.me">Contact via Email</a>
+  ← Sauber! mailto für Email, direkter Kontakt.
+
+------------------------------------------------------------------------
+4.2  Wichtige Attribute für Links
+------------------------------------------------------------------------
+
+  target="_blank"     → Link in neuem Tab öffnen
+  target="_self"      → Im selben Tab öffnen (Standard)
+  target="_parent"    → Im übergeordneten Frame
+  target="_top"       → Im obersten Frame
+
+  Bei target="_blank" IMMER auch:
+  rel="noopener noreferrer"
+  → Sicherheit! Ohne das könnte die neue Seite per window.opener
+    auf deine Seite zugreifen (clickjacking-Risiko).
+
+  <a href="https://example.com" target="_blank" rel="noopener noreferrer">
+    Sicherer externer Link
+  </a>
+
+  download           → Datei herunterladen statt öffnen
+  download="name.pdf" → Mit eigenem Dateinamen
+
+  <a href="datei.pdf" download="TrafkDoc.pdf">PDF herunterladen</a>
+
+------------------------------------------------------------------------
+4.3  Anker — Seiteninterner Sprung
+------------------------------------------------------------------------
+
+  <!-- Ziel-Anker definieren: -->
+  <section id="projekte">
+    <h2>Projekte</h2>
+    ...
+  </section>
+
+  <!-- Link zum Anker: -->
+  <a href="#projekte">Zu den Projekten</a>
+
+  <!-- Anker auf anderer Seite: -->
+  <a href="about.html#team">Unser Team</a>
+
+------------------------------------------------------------------------
+4.4  Navigation mit <nav>
+------------------------------------------------------------------------
+
+  <nav aria-label="Hauptnavigation">
+    <ul>
+      <li><a href="/">Startseite</a></li>
+      <li><a href="/projekte/">Projekte</a></li>
+      <li><a href="/ueber/">Über uns</a></li>
+    </ul>
+  </nav>
+
+  nav ist ein semantisches Element. Sagt dem Browser: "Das ist
+  Navigation." Wichtig für Screenreader (aria-label erklärt welche Nav).
+
+Aus deinem Code (header.html):
+  <nav id="header-nav"></nav>
+  ← Leer, wird per JS befüllt (placeholder.js, nav.js). Das ist ein
+    gültiges Muster für dynamisch generierte Navigation.
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Baue eine simple Navigationsleiste mit 4 Links.
+Einer davon soll zu einem Anker auf derselben Seite springen.
+Einer soll eine Email öffnen.
+Einer soll eine externe Seite in neuem Tab öffnen (mit rel korrekt).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Bilder und Medien
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Bilder — das <img> Tag
+------------------------------------------------------------------------
+
+  <img src="logo.png" alt="TrafkHop Entertainment Logo">
+
+  src   → Pfad zum Bild (relativ oder absolut)
+  alt   → Pflicht! Alternativer Text wenn Bild nicht lädt, für
+          Screenreader, für Suchmaschinen. Bei dekorativen Bildern: alt=""
+
+Aus deinem Code:
+  <img id="trafkhopEnt" src="https://...Logo%20v2.png" alt="Trafkhop Entertainment">
+  ← Gut! alt vorhanden und sinnvoll beschreibend.
+
+Wichtige optionale Attribute:
+
+  width="300"           → Breite in Pixeln (besser über CSS regeln!)
+  height="200"          → Höhe in Pixeln
+  loading="lazy"        → Bild erst laden wenn im Viewport sichtbar
+                          (Performance-Optimierung — bei Bildern weiter
+                          unten auf der Seite IMMER setzen)
+  decoding="async"      → Bild asynchron dekodieren
+  fetchpriority="high"  → Für das erste wichtige Bild (LCP-Optimierung)
+
+------------------------------------------------------------------------
+5.2  Responsive Bilder — srcset und sizes
+------------------------------------------------------------------------
+
+srcset erlaubt verschiedene Bildgrößen für verschiedene Auflösungen:
+
+  <img
+    src="logo-400.png"
+    srcset="logo-400.png 400w,
+            logo-800.png 800w,
+            logo-1200.png 1200w"
+    sizes="(max-width: 600px) 100vw,
+           (max-width: 1200px) 50vw,
+           400px"
+    alt="TrafkHop Logo"
+  >
+
+  srcset: Liste von Bilddateien mit ihrer Breite (w = width descriptor).
+  sizes:  Sagt dem Browser, wie breit das Bild tatsächlich angezeigt wird.
+          Browser wählt dann die passende Datei aus srcset.
+
+  → Mobile lädt 400px-Version, Desktop 1200px-Version. Weniger Traffic!
+
+------------------------------------------------------------------------
+5.3  Das <picture> Element — Art Direction
+------------------------------------------------------------------------
+
+Für verschiedene Bilder (nicht nur verschiedene Größen) je nach Gerät:
+
+  <picture>
+    <source
+      media="(max-width: 600px)"
+      srcset="logo-mobil.png"
+    >
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="logo-dunkel.png"
+    >
+    <img src="logo-standard.png" alt="TrafkHop Logo">
+  </picture>
+
+  Wichtig: Das <img> am Ende ist das Fallback und PFLICHT.
+  Browser geht von oben nach unten durch die source-Elemente und
+  nimmt den ersten passenden. Kein Match? → <img> Fallback.
+
+  Auch für moderne Formate (WebP mit JPEG-Fallback):
+  <picture>
+    <source srcset="bild.webp" type="image/webp">
+    <img src="bild.jpg" alt="Beschreibung">
+  </picture>
+
+------------------------------------------------------------------------
+5.4  Video
+------------------------------------------------------------------------
+
+  <video controls width="640" poster="thumbnail.jpg">
+    <source src="video.webm" type="video/webm">
+    <source src="video.mp4" type="video/mp4">
+    <p>Dein Browser unterstützt kein Video. <a href="video.mp4">Hier herunterladen.</a></p>
+  </video>
+
+  Wichtige Attribute:
+    controls          → Zeigt Steuerungsleiste (Play, Pause, Lautstärke)
+    autoplay          → Automatisch starten (muted PFLICHT dafür)
+    muted             → Ohne Ton (für Autoplay nötig)
+    loop              → Endlosschleife
+    preload="auto"    → Vorab laden
+    preload="metadata"→ Nur Metadaten vorab (empfohlen)
+    preload="none"    → Gar nicht vorab laden
+    poster="bild.jpg" → Thumbnail bevor Video startet
+    playsinline       → Mobile: im Element abspielen, kein Vollbild
+    width/height      → Größe (besser per CSS)
+
+------------------------------------------------------------------------
+5.5  Audio
+------------------------------------------------------------------------
+
+  <audio controls>
+    <source src="musik.ogg" type="audio/ogg">
+    <source src="musik.mp3" type="audio/mpeg">
+    Dein Browser unterstützt kein Audio.
+  </audio>
+
+  Gleiche Attribute wie video (außer poster, width, height).
+
+------------------------------------------------------------------------
+5.6  Eingebettete Inhalte — iframe
+------------------------------------------------------------------------
+
+  <iframe
+    src="https://www.youtube.com/embed/videoId"
+    width="560"
+    height="315"
+    title="Videotitel"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
+    allowfullscreen
+    loading="lazy"
+  ></iframe>
+
+  Für andere Seiten, Maps, externe Inhalte.
+  Sicherheit: sandbox-Attribut schränkt Rechte ein:
+    sandbox="allow-scripts allow-same-origin"
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Füge ein Bild mit lazy loading zu deiner Seite hinzu.
+Mache es responsive mit srcset für 3 verschiedene Größen.
+Füge ein Video-Element ein (kann ein Platzhalterpfad sein)
+mit sinnvollen Attributen (controls, poster, muted).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Tabellen
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Grundstruktur einer Tabelle
+------------------------------------------------------------------------
+
+  <table>
+    <caption>Übersicht der TrafkHop-Projekte</caption>
+    <thead>
+      <tr>
+        <th scope="col">Projekt</th>
+        <th scope="col">Jahr</th>
+        <th scope="col">Typ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>RSA</td>
+        <td>2025</td>
+        <td>Archiv</td>
+      </tr>
+      <tr>
+        <td>TrafkSite</td>
+        <td>2025</td>
+        <td>Website</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3">Alle Rechte vorbehalten</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  table   → Die Tabelle selbst
+  caption → Titel der Tabelle (Pflicht für Barrierefreiheit!)
+  thead   → Kopfzeilen-Bereich
+  tbody   → Datenzellen-Bereich
+  tfoot   → Fußzeilen-Bereich
+  tr      → Tabellenzeile (table row)
+  th      → Kopfzelle (table header) — fett und zentriert by default
+  td      → Datenzelle (table data)
+
+  scope="col" → Diese th ist eine Spalten-Überschrift (für Screenreader)
+  scope="row" → Diese th ist eine Zeilen-Überschrift
+
+------------------------------------------------------------------------
+6.2  Zellen verbinden
+------------------------------------------------------------------------
+
+  <!-- Zellen horizontal verbinden (Spalten): -->
+  <td colspan="2">Erstreckt sich über 2 Spalten</td>
+
+  <!-- Zellen vertikal verbinden (Zeilen): -->
+  <td rowspan="3">Erstreckt sich über 3 Zeilen</td>
+
+  Beispiel:
+  <table>
+    <tr>
+      <th>Name</th>
+      <th colspan="2">Kontakt</th>   ← erstreckt sich über "Email" + "Tel"
+    </tr>
+    <tr>
+      <td rowspan="2">Daniel</td>    ← erstreckt sich über zwei Zeilen
+      <td>Email</td>
+      <td>Telefon</td>
+    </tr>
+    <tr>
+      <!-- td für "Daniel" entfällt weil rowspan=2 von oben -->
+      <td>blog@trafk.de</td>
+      <td>+43 ...</td>
+    </tr>
+  </table>
+
+------------------------------------------------------------------------
+6.3  Spaltengruppen
+------------------------------------------------------------------------
+
+  <table>
+    <colgroup>
+      <col style="background-color: #fff495">  ← Erste Spalte gelb
+      <col span="2">                            ← Nächste 2 Spalten standard
+    </colgroup>
+    ...
+  </table>
+
+  Nur wenige CSS-Properties funktionieren an col/colgroup:
+  background, border, visibility, width — sonst muss man td/th stylen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Erstelle eine Tabelle mit deinen Projekten.
+Spalten: Name, Beschreibung, Jahr, Status.
+Benutze thead/tbody/tfoot.
+Verbinde 2 Zellen horizontal mit colspan.
+Füge scope="col" zu allen th hinzu.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Formulare — der wichtigste interaktive Teil
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Das <form>-Element
+------------------------------------------------------------------------
+
+  <form action="/senden" method="post" novalidate>
+    <!-- Formularfelder hier -->
+    <button type="submit">Absenden</button>
+  </form>
+
+  action   → URL an die das Formular gesendet wird
+  method   → "get" (Daten in URL) oder "post" (Daten im Body)
+  novalidate → Browser-eigene Validierung abschalten (wenn du eigene machst)
+  enctype  → "multipart/form-data" für Datei-Uploads
+
+------------------------------------------------------------------------
+7.2  Das <input>-Element — alle wichtigen Typen
+------------------------------------------------------------------------
+
+  type="text"           → Einzeiliges Textfeld (Standard)
+  type="password"       → Passwort (Zeichen versteckt)
+  type="email"          → Email-Adresse (mit Validierung)
+  type="number"         → Zahl
+  type="tel"            → Telefonnummer
+  type="url"            → URL-Adresse
+  type="search"         → Suchfeld (mit x zum Löschen)
+  type="date"           → Datumspicker
+  type="time"           → Zeitauswahl
+  type="datetime-local" → Datum + Uhrzeit
+  type="month"          → Monatsauswahl
+  type="week"           → Wochenauswahl
+  type="color"          → Farbauswahl
+  type="range"          → Schieberegler
+  type="checkbox"       → Checkbox (an/aus)
+  type="radio"          → Radio-Button (einer von mehreren)
+  type="file"           → Datei-Upload
+  type="hidden"         → Unsichtbares Feld (z.B. CSRF-Token)
+  type="submit"         → Absende-Button
+  type="reset"          → Formular zurücksetzen
+  type="button"         → Normaler Button ohne Standardverhalten
+  type="image"          → Bild als Submit-Button
+
+Aus deinem Code (header.html):
+  <input type="search" name="search" id="search" class="do" placeholder="Search...">
+  ← Sehr schön! type="search" für Suchfelder.
+
+Aus deinem Code (footer.html):
+  <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5">
+  ← Perfekter Einsatz von type="range" mit min, max, step, value.
+
+------------------------------------------------------------------------
+7.3  Wichtige Input-Attribute
+------------------------------------------------------------------------
+
+  name="feldname"        → Pflicht für Formulardaten! Wird als Key gesendet
+  id="eindeutig"         → Für label-Verknüpfung und JS-Zugriff
+  value="vorausgefüllt"  → Standardwert
+  placeholder="Hint"     → Grauer Hinweistext (KEIN Ersatz für label!)
+  required               → Feld muss ausgefüllt sein
+  disabled               → Feld gesperrt und wird NICHT mit gesendet
+  readonly               → Lesbar aber nicht änderbar, WIRD gesendet
+  autofocus              → Dieses Feld bekommt Fokus beim Laden
+  autocomplete="off"     → Browser-Autovervollständigung deaktivieren
+  autocomplete="email"   → Browser füllt Email automatisch aus
+  min="0"                → Minimalwert (für number, range, date)
+  max="100"              → Maximalwert
+  step="5"               → Schrittgröße
+  maxlength="50"         → Max. Zeichenanzahl
+  minlength="3"          → Min. Zeichenanzahl
+  pattern="[A-Z]{3}"     → Regex-Validierung
+  multiple               → Mehrere Werte erlaubt (file, email)
+  accept=".pdf,image/*"  → Erlaubte Dateitypen (file-Input)
+
+------------------------------------------------------------------------
+7.4  Label — Pflicht für Barrierefreiheit
+------------------------------------------------------------------------
+
+  <!-- Methode 1: Explizite Verknüpfung über id/for: -->
+  <label for="nutzername">Benutzername</label>
+  <input type="text" id="nutzername" name="nutzername">
+
+  <!-- Methode 2: Implizit durch Umschließung: -->
+  <label>
+    Benutzername
+    <input type="text" name="nutzername">
+  </label>
+
+  IMMER label verwenden! Ohne label:
+  - Screenreader wissen nicht was das Feld bedeutet
+  - Klick auf label fokussiert nicht das Feld
+  - Schlechte Nutzererfahrung auf Mobile
+
+------------------------------------------------------------------------
+7.5  Textarea und Select
+------------------------------------------------------------------------
+
+  <!-- Mehrzeiliges Textfeld: -->
+  <label for="nachricht">Nachricht</label>
+  <textarea
+    id="nachricht"
+    name="nachricht"
+    rows="6"
+    cols="40"
+    placeholder="Deine Nachricht..."
+    maxlength="500"
+  ></textarea>
+  → rows und cols geben Anfangsgröße an. Größe per CSS besser steuerbar.
+  → Leeres textarea braucht öffnenden UND schließenden Tag!
+
+  <!-- Dropdown-Auswahl: -->
+  <label for="projekt">Projekt wählen</label>
+  <select id="projekt" name="projekt">
+    <option value="">-- Bitte wählen --</option>
+    <option value="rsa">RSA</option>
+    <option value="trafksite" selected>TrafkSite</option>  ← vorausgewählt
+    <option value="trafktux" disabled>TrafkTux (bald)</option>
+  </select>
+
+  <!-- Gruppen im Select: -->
+  <select name="projekt">
+    <optgroup label="Aktive Projekte">
+      <option value="rsa">RSA</option>
+      <option value="trafksite">TrafkSite</option>
+    </optgroup>
+    <optgroup label="Archiv">
+      <option value="alt">Altes Projekt</option>
+    </optgroup>
+  </select>
+
+  <!-- Mehrfachauswahl: -->
+  <select name="tags" multiple size="4">
+    <option value="spiel">Spiel</option>
+    <option value="website">Website</option>
+    <option value="archiv">Archiv</option>
+  </select>
+
+------------------------------------------------------------------------
+7.6  Checkboxen und Radio-Buttons
+------------------------------------------------------------------------
+
+  <!-- Checkboxen (beliebig viele anwählbar): -->
+  <fieldset>
+    <legend>Interessen</legend>
+
+    <input type="checkbox" id="cb-spiele" name="interessen" value="spiele" checked>
+    <label for="cb-spiele">Spiele</label>
+
+    <input type="checkbox" id="cb-code" name="interessen" value="code">
+    <label for="cb-code">Programmieren</label>
+  </fieldset>
+
+  <!-- Radio-Buttons (nur einer wählbar): -->
+  <fieldset>
+    <legend>Lieblingsfarbe</legend>
+
+    <input type="radio" id="r-gelb" name="farbe" value="gelb" checked>
+    <label for="r-gelb">Kraft-Gelb</label>
+
+    <input type="radio" id="r-lila" name="farbe" value="lila">
+    <label for="r-lila">Trafk-Lila</label>
+  </fieldset>
+
+  Gleiche name bei Radio-Buttons → sie gehören zur selben Gruppe!
+  fieldset fasst zusammen, legend beschreibt die Gruppe.
+
+------------------------------------------------------------------------
+7.7  Datalist — Autocomplete-Vorschläge
+------------------------------------------------------------------------
+
+  <label for="browser">Lieblingsbrowser</label>
+  <input list="browser-list" id="browser" name="browser">
+  <datalist id="browser-list">
+    <option value="Firefox">
+    <option value="Chrome">
+    <option value="Safari">
+    <option value="TrafkBrowser 3000">
+  </datalist>
+
+  Kein Dropdown-Zwang — Nutzer kann trotzdem freien Text eingeben.
+  Die datalist macht nur Vorschläge. Verknüpfung über list="id".
+
+------------------------------------------------------------------------
+7.8  Button-Typen
+------------------------------------------------------------------------
+
+  <button type="submit">Formular absenden</button>  ← Standard in form
+  <button type="reset">Zurücksetzen</button>
+  <button type="button">Klick mich (JS nötig)</button>  ← für JS-Handler
+
+  type="button" IMMER setzen wenn der Button kein Formular absendet!
+  Ohne Typ: Standardverhalten = submit. Das kann dein Formular unerwartet
+  abschicken wenn der Button innerhalb von <form> ist.
+
+  <button> vs <input type="submit">:
+  → <button> bevorzugen! Kann HTML-Inhalt enthalten (Icons etc.)
+  → <input type="submit"> kann nur Text als value
+
+------------------------------------------------------------------------
+7.9  Output und Progress
+------------------------------------------------------------------------
+
+  <!-- Ergebnis einer Berechnung: -->
+  <form oninput="result.value = parseInt(a.value) + parseInt(b.value)">
+    <input type="range" id="a" value="50"> +
+    <input type="number" id="b" value="50"> =
+    <output name="result" for="a b">100</output>
+  </form>
+
+  <!-- Fortschrittsbalken: -->
+  <progress value="70" max="100">70%</progress>
+  <progress>Loading...</progress>  ← Ohne value: unbestimmter Ladebalken
+
+  <!-- Messanzeige (für Werte mit Grenzen): -->
+  <meter value="0.7" min="0" max="1" low="0.3" high="0.8" optimum="1">
+    70%
+  </meter>
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Erstelle ein Kontaktformular mit:
+- Name (text, required, minlength=2)
+- Email (email, required)
+- Betreff (select mit 3 Optionen)
+- Nachricht (textarea, rows=5)
+- Priorität (range, 1-5)
+- Newsletter ja/nein (checkbox)
+- Absenden-Button
+Alle Felder müssen label haben. Gruppenfelder in fieldset.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Semantische Struktur — HTML5 Layout-Elemente
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Warum semantisch?
+------------------------------------------------------------------------
+
+Früher sah HTML so aus:
+  <div id="header">...</div>
+  <div id="nav">...</div>
+  <div id="content">...</div>
+  <div id="footer">...</div>
+
+Heute gibt es dafür eigene Elemente. Der Vorteil:
+- Screenreader verstehen die Struktur der Seite
+- Suchmaschinen erkennen wichtige Inhalte
+- Code ist lesbarer
+- Browser können besser optimieren
+
+------------------------------------------------------------------------
+8.2  Die wichtigsten Strukturelemente
+------------------------------------------------------------------------
+
+  <header>
+    Kopfbereich der Seite ODER eines Abschnitts. Enthält typischerweise
+    Logo, Seitenname, Hauptnavigation.
+    → Kann mehrfach vorkommen (Seiten-Header + Artikel-Header).
+
+  <nav>
+    Navigationsbereich. Für Menüs, Brotkrumen-Navigation usw.
+    → Nicht jede Linkliste braucht nav — nur hauptsächliche Navigation.
+
+  <main>
+    Hauptinhalt der Seite. Genau einmal pro Seite!
+    → Alles was einzigartig für diese Seite ist (nicht Logo, Nav, Footer).
+
+  <article>
+    Ein eigenständiger, in sich geschlossener Inhalt.
+    → Blogpost, Newsartikel, Forenbeitrag, Produktkarte.
+    → Wäre auch allein sinnvoll (könnte in einen RSS-Feed).
+
+  <section>
+    Thematischer Abschnitt innerhalb einer Seite oder eines Artikels.
+    → Hat fast immer eine Überschrift.
+    → Wenn kein thematischer Zusammenhang → div verwenden.
+
+  <aside>
+    Inhalt der tangential mit dem umgebenden Inhalt zusammenhängt.
+    → Seitenleiste, Callout-Boxen, verwandte Links.
+    → Nicht für unwichtigen Inhalt — sondern für ergänzenden Inhalt.
+
+  <footer>
+    Fußbereich der Seite ODER eines Abschnitts.
+    → Copyright, Links, Kontaktinfos, verwandte Dokumente.
+
+  <div>
+    Kein semantisches Bedeutung. Container für CSS/JS-Zwecke.
+    → Wenn kein passendes semantisches Element existiert.
+
+  <span>
+    Inline-Container ohne Semantik.
+    → Für CSS/JS-Targeting innerhalb von Text.
+
+Aus deinem Code — sehr schön strukturiert:
+  <header class="glow">  ← semantisch korrekter Header
+  <footer class="glow">  ← semantisch korrekter Footer
+  <main>                 ← Hauptinhalt klar markiert
+  <section id="Logo">    ← Sektionen für die verschiedenen Bereiche
+  <nav id="header-nav">  ← Navigation korrekt markiert
+
+------------------------------------------------------------------------
+8.3  Typisches Seiten-Layout
+------------------------------------------------------------------------
+
+  <body>
+    <header>
+      <nav>...</nav>
+    </header>
+
+    <main>
+      <article>
+        <header>
+          <h1>Artikeltitel</h1>
+          <time datetime="2026-06-13">13. Juni 2026</time>
+        </header>
+
+        <section>
+          <h2>Einleitung</h2>
+          <p>...</p>
+        </section>
+
+        <section>
+          <h2>Details</h2>
+          <p>...</p>
+        </section>
+
+        <footer>
+          <p>Autor: Daniel Raberger</p>
+        </footer>
+      </article>
+
+      <aside>
+        <h2>Verwandte Projekte</h2>
+        <ul>...</ul>
+      </aside>
+    </main>
+
+    <footer>
+      <p>© 2026 TrafkHop Entertainment™</p>
+    </footer>
+  </body>
+
+------------------------------------------------------------------------
+8.4  Details und Summary — eingebautes Akkordeon
+------------------------------------------------------------------------
+
+  <details>
+    <summary>Mehr Infos anzeigen</summary>
+    <p>Dieser Text ist standardmäßig versteckt und wird aufgeklappt
+    wenn man auf Summary klickt. Kein JavaScript nötig!</p>
+  </details>
+
+  <details open>   ← open-Attribut macht es standardmäßig aufgeklappt
+    <summary>FAQ: Was ist TrafkHop?</summary>
+    <p>TrafkHop Entertainment ist ein Ein-Mann-Studio...</p>
+  </details>
+
+------------------------------------------------------------------------
+8.5  Dialog-Element
+------------------------------------------------------------------------
+
+  <dialog id="meinDialog">
+    <h2>Bist du sicher?</h2>
+    <p>Diese Aktion kann nicht rückgängig gemacht werden.</p>
+    <button onclick="document.getElementById('meinDialog').close()">
+      Abbrechen
+    </button>
+    <button>Bestätigen</button>
+  </dialog>
+
+  <button onclick="document.getElementById('meinDialog').showModal()">
+    Dialog öffnen
+  </button>
+
+  Per JS: dialog.showModal() → modaler Dialog (mit Backdrop)
+          dialog.show()       → nicht-modaler Dialog
+          dialog.close()      → schließen
+
+  Eingebauter Fokus-Trap, ESC zum Schließen — eingebaut!
+
+------------------------------------------------------------------------
+8.6  figure und figcaption
+------------------------------------------------------------------------
+
+  <figure>
+    <img src="screenshot.png" alt="TrafkSite Screenshot">
+    <figcaption>Abb. 1: Die TrafkSite-Homepage, Stand 2026</figcaption>
+  </figure>
+
+  <figure>
+    <pre><code>const x = 42;</code></pre>
+    <figcaption>Listing 1: Variable deklarieren</figcaption>
+  </figure>
+
+  figure = irgendein Inhalt mit Beschriftung (nicht nur Bilder!)
+  figcaption = die Beschriftung dazu
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Baue das Grundlayout für eine Projektseite.
+Nutze header, nav, main, article, aside, footer — alle semantisch.
+Füge ein details/summary-Element für FAQ ein.
+Füge einen dialog-Button ein der beim Klick öffnet.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Globale Attribute — auf jedem Element verwendbar
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Die wichtigsten globalen Attribute
+------------------------------------------------------------------------
+
+  id="eindeutig"
+    Eindeutige ID pro Seite. Für CSS-Targeting (#id), JS-Zugriff
+    (getElementById), Anker (#id in href).
+
+  class="klasse1 klasse2"
+    CSS-Klassen. Mehrere mit Leerzeichen getrennt.
+
+  style="color: red; font-size: 20px"
+    Inline-CSS. Vermeiden! Schlechte Trennung von Inhalt und Stil.
+    Manchmal nötig für dynamische Werte per JS.
+
+  title="Tooltip-Text"
+    Erscheint als Tooltip beim Hovern. Nicht für wichtige Infos
+    (Mobile hat kein Hover).
+
+  lang="de"
+    Sprache des Elements oder Teils davon.
+    <p lang="en">This is English text.</p>
+
+  dir="ltr"/"rtl"/"auto"
+    Textrichtung. ltr = links nach rechts, rtl = rechts nach links.
+
+  hidden
+    Element unsichtbar und aus dem Accessibility-Baum entfernt.
+    Wie display:none in CSS, aber semantisch.
+
+  tabindex="0"
+    Reihenfolge beim Tab-Navigieren.
+    tabindex="0" → in natürliche Tab-Reihenfolge aufnehmen
+    tabindex="-1" → per JS fokussierbar, aber nicht per Tab erreichbar
+    tabindex="1" → feste Reihenfolge (vermeiden — verwirrt Nutzer)
+
+  contenteditable="true"
+    Macht das Element bearbeitbar! Browser-interner Editor.
+
+  draggable="true"
+    Für Drag-and-Drop.
+
+  spellcheck="true"/"false"
+    Rechtschreibprüfung an/aus.
+
+------------------------------------------------------------------------
+9.2  Data-Attribute — eigene Daten im HTML
+------------------------------------------------------------------------
+
+Daten im HTML speichern die per JS ausgelesen werden können:
+
+  <div
+    id="spielkarte"
+    data-spiel-id="rsa"
+    data-version="2.3.1"
+    data-author="hoppitex"
+  >
+    RSA
+  </div>
+
+Per JS lesen:
+  const karte = document.getElementById('spielkarte');
+  karte.dataset.spielId      → "rsa"       (data-spiel-id → camelCase)
+  karte.dataset.version      → "2.3.1"
+  karte.dataset.author       → "hoppitex"
+
+Per CSS targeten:
+  [data-spiel-id="rsa"] { background: var(--Kraft); }
+
+  Das verwendest du in deinem Code — ein sauberes Pattern!
+
+------------------------------------------------------------------------
+9.3  ARIA-Attribute — Barrierefreiheit
+------------------------------------------------------------------------
+
+ARIA (Accessible Rich Internet Applications) macht komplexe Widgets
+für Screenreader verständlich.
+
+  aria-label="Schließen"
+    Zugänglicher Name wenn kein sichtbarer Text vorhanden:
+    <button aria-label="Schließen">×</button>
+
+  aria-labelledby="id-des-titels"
+    Zugänglicher Name kommt von einem anderen Element.
+
+  aria-describedby="id-der-beschreibung"
+    Zusätzliche Beschreibung (Fehlertext, Hilfetext).
+
+  aria-hidden="true"
+    Element vor Screenreader verbergen (z.B. dekorative Icons).
+
+  aria-expanded="false"/"true"
+    Sagt ob ein Accordion/Dropdown offen oder geschlossen ist.
+
+  aria-current="page"/"step"
+    Aktueller Navigationspunkt. Für Header-Nav!
+
+  role="button"/"alert"/"dialog"/"navigation"/...
+    Definiert die Rolle wenn das HTML-Element nicht selbst aussagekräftig ist.
+
+Aus deinem Code (header.html):
+  <nav id="header-nav"></nav>
+  ← Würde von aria-label="Hauptnavigation" profitieren!
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Füge data-Attribute zu deinen Projektkarten hinzu (id, typ, jahr).
+Füge aria-label zu allen Icon-Buttons hinzu.
+Setze aria-current="page" auf den aktiven Navigationspunkt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Metadaten und Head — die unsichtbare Macht
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Meta-Tags
+------------------------------------------------------------------------
+
+  <!-- Zeichenkodierung — IMMER als erstes -->
+  <meta charset="utf-8">
+
+  <!-- Viewport für Mobile — IMMER setzen -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <meta name="description" content="Max. 160 Zeichen. Wird in Google-Snippets angezeigt.">
+  <meta name="keywords" content="trafkhop, spiele, entertainment">  ← Kaum noch relevant
+  <meta name="author" content="Daniel Raberger">
+  <meta name="robots" content="index, follow">   ← Suchmaschinen erlauben
+
+  <!-- Open Graph (Facebook, Discord, Slack Previews): -->
+  <meta property="og:title" content="TrafkSite">
+  <meta property="og:description" content="Beyond the familiar...">
+  <meta property="og:image" content="https://...preview.jpg">
+  <meta property="og:url" content="https://trafkhop-entertainment.github.io/TrafkSite/">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Cards: -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TrafkSite">
+
+  <!-- Theme Color für Mobile Browser-Chrome: -->
+  <meta name="theme-color" content="#5a3998">
+
+  <!-- Verschiedenes: -->
+  <meta http-equiv="refresh" content="5; url=https://neue-seite.de">
+    → Seite nach 5 Sekunden weiterleiten (vermeiden wenn möglich)
+
+Aus deinem Code:
+  <meta name="description" content="The Homepage of Trafkhop Entertainment">
+  <meta name="author" content="Trafkhop Entertainment">
+  ← Gut! Für Open Graph noch og:title und og:image hinzufügen.
+
+------------------------------------------------------------------------
+10.2  Link-Tags
+------------------------------------------------------------------------
+
+  <!-- CSS einbinden: -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Favicon: -->
+  <link rel="icon" href="favicon.ico">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">  ← Moderne Variante
+  <link rel="apple-touch-icon" href="icon-180.png">          ← iOS Homescreen
+
+  <!-- Fonts (z.B. Google Fonts — selbst hosten besser für Datenschutz): -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...">
+
+  <!-- Canonical URL (für SEO bei doppelten Inhalten): -->
+  <link rel="canonical" href="https://trafkhop.de/korrekte-url">
+
+  <!-- Preload — wichtige Ressourcen vorab laden: -->
+  <link rel="preload" href="schrift.woff2" as="font" crossorigin>
+  <link rel="preload" href="hintergrundbild.jpg" as="image">
+
+  <!-- Prefetch — nächste Seite vorab laden: -->
+  <link rel="prefetch" href="projekte.html">
+
+Aus deinem Code:
+  <link rel="stylesheet" href="files/standard.css">
+  <link rel="stylesheet" href="index.css">
+  ← Korrekt! standard.css zuerst, dann die spezifischen Überschreibungen.
+
+------------------------------------------------------------------------
+10.3  Script-Tags
+------------------------------------------------------------------------
+
+  <!-- Ende von body (klassisch): -->
+  <script src="main.js"></script>
+
+  <!-- Im head mit defer (empfohlen): -->
+  <script src="main.js" defer></script>
+    → Lädt parallel, führt aus wenn DOM fertig ist. Reihenfolge erhalten.
+
+  <!-- Im head mit async: -->
+  <script src="analytics.js" async></script>
+    → Lädt parallel, führt sofort aus wenn geladen. Reihenfolge NICHT garantiert.
+    → Nur für Scripts die nicht vom DOM oder anderen Scripts abhängen.
+
+  <!-- Inline-Script: -->
+  <script>
+    console.log("Direkt im HTML");
+  </script>
+
+  <!-- Module: -->
+  <script type="module" src="module.js"></script>
+    → Implizit defer. Kann import/export benutzen.
+
+Aus deinem Code:
+  <script src="files/placeholder.js"></script>
+  <script src="files/nav.js"></script>
+  <script src="files/volume.js"></script>
+  ← Am Ende von body — klassisch und funktioniert. Mit defer im head
+    wäre es moderner.
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Ergänze deinen head mit:
+- Open Graph Tags (title, description, image, url)
+- theme-color in Trafk-Lila
+- Ein favicon (auch wenn die Datei noch nicht existiert)
+- Preload für das Haupthintergrundbild
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: HTML für Performance und Barrierefreiheit
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Wichtige Performance-Attribute
+------------------------------------------------------------------------
+
+  loading="lazy"       → Bilder/iframes erst laden wenn sichtbar
+  decoding="async"     → Bild asynchron dekodieren
+  fetchpriority="high" → Wichtigstes Bild vorab (LCP-Optimierung)
+
+  <!-- Schriften: crossorigin ist bei Preload PFLICHT -->
+  <link rel="preload" href="font.woff2" as="font" type="font/woff2" crossorigin>
+
+------------------------------------------------------------------------
+11.2  Barrierefreiheit — die wichtigsten Regeln
+------------------------------------------------------------------------
+
+1. Alle Bilder haben alt-Text (oder alt="" wenn dekorativ)
+2. Alle Formularfelder haben label
+3. Farbkontrast: mind. 4.5:1 für Text (Tool: WebAIM Contrast Checker)
+4. Tastaturbedienbar: Tab-Reihenfolge logisch, alle Aktionen per Tastatur
+5. Fokus sichtbar: Niemals :focus { outline: none } ohne Ersatz!
+6. Überschriften-Hierarchie einhalten (nicht von h1 auf h4 springen)
+7. Links beschreibend: "Mehr lesen" ist schlecht, "RSA-Projektseite lesen" ist gut
+8. Sprache setzen: lang auf html, lang auf Fremdsprachen-Blöcke
+
+------------------------------------------------------------------------
+11.3  Validierung
+------------------------------------------------------------------------
+
+Deinen HTML-Code auf Fehler prüfen:
+  https://validator.w3.org/
+
+Gibt Fehler und Warnungen aus — regelmäßig prüfen!
+
+--------------------------------------------------------------------------------
+ABSCHLUSSÜBUNG:
+Erstelle eine vollständige Seite für eines deiner Projekte.
+Benutze: DOCTYPE, head mit allen Metadaten, semantische Struktur,
+nav mit korrekter Navigation, main mit article und section,
+eine Tabelle (z.B. Features/Status-Übersicht),
+ein Formular (z.B. Feedback-Formular),
+ein Bild mit lazy loading und srcset,
+details/summary für FAQ,
+aside für verwandte Projekte,
+footer mit Copyright.
+Alles semantisch korrekt und mit aria-Attributen wo nötig.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — HTML
+================================================================================
+
+STRUKTUR:       html, head, body | header, nav, main, article, section, aside, footer
+METADATEN:      meta charset, meta viewport, title, link rel, script defer
+TEXT:           h1-h6, p, br, hr | strong, em, small, mark, code, pre, time
+LISTEN:         ul > li | ol > li | dl > dt + dd
+LINKS:          <a href="..."> | mailto: | tel: | #anker | rel="noopener"
+BILDER:         img alt (pflicht) | srcset/sizes | <picture> | loading="lazy"
+MEDIEN:         video + source | audio + source | iframe
+TABELLEN:       table > thead/tbody/tfoot > tr > th/td | colspan/rowspan
+FORMULARE:      form | label (pflicht!) | input type=... | select | textarea | button
+GLOBAL:         id, class, data-*, aria-*, lang, hidden, tabindex
+PERFORMANCE:    loading=lazy | defer/async | preload | fetchpriority
+VALIDIERUNG:    validator.w3.org
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN — HTML
+================================================================================
+
+MDN HTML Docs  → https://developer.mozilla.org/de/docs/Web/HTML
+HTML Reference → https://htmlreference.io (visuell)
+Can I Use      → https://caniuse.com (Browser-Unterstützung)
+a11y Project   → https://www.a11yproject.com (Barrierefreiheit)
+W3C Validator  → https://validator.w3.org
+
+================================================================================
+Ende des HTML-Kurses — Copyright-Hinweis
+================================================================================
+
+Dieser Kurs wurde speziell für TrafkHop Entertainment erstellt, basierend
+auf den tatsächlich vorhandenen Dateien (index.html, header.html, footer.html)
+sowie dem bewährten Format des JS/Bash-Kurses.
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

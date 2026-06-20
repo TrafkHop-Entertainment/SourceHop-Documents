@@ -1,0 +1,1375 @@
+================================================================================
+ASSEMBLY KOMPLETTKURS — TEIL 1 von 4
+Grundlagen · CPU-Architektur · Register · Datentypen · Grundbefehle
+================================================================================
+
+AMD64 (x86-64) im Fokus, Intel-Kompatibilität vollständig abgedeckt.
+Syntax: NASM (Netwide Assembler) — der Standard für Linux/AMD64.
+Alle Beispiele laufen auf: Linux x86-64, NASM ≥ 2.15, ld oder gcc als Linker.
+
+Teil 1: CPU-Aufbau, Register, Speicher, Datentypen, MOV, Arithmetik, Flags
+Teil 2: Stack, Funktionen, Calling Conventions, Rekursion, System Calls
+Teil 3: Strings, Arrays, Pointer, Strukturen, SIMD-Grundlagen (SSE/AVX)
+Teil 4: Fortgeschritten — Optimierung, Inline-Asm in C, echte Projekte,
+         RollerCoaster Tycoon-ähnliche Engine in Assembly
+
+================================================================================
+MODUL 1: Was ist Assembly — und warum lernt man es
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Assembly vs. alle anderen Sprachen
+------------------------------------------------------------------------
+
+Wenn du Python schreibst, übersetzt Python es zu Bytecode, dann führt
+eine virtuelle Maschine das aus. Wenn du C schreibst, kompiliert gcc
+es zu Maschinencode. Assembly IST Maschinencode — nur für Menschen lesbar.
+
+  Python:      name = "Hallo"     → hohe Abstraktion, langsam
+  C:           int x = 5;         → mittlere Abstraktion, schnell
+  Assembly:    mov rax, 5         → KEINE Abstraktion, direkter Maschinencode
+
+Warum Assembly lernen?
+
+  1. Du verstehst wirklich was ein Computer macht.
+     Jede for-Schleife in C, jede list comprehension in Python —
+     am Ende ist es genau das, was du hier lernst. Alles andere ist
+     nur syntaktischer Zucker darüber.
+
+  2. Performance-kritischer Code.
+     Chris Sawyer schrieb RollerCoaster Tycoon (1999) zu 99% in
+     x86-Assembly. Das Ergebnis: ein Spiel das auf einem 90MHz-Rechner
+     lief und besser performte als jedes C-Äquivalent.
+
+  3. Reverse Engineering und Security.
+     Malware-Analyse, Exploits, Buffer Overflows — alles passiert
+     auf Assembly-Ebene. Ohne dieses Wissen bist du blind.
+
+  4. Embedded Systems und Bootloader.
+     Manche Systeme haben keinen Compiler. Der erste Code der auf einem
+     PC läuft (vor dem Betriebssystem) ist Assembly.
+
+  5. Compiler-Verstehen.
+     Was macht -O3 wirklich? Nur wer Assembly liest kann sagen ob
+     der Compiler gute Arbeit geleistet hat.
+
+------------------------------------------------------------------------
+1.2  x86-64 — die Architektur die du lernst
+------------------------------------------------------------------------
+
+Wir lernen x86-64, auch bekannt als:
+  - AMD64 (AMD hat diese Erweiterung entwickelt und eingeführt)
+  - x86-64 (generischer Name)
+  - Intel 64 (Intels Bezeichnung für dieselbe Architektur)
+  - EM64T (alter Intel-Name, veraltet)
+
+Wichtig: AMD ENTWICKELTE x86-64. Intel hat es kopiert.
+AMD Opteron (2003) war die erste CPU mit dieser Architektur.
+Das ist warum AMD64 der korrektere technische Name ist.
+
+Die Architektur ist CISC (Complex Instruction Set Computer):
+  - Hunderte verschiedene Befehle
+  - Befehle unterschiedlicher Länge (1-15 Bytes!)
+  - Viele Adressierungsmodi
+  - Im Gegensatz dazu: ARM ist RISC — weniger Befehle, alle gleich lang
+
+Intern übersetzen moderne CPUs CISC-Befehle zu RISC-ähnlichen Micro-Ops,
+aber das ist unter der Haube — für uns sieht es nach CISC aus.
+
+------------------------------------------------------------------------
+1.3  Assembler, Linker, und der Build-Prozess
+------------------------------------------------------------------------
+
+Ein "Assembler" übersetzt Assembly-Text (Mnemonics) zu Maschinencode.
+Wir benutzen NASM (Netwide Assembler):
+
+  Installation:
+    sudo apt install nasm            Debian/Ubuntu
+    sudo pacman -S nasm              Arch Linux
+    sudo dnf install nasm            Fedora
+
+  Der Build-Prozess:
+
+    hello.asm ---[NASM]---> hello.o ---[ld/gcc]---> hello (ausführbar)
+
+  Schritt für Schritt:
+
+    1. NASM assembliert — erstellt Object-File (.o):
+       nasm -f elf64 hello.asm -o hello.o
+
+       -f elf64    → Format: ELF 64-Bit (Linux-Standard)
+       -o hello.o  → Output-Datei
+
+    2. Linker verbindet — erstellt ausführbares Binary:
+       ld -o hello hello.o           (purer Linker, keine C-Library)
+       oder:
+       gcc -no-pie -o hello hello.o  (gcc als Linker, C-Library verfügbar)
+
+  Unser Makefile für alle Projekte:
+
+    NAME    = hello
+    NASM    = nasm
+    LD      = ld
+    NFLAGS  = -f elf64 -g -F dwarf
+    LFLAGS  = -m elf_x86_64
+
+    $(NAME): $(NAME).o
+        $(LD) $(LFLAGS) -o $@ $<
+
+    $(NAME).o: $(NAME).asm
+        $(NASM) $(NFLAGS) -o $@ $<
+
+    clean:
+        rm -f *.o $(NAME)
+
+    -g -F dwarf  → Debug-Info (für gdb) — immer einschalten!
+
+  Andere Assembler (wir benutzen sie nicht, aber wichtig zu kennen):
+    MASM    → Microsoft Assembler (Windows, Intel-Syntax)
+    GAS     → GNU Assembler (benutzt AT&T-Syntax — umgekehrte Operanden!)
+    YASM    → Kompatibler NASM-Klon, etwas veraltet
+    FASM    → Flat Assembler, eigene Syntax, sehr kompakt
+
+  NASM vs AT&T-Syntax (GAS) — der wichtigste Unterschied:
+
+    NASM (Intel-Syntax):    mov rax, 5        Ziel, Quelle
+    GAS (AT&T-Syntax):      movq $5, %rax     Quelle, Ziel (umgekehrt!)
+
+  Wir benutzen NASM / Intel-Syntax. Das ist lesbar, logisch, Standard.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Installiere NASM. Erstelle eine Datei test_install.asm mit:
+  global _start
+  section .text
+  _start:
+    mov rax, 60
+    xor rdi, rdi
+    syscall
+Assembliere: nasm -f elf64 test_install.asm -o test.o
+Linke:       ld -o test test.o
+Führe aus:   ./test
+Prüfe:       echo $?   sollte 0 ausgeben (normaler Exit)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Die CPU — Register und ihr Zweck
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Was ein Register ist
+------------------------------------------------------------------------
+
+Register sind Speicherzellen DIREKT in der CPU. Nicht im RAM, nicht im
+Cache — in der CPU selbst. Sie sind extrem schnell (1 Takt Zugriff)
+und extrem klein (es gibt nur 16 Stück auf x86-64, plus Spezial-Register).
+
+Vergleich der Zugriffszeiten:
+  Register:       ~1 Takt    (0.3ns bei 3GHz)
+  L1-Cache:       ~4 Takte
+  L2-Cache:       ~12 Takte
+  RAM:            ~100-300 Takte
+  SSD:            ~100.000 Takte
+  HDD:            ~10.000.000 Takte
+
+Assembly-Code ist im Kern: Daten zwischen Registern und Speicher bewegen,
+und Berechnungen auf Registern durchführen.
+
+------------------------------------------------------------------------
+2.2  Die 16 General-Purpose-Register (AMD64)
+------------------------------------------------------------------------
+
+x86-64 hat 16 Allzweck-Register. Jedes ist 64 Bit (8 Byte) breit.
+Historisch gewachsen: zuerst 8-Bit (1970er), dann 16-Bit (1978, 8086),
+dann 32-Bit (1985, 386), dann 64-Bit (2003, AMD Opteron).
+
+Diese Schichten sind NOCH HEUTE sichtbar — du kannst ältere Teile
+jedes Registers ansprechen:
+
+  64-Bit   32-Bit   16-Bit   8-Bit-High  8-Bit-Low
+  ──────────────────────────────────────────────────
+  rax      eax      ax       ah          al
+  rbx      ebx      bx       bh          bl
+  rcx      ecx      cx       ch          cl
+  rdx      edx      dx       dh          dl
+  rsi      esi      si                   sil
+  rdi      edi      di                   dil
+  rsp      esp      sp                   spl
+  rbp      ebp      bp                   bpl
+  r8       r8d      r8w                  r8b
+  r9       r9d      r9w                  r9b
+  r10      r10d     r10w                 r10b
+  r11      r11d     r11w                 r11b
+  r12      r12d     r12w                 r12b
+  r13      r13d     r13w                 r13b
+  r14      r14d     r14w                 r14b
+  r15      r15d     r15w                 r15b
+
+Kritische Eigenschaft — Fehlerquelle Nr. 1!
+  Wenn du in ein 32-Bit-Register schreibst (z.B. eax),
+  werden die oberen 32 Bits von rax automatisch auf 0 gesetzt.
+  Wenn du in ein 16-Bit- oder 8-Bit-Register schreibst,
+  bleiben die anderen Bits UNVERÄNDERT.
+
+  Beispiel:
+    mov rax, 0xFFFFFFFFFFFFFFFF   ; rax = FFFFFFFFFFFFFFFF
+    mov eax, 0                    ; rax = 0000000000000000  (obere Hälfte gelöscht!)
+    mov rax, 0xFFFFFFFFFFFFFFFF   ; rax = FFFFFFFFFFFFFFFF
+    mov ax,  0                    ; rax = FFFFFFFFFFFF0000  (nur untere 16 Bit!)
+    mov rax, 0xFFFFFFFFFFFFFFFF   ; rax = FFFFFFFFFFFFFFFF
+    mov ah,  0                    ; rax = FFFFFFFFFFFF00FF  (nur Bits 8-15!)
+    mov rax, 0xFFFFFFFFFFFFFFFF   ; rax = FFFFFFFFFFFFFFFF
+    mov al,  0                    ; rax = FFFFFFFFFFFFFF00  (nur untere 8 Bit!)
+
+------------------------------------------------------------------------
+2.3  Konventionelle Verwendung der Register
+------------------------------------------------------------------------
+
+Register haben keine eingebaute Bedeutung — du kannst sie frei benutzen.
+ABER: Es gibt Konventionen die der Linker, das OS und Libraries erwarten.
+Wenn du fremden Code aufrufst (C-Funktionen, Syscalls), MUSST du diese
+Konventionen einhalten (mehr dazu in Teil 2: Calling Conventions).
+
+Überblick der Konventionen (System V AMD64 ABI — Standard auf Linux):
+
+  rax   Rückgabewert von Funktionen. Auch: Syscall-Nummer.
+        Implizit in mul/div.
+
+  rbx   Callee-saved (du musst ihn sichern wenn du ihn benutzt).
+        Früher: Base-Register für Speicherzugriffe.
+
+  rcx   4. Argument bei Funktionsaufrufen.
+        Auch: Schleifenzähler (früher speziell, heute Konvention).
+        shift/rotate-Befehle benutzen cl (8-Bit-Teil von rcx).
+
+  rdx   3. Argument. Auch: obere Hälfte bei 128-Bit-Division/-Multiplikation.
+
+  rsi   2. Argument. Historisch: Source Index (String-Operationen).
+
+  rdi   1. Argument. Historisch: Destination Index (String-Operationen).
+
+  rsp   Stack Pointer — zeigt auf die Spitze des Stacks.
+        NIEMALS beliebig verändern ohne genaues Wissen!
+
+  rbp   Base Pointer — zeigt auf den Anfang des Stack-Frames.
+        Callee-saved. Wird oft als allgemeines Register benutzt.
+
+  r8    5. Argument.
+  r9    6. Argument.
+  r10   Temporär. Für Syscalls (kein Argument-Register für Syscalls).
+  r11   Temporär. Wird vom Syscall-Mechanismus überschrieben.
+  r12   Callee-saved.
+  r13   Callee-saved.
+  r14   Callee-saved.
+  r15   Callee-saved.
+
+Merksatz für Argumente: rdi, rsi, rdx, rcx, r8, r9 — in dieser Reihenfolge.
+Eselsbrücke: "Damen Singen Die Chöre, 8 Noten"
+
+------------------------------------------------------------------------
+2.4  Spezial-Register
+------------------------------------------------------------------------
+
+  rip   Instruction Pointer — zeigt auf den nächsten Befehl.
+        Du kannst rip NICHT direkt mit mov ändern.
+        Indirekter Zugriff: call/jmp/ret etc.
+
+  rflags — Das Flags-Register.
+        Einzelne Bits, jedes hat eine Bedeutung.
+        Befehle wie cmp, add, sub setzen diese Bits.
+        Sprungbefehle (je, jne, jg, ...) lesen diese Bits.
+
+        Wichtigste Flags:
+          CF  Carry Flag     → Übertrag bei unsigned-Arithmetik
+          ZF  Zero Flag      → Ergebnis war 0
+          SF  Sign Flag      → Ergebnis war negativ (MSB = 1)
+          OF  Overflow Flag  → Überlauf bei signed-Arithmetik
+          PF  Parity Flag    → Anzahl gesetzter Bits gerade
+          AF  Auxiliary CF   → Übertrag von Bit 3 nach 4 (BCD-Arithmetik)
+          IF  Interrupt Flag → Maskiert Interrupts (Ring 0 only)
+          DF  Direction Flag → Richtung für String-Operationen
+
+  Segmentregister: cs, ds, es, fs, gs, ss
+        In 64-Bit-Modus meist bedeutungslos (außer fs und gs
+        für Thread-Local Storage).
+
+------------------------------------------------------------------------
+2.5  SIMD-Register — für später
+------------------------------------------------------------------------
+
+Neben den General-Purpose-Registern gibt es:
+
+  XMM0–XMM15    128-Bit Register (SSE, SSE2, ...)
+  YMM0–YMM15    256-Bit Register (AVX, AVX2)
+  ZMM0–ZMM31   512-Bit Register (AVX-512, nicht überall)
+
+Diese nutzen wir in Teil 3 für Vektoroperationen.
+YMM0 enthält z.B. die unteren 128 Bit als XMM0 — ähnlich wie rax/eax.
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Schreibe auf (noch nicht ausführen) was nach jeder Zeile in rax steht:
+  mov rax, 0x1122334455667788
+  mov eax, 0
+  (rax = ?)
+  mov rax, 0x1122334455667788
+  mov ax,  0xABCD
+  (rax = ?)
+  mov rax, 0x1122334455667788
+  mov ah,  0xFF
+  (rax = ?)
+  mov rax, 0x1122334455667788
+  mov al,  0x00
+  (rax = ?)
+
+Auflösung:
+  Nach mov eax, 0:             rax = 0x0000000000000000
+  Nach mov ax, 0xABCD:         rax = 0x112233445566ABCD
+  Nach mov ah, 0xFF:           rax = 0x112233445566FF88
+  Nach mov al, 0x00:           rax = 0x1122334455667700
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Speicher — RAM, Adressen, und Datensegmente
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Das Speichermodell von x86-64
+------------------------------------------------------------------------
+
+In 64-Bit-Modus hat jeder Prozess einen eigenen virtuellen Adressraum.
+Theoretisch 2^64 Bytes = 16 Exabyte. Praktisch nutzt Linux die unteren
+128 TB (48-Bit Adressen: 0x0000000000000000 – 0x00007FFFFFFFFFFF).
+
+Das Speicher-Layout eines typischen Linux-Prozesses:
+
+  Adresse hoch
+  +---------------------------------+  0xFFFFFFFFFFFFFFFF
+  |  Kernel-Speicher                |  (kein Zugriff aus User-Space)
+  +---------------------------------+  0x00007FFFFFFFFFFF
+  |  Stack                          |  wächst nach unten
+  |  (Funktionsargumente,           |
+  |   lokale Variablen)             |
+  +---------------------------------+
+  |  (freier Bereich)               |
+  +---------------------------------+
+  |  Heap                           |  wächst nach oben
+  |  (dynamischer Speicher,         |
+  |   malloc/mmap)                  |
+  +---------------------------------+
+  |  .bss                           |  Nicht-initialisierte Daten
+  +---------------------------------+
+  |  .data                          |  Initialisierte Daten
+  +---------------------------------+
+  |  .text                          |  Code (read-only, executable)
+  +---------------------------------+  0x0000000000400000 (typisch)
+  Adresse niedrig
+
+------------------------------------------------------------------------
+3.2  Sections in NASM
+------------------------------------------------------------------------
+
+Eine Assembly-Datei ist in Sections aufgeteilt:
+
+  section .text       → Code
+    - Enthält alle Befehle (Instruktionen)
+    - Read-only, executable
+    - Kein Schreiben in .text erlaubt (Segfault)
+
+  section .data       → Initialisierte Daten
+    - Globale Variablen mit Anfangswerten
+    - Read-write, nicht executable
+    - Diese Werte sind direkt im Binary gespeichert
+
+  section .bss        → Nicht-initialisierte Daten
+    - Wird beim Programmstart mit Nullen gefüllt
+    - Kein Speicher im Binary verbraucht (nur Größe gespeichert)
+    - Read-write
+
+  section .rodata     → Read-only Data
+    - Strings die sich nicht ändern
+
+  Beispiel:
+
+    section .data
+        message  db  "Hallo Assembly!", 10, 0
+        ; db = Define Byte(s)
+        ; 10 = newline (\n), 0 = null-terminator
+        zahl     dq  42
+        ; dq = Define Qword (64-Bit Zahl)
+
+    section .bss
+        puffer   resb  256
+        ; resb = Reserve Bytes — 256 Bytes reserviert, mit 0 initialisiert
+
+    section .text
+        global _start
+        _start:
+            ; Code hier
+
+------------------------------------------------------------------------
+3.3  Datendefinitions-Befehle (Define)
+------------------------------------------------------------------------
+
+In section .data (für initialisierte Daten):
+
+  db    Define Byte          1 Byte  (8-Bit)
+  dw    Define Word          2 Bytes (16-Bit)
+  dd    Define Doubleword    4 Bytes (32-Bit)
+  dq    Define Quadword      8 Bytes (64-Bit)
+  dt    Define Tenbyte      10 Bytes (80-Bit float, selten)
+
+  Beispiele:
+    byte_wert    db  255         ; ein Byte mit Wert 255
+    word_wert    dw  1000        ; zwei Bytes mit Wert 1000
+    dword_wert   dd  100000      ; vier Bytes
+    qword_wert   dq  9999999999  ; acht Bytes
+    floatwert    dd  3.14        ; single-precision float (4 Bytes)
+    doublewert   dq  3.14159     ; double-precision float (8 Bytes)
+
+    ; Strings:
+    text1   db  "Hallo", 0         ; null-terminiert (C-String-Stil)
+    text2   db  "Welt", 10, 0      ; mit Newline dann Null-Byte
+    text3   db  'X', 'Y', 'Z'     ; drei einzelne Bytes
+
+    ; Arrays von Zahlen:
+    zahlen  dd  1, 2, 3, 4, 5     ; fünf 32-Bit-Integers (20 Bytes)
+    bytes   db  0xDE, 0xAD, 0xBE, 0xEF  ; vier Bytes in hex
+
+In section .bss (für reservierten Speicher):
+
+  resb    Reserve Bytes       1 Byte pro Einheit
+  resw    Reserve Words       2 Bytes pro Einheit
+  resd    Reserve Dwords      4 Bytes pro Einheit
+  resq    Reserve Qwords      8 Bytes pro Einheit
+
+  Beispiele:
+    eingabe_puffer  resb  1024    ; 1024 Bytes reservieren
+    zahl_speicher   resq  10      ; 10 × 8 = 80 Bytes für 10 64-Bit-Zahlen
+
+------------------------------------------------------------------------
+3.4  Labels und Adressen
+------------------------------------------------------------------------
+
+Ein Label ist ein Name für eine Adresse. Wenn du schreibst:
+
+  message  db  "Hallo", 0
+
+Dann ist "message" ein Label das die ADRESSE des ersten Bytes enthält —
+nicht den Inhalt. Das ist wie ein Pointer in C!
+
+  C:        char *text = "Hallo";     → text zeigt auf das 'H'
+  Assembly: message db "Hallo", 0    → message ist die Adresse des 'H'
+
+Um den Inhalt an einer Adresse zu lesen, benutzt du eckige Klammern:
+
+  mov rax, message      ; rax = ADRESSE von message (Pointer)
+  mov rax, [message]    ; rax = INHALT von message (8 Bytes lesen)
+  mov al, [message]     ; al = erstes BYTE von message (das 'H' = 0x48)
+
+Das ist einer der häufigsten Fehler in Assembly:
+  [var] = Daten AN der Adresse (dereferenzieren)
+  var   = die Adresse selbst (Pointer-Wert)
+
+------------------------------------------------------------------------
+3.5  Größenspezifizierer bei Speicherzugriffen
+------------------------------------------------------------------------
+
+Wenn NASM nicht weiß wie viele Bytes du lesen/schreiben willst,
+musst du es explizit angeben:
+
+  mov [adresse], 42          ; FEHLER: Wie groß ist 42? 1, 2, 4, oder 8 Byte?
+  mov byte  [adresse], 42    ; 1 Byte schreiben
+  mov word  [adresse], 42    ; 2 Bytes schreiben
+  mov dword [adresse], 42    ; 4 Bytes schreiben
+  mov qword [adresse], 42    ; 8 Bytes schreiben
+
+Wenn das Ziel ein Register ist, weiß NASM die Größe:
+  mov al, [adresse]          ; klar: al ist 8-Bit → 1 Byte lesen
+  mov rax, [adresse]         ; klar: rax ist 64-Bit → 8 Bytes lesen
+  mov eax, [adresse]         ; klar: eax ist 32-Bit → 4 Bytes lesen
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Erstelle hello_world.asm — das klassische erste Programm:
+
+  section .data
+      msg     db  "Hallo, Assembly-Welt!", 10
+      msg_len equ $ - msg
+      ; $ = aktuelle Adresse, $ - msg = Länge des Strings
+
+  section .text
+      global _start
+
+  _start:
+      ; write(1, msg, msg_len)
+      mov rax, 1          ; Syscall-Nummer: write
+      mov rdi, 1          ; Dateideskriptor: 1 = stdout
+      mov rsi, msg        ; Adresse des Strings
+      mov rdx, msg_len    ; Länge
+      syscall
+
+      ; exit(0)
+      mov rax, 60         ; Syscall-Nummer: exit
+      xor rdi, rdi        ; rdi = 0 (Exit-Code)
+      syscall
+
+Kompiliere und führe aus. Du solltest "Hallo, Assembly-Welt!" sehen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Der MOV-Befehl — Daten bewegen
+================================================================================
+
+------------------------------------------------------------------------
+4.1  MOV — die wichtigste Instruktion
+------------------------------------------------------------------------
+
+MOV ist die meistbenutzte Instruktion in x86-64 Assembly.
+Sie kopiert Daten von einer Quelle zu einem Ziel.
+
+  Syntax:  mov ziel, quelle
+
+Mögliche Kombinationen:
+
+  mov reg, reg         ; Register ← Register
+  mov reg, mem         ; Register ← Speicher
+  mov mem, reg         ; Speicher ← Register
+  mov reg, imm         ; Register ← Direktwert (Immediate)
+  mov mem, imm         ; Speicher ← Direktwert (mit Größenspezifizierer)
+
+Was NICHT geht:
+  mov mem, mem         ; Speicher ← Speicher: NICHT MÖGLICH!
+    → Umweg über Register: mov rax, [quelle] dann mov [ziel], rax
+
+  mov rax, [rbx][rcx]  ; Zwei separate Speicherzugriffe: NICHT MÖGLICH!
+    → Immer nur ein Speicherzugriff pro Instruktion
+
+------------------------------------------------------------------------
+4.2  Adressierungsmodi
+------------------------------------------------------------------------
+
+Speicher kann auf verschiedene Weisen adressiert werden:
+
+  1. Direkte Adressierung — fester Label:
+     mov rax, [variable]       ; Inhalt von "variable" laden
+
+  2. Register-Indirekt — Register enthält die Adresse:
+     mov rax, [rbx]            ; Adresse steht in rbx, lade 8 Bytes
+
+  3. Register + Offset:
+     mov rax, [rbx + 8]        ; Adresse = rbx + 8
+     mov rax, [rbx - 4]        ; Adresse = rbx - 4
+
+  4. Base + Index:
+     mov rax, [rbx + rcx]      ; Adresse = rbx + rcx
+
+  5. Base + Index × Scale + Displacement (vollständige Adressierung):
+     mov rax, [rbx + rcx*8 + 16]
+     ; Adresse = rbx + (rcx × 8) + 16
+     ; Scale muss sein: 1, 2, 4, oder 8
+     ; Perfect für Arrays: rbx = Basisadresse, rcx = Index, 8 = Elementgröße
+
+  6. RIP-relative Adressierung (in 64-Bit sehr häufig):
+     mov rax, [rel variable]   ; Adresse relativ zu rip
+     ; NASM macht das automatisch mit "default rel" am Dateianfang
+
+  Beispiele mit einem Array von 64-Bit-Zahlen:
+
+    section .data
+        arr  dq  10, 20, 30, 40, 50    ; 5 Elemente à 8 Bytes
+
+    section .text
+    _start:
+        ; Erstes Element (Index 0):
+        mov rax, [arr]              ; rax = 10
+        mov rax, [arr + 0]          ; rax = 10 (explizit)
+
+        ; Zweites Element (Index 1, Offset = 1*8 = 8):
+        mov rax, [arr + 8]          ; rax = 20
+
+        ; Drittes Element (Index 2, Offset = 2*8 = 16):
+        mov rax, [arr + 16]         ; rax = 30
+
+        ; Mit Register als Index:
+        mov rcx, 3                  ; Index 3
+        mov rax, [arr + rcx*8]      ; rax = arr[3] = 40
+
+------------------------------------------------------------------------
+4.3  Besondere MOV-Varianten
+------------------------------------------------------------------------
+
+  MOVZX — Move with Zero Extension:
+    Lädt kleinere Werte und füllt Rest mit Nullen auf.
+
+    movzx rax, byte [adresse]     ; lädt 1 Byte, Rest = 0
+    movzx rax, word [adresse]     ; lädt 2 Bytes, Rest = 0
+    movzx eax, byte [adresse]     ; 4-Byte-Version (obere 32 Bit von rax auch 0)
+
+    Beispiel: [adresse] enthält 0xFF:
+    movzx rax, byte [adresse]  → rax = 0x00000000000000FF
+
+  MOVSX — Move with Sign Extension:
+    Lädt kleinere Werte und erweitert das Vorzeichenbit.
+
+    movsx rax, byte [adresse]     ; lädt 1 Byte, erweitert Vorzeichen
+    movsx rax, word [adresse]
+
+    Beispiel: [adresse] enthält 0xFF (als signed: -1):
+    movsx rax, byte [adresse]  → rax = 0xFFFFFFFFFFFFFFFF (-1)
+    movzx rax, byte [adresse]  → rax = 0x00000000000000FF (255)
+
+  MOVSXD — Move with Sign Extension Doubleword to Quadword:
+    movsxd rax, dword [adresse]   ; lädt 32-Bit, sign-extended zu 64-Bit
+    movsxd rax, ecx               ; aus Register
+
+  LEA — Load Effective Address:
+    Lädt die ADRESSE, nicht den Inhalt. Klingt simpel, ist aber sehr vielseitig.
+
+    lea rax, [variable]           ; rax = Adresse von variable (kein Speicherzugriff!)
+    lea rax, [rbx + rcx*8 + 16]  ; rax = rbx + rcx*8 + 16 (Adressberechnung!)
+
+    Trick: LEA rechnet! Kein Speicherzugriff, trotzdem kann es:
+    lea rax, [rax + rax*4]        ; rax = rax + rax*4 = rax*5  (Multiplikation mit 5!)
+    lea rax, [rbx + 7]            ; rax = rbx + 7              (Addition ohne Flags!)
+    lea rax, [rbx + rcx]          ; rax = rbx + rcx            (Addition ohne Flags!)
+
+    LEA verändert KEINE FLAGS. Das ist manchmal entscheidend.
+
+  CMOV — Conditional Move (Bedingte Zuweisung):
+    Bewegt Daten NUR wenn eine Bedingung erfüllt ist.
+    Sehr nützlich um Sprünge (branches) zu vermeiden → bessere Performance.
+
+    cmp rax, rbx         ; vergleiche
+    cmove  rcx, rdx      ; rcx = rdx, aber NUR wenn rax == rbx (Zero Flag)
+    cmovne rcx, rdx      ; rcx = rdx, aber NUR wenn rax != rbx
+    cmovg  rcx, rdx      ; NUR wenn rax > rbx (signed, Greater)
+    cmovge rcx, rdx      ; NUR wenn rax >= rbx
+    cmovl  rcx, rdx      ; NUR wenn rax < rbx
+    cmovle rcx, rdx      ; NUR wenn rax <= rbx
+    cmova  rcx, rdx      ; NUR wenn rax > rbx (unsigned, Above)
+    cmovb  rcx, rdx      ; NUR wenn rax < rbx (unsigned, Below)
+
+------------------------------------------------------------------------
+4.4  XCHG — Tauschen
+------------------------------------------------------------------------
+
+  xchg rax, rbx         ; tausche rax und rbx (ohne Hilfsvariable!)
+  xchg [mem], rax       ; tausche Speicher und Register
+
+  Achtung: xchg mit Speicher ist IMPLIZIT LOCKED.
+  Das bedeutet: atomarer Austausch — sicher für Multithreading.
+  Aber: langsam! Benutze für normale Tausche lieber drei MOVs oder
+  den XOR-Trick:
+
+    ; XOR-Tausch (kein temporäres Register nötig):
+    xor rax, rbx
+    xor rbx, rax
+    xor rax, rbx
+    ; Jetzt sind rax und rbx getauscht. Wie Magie, aber Mathematik.
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Erkläre was jede Zeile macht und was danach in den Registern steht:
+
+  section .data
+      a  dq  100
+      b  dw  250
+      c  db  -5
+
+  section .text
+  global _start
+  _start:
+      mov  rax, [a]                  ; rax = ?
+      movzx rbx, word [b]            ; rbx = ?
+      movsx rcx, byte [c]            ; rcx = ?
+      lea  rdx, [rax + rbx*2 + 10]  ; rdx = ?
+      mov  [a], rdx                  ; was passiert im Speicher?
+      xor  rax, rax
+      mov  rax, 60
+      syscall
+
+Auflösung:
+  rax = 100
+  rbx = 250
+  rcx = -5 (0xFFFFFFFFFFFFFFFB)
+  rdx = 100 + 250*2 + 10 = 100 + 500 + 10 = 610
+  [a] enthält danach 610
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Arithmetik und Logik
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Grundlegende Arithmetik
+------------------------------------------------------------------------
+
+  ADD — Addition:
+    add rax, rbx         ; rax = rax + rbx
+    add rax, 42          ; rax = rax + 42
+    add [mem], rax       ; Speicher += rax
+    add rax, [mem]       ; rax += Inhalt von mem
+
+  SUB — Subtraktion:
+    sub rax, rbx         ; rax = rax - rbx
+    sub rax, 10          ; rax = rax - 10
+    sub rsp, 8           ; Häufig: Stack-Pointer anpassen
+
+  INC — Inkrementieren (um 1 erhöhen):
+    inc rax              ; rax++ (aber: setzt kein CF! Unterschied zu add rax, 1)
+    inc byte [mem]       ; Speicher-Byte um 1 erhöhen
+
+  DEC — Dekrementieren (um 1 verringern):
+    dec rax              ; rax--
+    dec rcx              ; typisch: Schleifenzähler
+
+  NEG — Negieren (Vorzeichen umkehren):
+    neg rax              ; rax = -rax  (Zweierkomplement)
+
+  Flags nach Arithmetik (alle beeinflussen ZF, SF, OF, CF, AF, PF):
+    ZF (Zero Flag):     gesetzt wenn Ergebnis = 0
+    SF (Sign Flag):     gesetzt wenn Ergebnis negativ (MSB = 1)
+    OF (Overflow Flag): gesetzt wenn signed Overflow
+    CF (Carry Flag):    gesetzt wenn unsigned Übertrag
+
+------------------------------------------------------------------------
+5.2  Multiplikation
+------------------------------------------------------------------------
+
+Multiplikation ist komplexer als Addition, weil das Ergebnis
+doppelt so groß werden kann:
+  32-Bit × 32-Bit = 64-Bit Ergebnis
+  64-Bit × 64-Bit = 128-Bit Ergebnis
+
+  MUL — Unsigned Multiplikation:
+    mul rbx    ; rdx:rax = rax * rbx
+               ; Das Ergebnis ist 128-Bit: obere Hälfte in rdx, untere in rax
+    mul ebx    ; edx:eax = eax * ebx   (32-Bit-Version)
+    mul bx     ; dx:ax   = ax  * bx    (16-Bit-Version)
+    mul bl     ; ax      = al  * bl    (8-Bit-Version, Ergebnis vollständig in ax)
+
+  IMUL — Signed Multiplikation (mehrere Varianten):
+    ; Variante 1: wie MUL, aber signed, rdx:rax = rax * Operand
+    imul rbx            ; rdx:rax = rax * rbx (signed)
+
+    ; Variante 2: Zwei-Operanden (häufigste!), Ergebnis abgeschnitten auf 64-Bit
+    imul rax, rbx       ; rax = rax * rbx (untere 64-Bit, häufig ausreichend)
+    imul rax, 5         ; rax = rax * 5
+
+    ; Variante 3: Drei-Operanden
+    imul rax, rbx, 10   ; rax = rbx * 10 (Direktwert muss 32-Bit passen)
+
+  Multiplikation mit 10 (häufig — verschiedene Methoden):
+    imul rax, rax, 10          ; direkt (1 Instruktion)
+    lea  rax, [rax + rax*4]    ; rax = rax*5
+    add  rax, rax              ; rax = rax*10  (zwei Instruktionen, oft schneller!)
+
+------------------------------------------------------------------------
+5.3  Division
+------------------------------------------------------------------------
+
+Division ist gefährlich: Division durch 0 erzeugt Exception #DE!
+
+  DIV — Unsigned Division:
+    ; Vor div: Dividend in rdx:rax (128-Bit für 64-Bit-Division)
+    ; Nach div: Quotient in rax, Rest in rdx
+
+    ; Beispiel: 17 / 5
+    mov  rax, 17
+    xor  rdx, rdx    ; rdx = 0 (WICHTIG! Sonst Garbage in oberer Hälfte → Fehler)
+    mov  rcx, 5
+    div  rcx         ; rax = 3 (Quotient), rdx = 2 (Rest)
+
+    div rbx          ; 128-Bit Dividend rdx:rax / rbx → rax=Quotient, rdx=Rest
+    div ebx          ; 64-Bit Dividend edx:eax / ebx → eax=Quotient, edx=Rest
+
+  IDIV — Signed Division:
+    ; CQO (Convert Quadword to Octword) sign-extends rax nach rdx:rax
+
+    ; Beispiel: -17 / 5
+    mov  rax, -17
+    cqo              ; sign-extends rax → rdx:rax
+    mov  rcx, 5
+    idiv rcx         ; rax = -3 (Quotient), rdx = -2 (Rest)
+
+    Verwandte Instruktionen vor Division:
+    cbw     ; al  sign-extends zu ax
+    cwd     ; ax  sign-extends zu dx:ax
+    cdq     ; eax sign-extends zu edx:eax
+    cqo     ; rax sign-extends zu rdx:rax  ← benutze das vor idiv mit 64-Bit
+
+------------------------------------------------------------------------
+5.4  Bitweise Operationen
+------------------------------------------------------------------------
+
+  AND — Bitweise UND:
+    and rax, rbx         ; rax = rax & rbx
+    and rax, 0xFF        ; nur untere 8 Bits behalten (Maskierung)
+    and rax, 0xFFFFFFFFFFFFFFFE  ; unterstes Bit löschen (gerade machen)
+
+    Typisch: and reg, mask   → Bits löschen / Bits extrahieren
+
+  OR — Bitweise ODER:
+    or  rax, rbx         ; rax = rax | rbx
+    or  rax, 1           ; unterstes Bit setzen (ungerade machen)
+    or  rax, 0x80        ; Bit 7 setzen
+
+    Typisch: or reg, mask    → Bits setzen
+
+  XOR — Bitweise Exklusiv-ODER:
+    xor rax, rbx         ; rax = rax ^ rbx
+    xor rax, rax         ; rax = 0  ← schnellste Art ein Register zu nullen!
+    xor rax, 1           ; unterstes Bit toggeln
+
+    Typisch: xor reg, reg  → schnell auf 0 setzen
+             xor reg, mask → Bits toggeln
+
+  NOT — Bitweise Negation:
+    not rax              ; rax = ~rax  (alle Bits umdrehen)
+    ; Nicht zu verwechseln mit NEG (arithmetisches Vorzeichen)!
+    ; not 0x00 = 0xFF
+    ; not 0xFF = 0x00
+
+------------------------------------------------------------------------
+5.5  Shift und Rotate
+------------------------------------------------------------------------
+
+  SHL — Shift Left (Logical):
+    shl rax, 1           ; rax <<= 1  (Multiplikation mit 2)
+    shl rax, 3           ; rax <<= 3  (Multiplikation mit 8)
+    shl rax, cl          ; Anzahl aus cl-Register (der einzige erlaubte Shift-Operand außer Direktwert)
+
+    Bit-Bild: 0011 0101 SHL 2 → 1101 0100 (von rechts mit 0 auffüllen)
+
+  SHR — Shift Right (Logical) — unsigned:
+    shr rax, 1           ; rax >>= 1  (Division durch 2, unsigned)
+    shr rax, cl
+
+    Bit-Bild: 1000 1010 SHR 2 → 0010 0010 (von links mit 0 auffüllen)
+
+  SAR — Shift Right (Arithmetic) — signed:
+    sar rax, 1           ; rax >>= 1  (Division durch 2, signed, Vorzeichen bleibt!)
+
+    Bit-Bild: 1000 1010 SAR 2 → 1110 0010 (von links mit Vorzeichenbit auffüllen)
+    Das ist der Unterschied zu SHR: SAR erhält das Vorzeichen!
+
+  ROL / ROR — Rotate Left / Right:
+    rol rax, 1           ; rotiere links um 1 (heraus links = rein rechts)
+    ror rax, 8           ; rotiere rechts um 8 (bytes rotieren bei 64-Bit-Wert)
+
+    ror rax, 8 ist nützlich für Big/Little-Endian-Konvertierung.
+
+  SHLD / SHRD — Double Precision Shift:
+    shld rax, rbx, 8     ; 128-Bit rax:rbx links shiften, obere 64 Bit in rax
+    Nützlich für 128-Bit Operationen.
+
+------------------------------------------------------------------------
+5.6  CMP und TEST — Vergleiche ohne Ergebnis zu speichern
+------------------------------------------------------------------------
+
+  CMP — Compare:
+    cmp rax, rbx         ; führt rax - rbx aus, wirft Ergebnis weg, setzt Flags
+    cmp rax, 0           ; Ist rax == 0?
+    cmp rax, 100         ; Ist rax == 100?
+
+    Nach cmp kannst du konditionelle Sprünge benutzen:
+    je   label           ; Jump if Equal        (ZF = 1)
+    jne  label           ; Jump if Not Equal    (ZF = 0)
+    jg   label           ; Jump if Greater      (signed)
+    jge  label           ; Jump if >= (signed)
+    jl   label           ; Jump if Less         (signed)
+    jle  label           ; Jump if <= (signed)
+    ja   label           ; Jump if Above        (unsigned)
+    jae  label           ; Jump if Above/Equal  (unsigned)
+    jb   label           ; Jump if Below        (unsigned)
+    jbe  label           ; Jump if Below/Equal  (unsigned)
+    js   label           ; Jump if Sign (negativ)
+    jns  label           ; Jump if Not Sign
+    jc   label           ; Jump if Carry
+    jnc  label           ; Jump if No Carry
+    jo   label           ; Jump if Overflow
+    jno  label           ; Jump if No Overflow
+
+  TEST — Bitweises UND ohne Ergebnis zu speichern:
+    test rax, rax        ; rax & rax → setzt ZF wenn rax == 0
+    test rax, rax        ; häufiger als cmp rax, 0 (schneller!)
+    test rax, 1          ; ist Bit 0 gesetzt? Wenn ja: ZF = 0, jne springt
+    test al,  0x80       ; ist Bit 7 gesetzt? (signed-Bit für 8-Bit-Wert)
+
+    Faustregeln:
+      "if (x == 0)":     test rax, rax  +  je
+      "if (x != 0)":     test rax, rax  +  jne
+      "if (x & mask)":   test rax, mask +  jne
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Schreibe ein Assembly-Programm das folgendes berechnet:
+  ergebnis = (a * b + c) / d
+wobei a=15, b=7, c=3, d=4 (alle positiv, kein Vorzeichen).
+Speichere das Ergebnis in r15 und beende mit exit(ergebnis).
+
+Lösung-Skelett:
+  section .text
+  global _start
+  _start:
+      mov rax, 15       ; a
+      imul rax, 7       ; a * b = 105
+      add  rax, 3       ; + c = 108
+      xor  rdx, rdx     ; rdx = 0 für Division
+      mov  rcx, 4       ; d
+      div  rcx          ; rax = 108 / 4 = 27
+      mov  r15, rax
+      mov  rdi, r15
+      mov  rax, 60
+      syscall
+Prüfe: echo $? sollte 27 ausgeben.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Kontrollfluss — Sprünge und Schleifen
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Unconditional Jump — JMP
+------------------------------------------------------------------------
+
+  jmp label            ; springe immer zu label
+  jmp rax              ; springe zur Adresse in rax (indirekter Sprung)
+  jmp [rbx]            ; springe zur Adresse AUF DIE rbx zeigt
+
+  Wo cmp / test benutzt wird, springt danach ein konditioneller Befehl.
+  Wo kein Vergleich vorhergeht, benutze jmp.
+
+------------------------------------------------------------------------
+6.2  if-else in Assembly
+------------------------------------------------------------------------
+
+C-Code:
+  if (rax > 10) {
+      rax = rax - 10;
+  } else {
+      rax = rax + 5;
+  }
+
+Assembly:
+  cmp  rax, 10          ; Vergleiche rax mit 10
+  jle  else_branch      ; wenn rax <= 10, springe zu else
+  ; if-Teil:
+  sub  rax, 10
+  jmp  end_if           ; überspringe else
+  else_branch:
+  ; else-Teil:
+  add  rax, 5
+  end_if:
+  ; weiter...
+
+Wichtig: Die Bedingung im jXX ist oft die Negation der C-Bedingung.
+  C:        if (rax > 10) { ... }
+  Asm:      cmp rax, 10
+            jle else      → Springe wenn NICHT größer (also <=)
+
+------------------------------------------------------------------------
+6.3  Schleifen in Assembly
+------------------------------------------------------------------------
+
+  While-Schleife:
+  C:   while (rcx > 0) { ... rcx--; }
+
+  Asm:
+    schleife_start:
+        cmp  rcx, 0
+        jle  schleife_ende     ; abbrechen wenn rcx <= 0
+        ; Schleifenrumpf hier
+        dec  rcx
+        jmp  schleife_start
+    schleife_ende:
+
+  Do-While-Schleife (effizienter — ein Sprung weniger!):
+  C:   do { ... rcx--; } while (rcx > 0);
+
+  Asm:
+    schleife_start:
+        ; Schleifenrumpf hier
+        dec  rcx
+        jg   schleife_start    ; weitermachen solange rcx > 0
+
+  For-Schleife:
+  C:   for (int i = 0; i < 10; i++) { arr[i] = i * 2; }
+
+  Asm:
+    section .bss
+        arr  resq  10          ; 10 × 8 Bytes
+
+    section .text
+    _start:
+        xor  rcx, rcx          ; i = 0
+    for_schleife:
+        cmp  rcx, 10           ; i < 10?
+        jge  for_ende
+        ; arr[i] = i * 2
+        mov  rax, rcx
+        imul rax, 2            ; rax = i * 2
+        mov  [arr + rcx*8], rax  ; arr[i] = rax
+        inc  rcx               ; i++
+        jmp  for_schleife
+    for_ende:
+
+  LOOP-Befehl (historisch, nutzt implizit rcx):
+    mov  rcx, 10           ; 10 Iterationen
+    schleife:
+        ; Rumpf
+        loop schleife      ; dec rcx, springe wenn rcx != 0
+
+    Achtung: LOOP ist auf modernen CPUs oft langsamer als dec rcx + jnz.
+
+------------------------------------------------------------------------
+6.4  Praxis — Summe eines Arrays
+------------------------------------------------------------------------
+
+  C:
+    long sum = 0;
+    for (int i = 0; i < 5; i++) sum += arr[i];
+
+  section .data
+      arr    dq  10, 20, 30, 40, 50
+      laenge equ 5
+
+  section .text
+  global _start
+  _start:
+      xor  rax, rax         ; sum = 0
+      xor  rcx, rcx         ; i = 0
+  summier_loop:
+      cmp  rcx, laenge
+      jge  summier_ende
+      add  rax, [arr + rcx*8]   ; sum += arr[i]
+      inc  rcx
+      jmp  summier_loop
+  summier_ende:
+      ; rax = 150 (10+20+30+40+50)
+      mov  rdi, rax
+      mov  rax, 60
+      syscall
+
+------------------------------------------------------------------------
+6.5  Switch-Case — Sprungtabellen
+------------------------------------------------------------------------
+
+  Ein sehr effizienter Trick: statt vieler cmp+je, eine Tabelle von Adressen!
+
+  C:
+    switch (n) {
+      case 0: ...; break;
+      case 1: ...; break;
+      case 2: ...; break;
+      default: ...;
+    }
+
+  Asm (mit Sprungtabelle):
+    section .data
+        jmp_table  dq  case_0, case_1, case_2    ; Array von Adressen
+
+    section .text
+    _start:
+        mov  rax, n          ; n = 0, 1, oder 2
+        cmp  rax, 2
+        ja   default_case    ; Bounds-Check: wenn > 2, → default
+        jmp  [jmp_table + rax*8]  ; indirekter Sprung via Tabelle
+
+    case_0:
+        ; ...
+        jmp end_switch
+    case_1:
+        ; ...
+        jmp end_switch
+    case_2:
+        ; ...
+        jmp end_switch
+    default_case:
+        ; ...
+    end_switch:
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Implementiere FizzBuzz in Assembly für Zahlen 1 bis 20.
+Schreibe für jede Zahl:
+- "FizzBuzz\n" wenn durch 15 teilbar (zuerst prüfen!)
+- "Fizz\n"     wenn durch 3 teilbar
+- "Buzz\n"     wenn durch 5 teilbar
+- die Zahl als String, sonst
+
+Tipp: Modulo-Operation mit div. Prüfe ob rdx == 0 nach der Division.
+Du wirst write-Syscall brauchen. Für die Zahl-Ausgabe: int-zu-ASCII.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: System Calls — wie Assembly mit dem Kernel kommuniziert
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Was ist ein System Call
+------------------------------------------------------------------------
+
+Dein Programm läuft in "User Space" — es hat keinen direkten Zugriff
+auf Hardware, Dateien, oder Netzwerk. Um mit der Welt zu interagieren,
+fragt es den Kernel via System Calls.
+
+In x86-64 Linux:
+  1. Lege Syscall-Nummer in rax
+  2. Lege Argumente in rdi, rsi, rdx, r10, r8, r9 (in dieser Reihenfolge)
+  3. Führe "syscall" aus
+  4. Ergebnis steht danach in rax
+
+Wichtig: Für Syscalls ist das 4. Argument r10, NICHT rcx!
+(Für C-Funktionen ist das 4. Argument rcx — das ist ein Unterschied!)
+
+Das syscall-Instruktion überschreibt rcx und r11 (Kernel nutzt sie intern).
+Also sichern vor dem Syscall wenn du ihre Werte danach noch brauchst!
+
+Fehlercodes: Wenn ein Syscall fehlschlägt, ist rax negativ (-errno).
+  cmp  rax, 0
+  js   fehler_handler       ; SF=1 wenn negativ → Fehler
+
+------------------------------------------------------------------------
+7.2  Die wichtigsten Linux Syscalls (x86-64)
+------------------------------------------------------------------------
+
+Nummer  Name        Argumente → Rückgabe
+─────────────────────────────────────────────────────────────────────────
+0       read        rdi=fd, rsi=buf, rdx=count → rax=bytes_read
+1       write       rdi=fd, rsi=buf, rdx=count → rax=bytes_written
+2       open        rdi=filename, rsi=flags, rdx=mode → rax=fd
+3       close       rdi=fd → rax=0
+4       stat        rdi=filename, rsi=statbuf → rax=0
+5       fstat       rdi=fd, rsi=statbuf → rax=0
+8       lseek       rdi=fd, rsi=offset, rdx=whence → rax=offset
+9       mmap        rdi=addr, rsi=len, rdx=prot, r10=flags, r8=fd, r9=off
+10      mprotect    rdi=addr, rsi=len, rdx=prot
+11      munmap      rdi=addr, rsi=len
+12      brk         rdi=addr → rax=neue_brk (Heap-Grenze)
+57      fork        → rax=pid (Kind: 0, Eltern: Child-PID)
+59      execve      rdi=filename, rsi=argv, rdx=envp
+60      exit        rdi=status
+62      kill        rdi=pid, rsi=signal
+102     getuid      → rax=uid
+104     getgid      → rax=gid
+
+Vollständige Liste: /usr/include/asm/unistd_64.h
+
+------------------------------------------------------------------------
+7.3  write — in die Konsole schreiben
+------------------------------------------------------------------------
+
+  ; write(1, "Hallo\n", 6)
+  mov  rax, 1           ; Syscall: write
+  mov  rdi, 1           ; fd: 1 = stdout (2 = stderr)
+  mov  rsi, text_adresse ; Pointer auf den Text
+  mov  rdx, 6           ; Anzahl Bytes
+  syscall
+
+------------------------------------------------------------------------
+7.4  read — von der Konsole lesen
+------------------------------------------------------------------------
+
+  section .bss
+      puffer  resb  100
+
+  ; read(0, puffer, 100)
+  mov  rax, 0           ; Syscall: read
+  mov  rdi, 0           ; fd: 0 = stdin
+  mov  rsi, puffer      ; Buffer-Adresse
+  mov  rdx, 100         ; Max. Bytes zu lesen
+  syscall
+  ; rax = tatsächlich gelesene Bytes (inkl. Newline bei Enter)
+
+------------------------------------------------------------------------
+7.5  open und close — Dateien öffnen
+------------------------------------------------------------------------
+
+  Flags für open (kombinierbar mit bitweisem OR):
+    O_RDONLY  = 0       ; nur lesen
+    O_WRONLY  = 1       ; nur schreiben
+    O_RDWR    = 2       ; lesen und schreiben
+    O_CREAT   = 64      ; erstellen wenn nicht vorhanden
+    O_TRUNC   = 512     ; Inhalt löschen beim Öffnen
+    O_APPEND  = 1024    ; ans Ende anhängen
+
+  section .data
+      dateiname  db  "ausgabe.txt", 0
+
+  ; open("ausgabe.txt", O_WRONLY|O_CREAT|O_TRUNC, 0644)
+  mov  rax, 2           ; Syscall: open
+  mov  rdi, dateiname   ; Dateiname (null-terminiert)
+  mov  rsi, 577         ; 1 | 64 | 512 = O_WRONLY|O_CREAT|O_TRUNC
+  mov  rdx, 420         ; 0644 octal = 420 dezimal (Dateiberechtigungen)
+  syscall
+  ; rax = Dateideskriptor (oder negativ bei Fehler)
+  mov  r15, rax         ; fd sichern
+
+  ; close(fd)
+  mov  rax, 3           ; Syscall: close
+  mov  rdi, r15         ; fd
+  syscall
+
+------------------------------------------------------------------------
+7.6  mmap — Speicher anfordern
+------------------------------------------------------------------------
+
+  ; mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+  mov  rax, 9           ; Syscall: mmap
+  xor  rdi, rdi         ; addr = NULL (Kernel wählt Adresse)
+  mov  rsi, 4096        ; length = 1 Page (4096 Bytes)
+  mov  rdx, 3           ; prot = PROT_READ(1)|PROT_WRITE(2)
+  mov  r10, 0x22        ; flags = MAP_PRIVATE(2)|MAP_ANONYMOUS(0x20)
+  mov  r8,  -1          ; fd = -1 (anonym, keine Datei)
+  xor  r9,  r9          ; offset = 0
+  syscall
+  ; rax = Adresse des neuen Speichers (oder 0xFFFF...FFFF bei Fehler)
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Schreibe ein Assembly-Programm das:
+1. Eine Datei "test.txt" erstellt und "Hallo aus Assembly!\n" hineinschreibt.
+2. Die Datei schließt.
+3. Die Datei erneut öffnet und den Inhalt liest.
+4. Den gelesenen Inhalt auf stdout ausgibt.
+5. Die Datei schließt und normal beendet.
+Dies testet: open, write, close, read, write (stdout), exit.
+Denke daran: open zum Lesen benutzt O_RDONLY = 0 als Flag.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Zahlen ausgeben und verarbeiten — Praxis
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Zahlen in Strings konvertieren
+------------------------------------------------------------------------
+
+Ein Syscall-write nimmt Bytes entgegen, keine Zahlen.
+Um "42" auszugeben, muss man aus der Zahl 42 die Bytes '4', '2' machen.
+
+Algorithmus (iterative Division durch 10):
+
+  section .bss
+      num_puffer  resb  22      ; max 20 Ziffern für uint64, +2 für \n und Null
+
+  ; Eingabe in rax. Gibt Adresse in rsi, Länge in rdx zurück.
+  int_zu_string:
+      ; Spezialfall 0:
+      test  rax, rax
+      jnz   .nicht_null
+      mov   byte [num_puffer], '0'
+      mov   byte [num_puffer+1], 10    ; newline
+      lea   rsi, [num_puffer]
+      mov   rdx, 2
+      ret
+
+  .nicht_null:
+      ; Rückwärts füllen — letzte Ziffer zuerst
+      lea   rdi, [num_puffer + 20]
+      mov   byte [rdi], 10             ; newline ans Ende
+      mov   rcx, 0                     ; Zähler
+      mov   rbx, 10                    ; Divisor
+
+  .ziffer_loop:
+      test  rax, rax
+      jz    .fertig
+      xor   rdx, rdx
+      div   rbx                        ; rax = rax/10, rdx = rax%10
+      add   dl, '0'                    ; Ziffer zu ASCII
+      dec   rdi
+      mov   [rdi], dl
+      inc   rcx
+      jmp   .ziffer_loop
+
+  .fertig:
+      inc   rcx                        ; +1 für Newline
+      mov   rsi, rdi                   ; Startadresse
+      mov   rdx, rcx                   ; Länge
+      ret
+
+------------------------------------------------------------------------
+8.2  Strings in Zahlen konvertieren (atoi)
+------------------------------------------------------------------------
+
+  ; Eingabe: rsi = Adresse des Strings (Ziffern, kein Vorzeichen)
+  ; Ausgabe: rax = Zahl
+  atoi:
+      xor  rax, rax        ; Ergebnis = 0
+      xor  rcx, rcx        ; Index = 0
+  .loop:
+      movzx rbx, byte [rsi + rcx]
+      cmp  bl, '0'
+      jl   .fertig
+      cmp  bl, '9'
+      jg   .fertig
+      sub  bl, '0'         ; ASCII zu Zahl
+      imul rax, 10         ; bisheriges Ergebnis × 10
+      add  rax, rbx        ; + neue Ziffer
+      inc  rcx
+      jmp  .loop
+  .fertig:
+      ret
+
+------------------------------------------------------------------------
+8.3  Hexadezimal ausgeben
+------------------------------------------------------------------------
+
+  ; Gibt rax als 16-stellige Hex-Zahl aus (z.B. "0000000000000042")
+  hex_ausgabe:
+      section .data
+      hex_zeichen  db  "0123456789ABCDEF"
+      hex_puffer   db  "0x", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10
+
+      ; ... (16 Iterationen: je 4 Bits extrahieren, lookup in hex_zeichen)
+      ; Übung: implementiere das selbst!
+
+  ; Schnelles Trick: ein Nibble (4 Bit) extrahieren:
+  ;   mov  rbx, rax
+  ;   and  bl,  0x0F           ; untere 4 Bits
+  ;   movzx rbx, byte [hex_zeichen + rbx]  ; → ASCII-Zeichen
+  ;   shr  rax, 4              ; nächste 4 Bits
+  ; 16 Mal wiederholen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 8 (Abschlussprojekt Teil 1):
+Schreibe ein vollständiges Programm:
+  1. Liest eine Zahl von stdin (als String, z.B. "41\n")
+  2. Konvertiert sie zu int mit atoi
+  3. Addiert 1
+  4. Gibt die neue Zahl als String auf stdout aus
+
+Beispiel: Eingabe "41" → Ausgabe "42\n"
+
+Das verbindet: read-Syscall, atoi, Arithmetik, int-zu-string, write-Syscall.
+Alle Konzepte aus Teil 1 kommen hier zusammen.
+
+Tipp: read liest inkl. Newline. Das '\n' am Ende vor atoi entfernen
+(oder atoi robust genug machen dass es bei nicht-Ziffern stoppt).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+ENDE TEIL 1
+================================================================================
+
+Weiter in Teil 2:
+  Modul 9:  Der Stack — Aufbau, push/pop, Alignment, Stack Frames
+  Modul 10: Funktionen in Assembly — call, ret, Prolog, Epilog
+  Modul 11: System V AMD64 ABI — Calling Conventions vollständig
+  Modul 12: Rekursion in Assembly — Fibonacci, Quicksort, Türme von Hanoi
+  Modul 13: Makros und wiederverwendbarer Code in NASM
+  Modul 14: C und Assembly mischen — Inline Asm, externe Funktionen aufrufen
+  Modul 15: Debugging mit GDB — Breakpoints, Register inspizieren, Disassemble
+  Modul 16: Fehlerbehandlung und robuster Code
+
+================================================================================

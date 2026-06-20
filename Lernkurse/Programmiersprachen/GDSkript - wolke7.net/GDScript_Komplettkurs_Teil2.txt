@@ -1,0 +1,960 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 2 von 4)
+================================================================================
+
+Voraussetzung: Teil 1 abgeschlossen. Du weißt was Nodes, Szenen, Variablen,
+Kontrollfluss und Funktionen sind.
+
+In diesem Teil bringen wir Spiele zum Leben: Spieler-Bewegung, Physik,
+Kollision, und Animationen. Am Ende kannst du einen vollständigen
+2D- und 3D-Platformer-Spieler bauen.
+
+
+################################################################################
+TEIL 2 — BEWEGUNG, PHYSIK UND INPUT
+################################################################################
+
+
+================================================================================
+MODUL 6: Input-System — Tastatur, Maus, Controller
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Input Actions — der richtige Weg für Input
+------------------------------------------------------------------------
+
+Godot hat ein Input-Action-System. Statt direkt auf Tastencodes zu prüfen,
+definierst du AKTIONEN ("jump", "move_left") und bindest Tasten daran.
+Das macht Controller-Support, Key-Remapping und Plattform-Unabhängigkeit trivial.
+
+Input Actions einrichten:
+  Projekteinstellungen → Eingabe-Zuordnungen → Neue Aktion hinzufügen
+
+Standardmäßig gibt es:
+  ui_accept, ui_cancel, ui_up, ui_down, ui_left, ui_right
+  (für UI-Navigation)
+
+Eigene Actions anlegen (typisch für Spiele):
+  "move_left"  → A, Pfeiltaste Links, Controller Analog-Stick Links
+  "move_right" → D, Pfeiltaste Rechts
+  "jump"       → Space, W, Controller A-Button
+  "attack"     → Linke Maustaste, Controller X-Button
+  "interact"   → E, Controller Y-Button
+
+------------------------------------------------------------------------
+6.2  Input abfragen — drei Methoden
+------------------------------------------------------------------------
+
+METHODE 1: In _process() — polling (für kontinuierliche Aktionen):
+  func _process(delta: float) -> void:
+      if Input.is_action_pressed("move_right"):
+          position.x += speed * delta
+
+  is_action_pressed()   → true solange Taste GEDRÜCKT BLEIBT
+  is_action_just_pressed() → true NUR im Frame wo gedrückt wurde
+  is_action_just_released() → true NUR im Frame wo losgelassen wurde
+
+  Analogwert (Trigger/Stick):
+    var staerke := Input.get_action_strength("move_right")   # 0.0 - 1.0
+    var achse := Input.get_axis("move_left", "move_right")   # -1.0 bis 1.0
+
+  2D-Richtungsvektor aus vier Aktionen:
+    var richtung := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+    # Gibt normalisierten Vector2 zurück — perfekt für 8-Richtungs-Bewegung!
+    # Automatisch normalisiert: Diagonal ist nicht schneller als gerade.
+
+METHODE 2: _input(event) — eventbasiert:
+  func _input(event: InputEvent) -> void:
+      if event.is_action_pressed("jump"):
+          springen()
+      if event is InputEventMouseButton:
+          var maus_event := event as InputEventMouseButton
+          if maus_event.button_index == MOUSE_BUTTON_LEFT and maus_event.pressed:
+              schiessen(maus_event.position)
+
+METHODE 3: _unhandled_input(event) — wie _input, aber UI hat Vorrang:
+  func _unhandled_input(event: InputEvent) -> void:
+      # Besser für Spieler-Input: Wenn ein Button in der UI gedrückt wurde,
+      # soll der Spieler nicht AUCH einen Angriff auslösen.
+      if event.is_action_pressed("attack"):
+          angreifen()
+
+  Faustregel:
+    _input()           → für UI-Code, frühe Input-Verarbeitung
+    _unhandled_input() → für Spieler-Input (EMPFOHLEN für CharacterBody)
+
+------------------------------------------------------------------------
+6.3  Maus-Input
+------------------------------------------------------------------------
+
+Mausposition:
+  get_viewport().get_mouse_position()   # Bildschirm-Koordinaten
+  get_global_mouse_position()           # Welt-Koordinaten (2D, berücksichtigt Kamera!)
+
+Maus-Cursor verbergen/sperren (für First-Person-Spiele!):
+  Input.mouse_mode = Input.MOUSE_MODE_HIDDEN       # Unsichtbar, bleibt in Fenster
+  Input.mouse_mode = Input.MOUSE_MODE_CAPTURED     # Unsichtbar, gesperrt (FPS!)
+  Input.mouse_mode = Input.MOUSE_MODE_VISIBLE      # Normal (Standard)
+  Input.mouse_mode = Input.MOUSE_MODE_CONFINED     # Sichtbar aber gesperrt
+
+Maus-Bewegung auslesen (für FPS-Kamera!):
+  func _input(event: InputEvent) -> void:
+      if event is InputEventMouseMotion:
+          var motion := event as InputEventMouseMotion
+          rotation_degrees.y -= motion.relative.x * maus_sensitivitaet
+          kopf.rotation_degrees.x -= motion.relative.y * maus_sensitivitaet
+          kopf.rotation_degrees.x = clamp(kopf.rotation_degrees.x, -85, 85)
+
+------------------------------------------------------------------------
+6.4  Controller-Support
+------------------------------------------------------------------------
+
+Godot erkennt Controller automatisch. Mit dem Action-System funktioniert
+alles out-of-the-box wenn du Actions statt direkter Tastencodes benutzt.
+
+Controller-Verbindung überwachen:
+  func _ready() -> void:
+      Input.joy_connection_changed.connect(_on_controller_changed)
+
+  func _on_controller_changed(device: int, verbunden: bool) -> void:
+      if verbunden:
+          print("Controller verbunden: ", Input.get_joy_name(device))
+      else:
+          print("Controller getrennt")
+
+Rumble/Vibration:
+  Input.start_joy_vibration(0, 0.5, 0.5, 0.3)
+  # (device_index, weak_magnitude, strong_magnitude, duration_seconds)
+
+------------------------------------------------------------------------
+6.5  Eigene Tastenbelegungen zur Laufzeit ändern
+------------------------------------------------------------------------
+
+  func taste_neu_belegen(action: String, neue_taste: Key) -> void:
+      InputMap.action_erase_events(action)          # Alte Tasten löschen
+      var event := InputEventKey.new()
+      event.keycode = neue_taste
+      InputMap.action_add_event(action, event)      # Neue Taste setzen
+
+  # Beispiel:
+  taste_neu_belegen("jump", KEY_SPACE)
+  taste_neu_belegen("jump", KEY_UP)
+
+Speichern/Laden von Tastenbelegungen → Modul 14.
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+1. Lege in Projekteinstellungen diese Actions an:
+     move_left, move_right, move_up, move_down, jump, attack, interact
+   Binde jeweils Tastatur UND Controller-Button.
+2. Baue ein Node2D mit Skript. In _process():
+     var richtung := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+     position += richtung * 200.0 * delta
+3. Gib in _unhandled_input(): "Gesprungen!" aus wenn "jump" just_pressed.
+4. Zeige die aktuelle Mausposition (Weltkoordinaten) als Label-Text an.
+5. Bonus: Implementiere Mouse-Lock (Escape zum Freigeben, Klick zum Sperren).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: CharacterBody2D & 3D — Spieler-Bewegung
+================================================================================
+
+------------------------------------------------------------------------
+7.1  CharacterBody2D — der 2D-Spieler
+------------------------------------------------------------------------
+
+CharacterBody2D ist der Standard-Node für Spieler und NPCs in 2D. Er hat
+keine automatische Physik (Gravitation, Kollision) — du kontrollierst
+alles, bekommst aber move_and_slide() als mächtiges Werkzeug.
+
+Szenen-Aufbau:
+  CharacterBody2D         ← das Skript hängt HIER
+  ├── Sprite2D
+  ├── CollisionShape2D    ← PFLICHT! Ohne das gibt es keine Kollision
+  └── Camera2D            ← optional, für Kamera die dem Spieler folgt
+
+Minimales Spieler-Skript:
+  extends CharacterBody2D
+
+  const SPEED: float = 200.0
+  const JUMP_FORCE: float = -400.0
+  const GRAVITY: float = 980.0   # Pixel pro Sekunde²
+
+  func _physics_process(delta: float) -> void:
+      # Gravitation anwenden
+      if not is_on_floor():
+          velocity.y += GRAVITY * delta
+
+      # Horizontal-Input
+      var richtung := Input.get_axis("move_left", "move_right")
+      velocity.x = richtung * SPEED
+
+      # Springen
+      if Input.is_action_just_pressed("jump") and is_on_floor():
+          velocity.y = JUMP_FORCE
+
+      move_and_slide()
+
+  # Das ist es! Ein funktionaler Platformer-Spieler in ~15 Zeilen.
+
+Wichtige CharacterBody2D-Methoden:
+  move_and_slide()
+    → Bewegt den Body gemäß velocity, behandelt Kollisionen, gleitet
+      entlang von Wänden/Böden. IMMER am Ende von _physics_process aufrufen.
+      Modifiziert velocity automatisch (z.B. Y-velocity = 0 wenn am Boden).
+
+  is_on_floor()        → bool: Steht der Spieler auf dem Boden?
+  is_on_wall()         → bool: Berührt der Spieler eine Wand?
+  is_on_ceiling()      → bool: Berührt der Spieler die Decke?
+  get_floor_normal()   → Vector2: Normale des Bodens (für Slope-Bewegung)
+  get_last_slide_collision() → KinematicCollision2D: Was wurde zuletzt getroffen?
+
+Erweiterte Konfiguration (Inspector):
+  Up Direction         → Welche Richtung ist "oben"? Standard: (0,-1)
+  Floor Max Angle      → Ab welchem Winkel ist es eine Wand, kein Boden?
+  Max Slides           → Wie oft kann der Body in einem Frame "rutschen"?
+
+------------------------------------------------------------------------
+7.2  Vollständiger 2D-Platformer-Spieler
+------------------------------------------------------------------------
+
+extends CharacterBody2D
+
+const SPEED: float = 250.0
+const JUMP_FORCE: float = -550.0
+const GRAVITY: float = 1200.0
+const AIR_CONTROL: float = 0.6     # Weniger Kontrolle in der Luft
+
+@export var max_jumps: int = 2      # Doppel-Sprung!
+
+var jumps_verbleibend: int = 2
+var ist_coyote_zeit: bool = false   # Kurz nach Abgrund noch springen dürfen
+var coyote_timer: float = 0.0
+const COYOTE_DAUER: float = 0.15
+
+@onready var sprite: Sprite2D = $Sprite2D
+@onready var animations: AnimationPlayer = $AnimationPlayer
+
+func _physics_process(delta: float) -> void:
+    # --- GRAVITATION ---
+    if not is_on_floor():
+        velocity.y += GRAVITY * delta
+        velocity.y = min(velocity.y, 1200.0)  # Terminal velocity
+    else:
+        jumps_verbleibend = max_jumps
+        coyote_timer = COYOTE_DAUER
+
+    # --- COYOTE TIME ---
+    # War gerade noch auf dem Boden? Kurz Sprung erlauben.
+    if was_on_floor and not is_on_floor():
+        ist_coyote_zeit = true
+    if ist_coyote_zeit:
+        coyote_timer -= delta
+        if coyote_timer <= 0:
+            ist_coyote_zeit = false
+            if jumps_verbleibend == max_jumps:
+                jumps_verbleibend -= 1  # Einen Sprung verbraucht für Abgrund
+
+    # --- SPRUNG ---
+    if Input.is_action_just_pressed("jump"):
+        if is_on_floor() or ist_coyote_zeit or jumps_verbleibend > 0:
+            velocity.y = JUMP_FORCE
+            jumps_verbleibend -= 1
+            ist_coyote_zeit = false
+
+    # Sprung abkürzen (Variable Jump Height):
+    if Input.is_action_just_released("jump") and velocity.y < -200:
+        velocity.y = -200.0
+
+    # --- HORIZONTALE BEWEGUNG ---
+    var richtung := Input.get_axis("move_left", "move_right")
+    var ziel_speed := richtung * SPEED
+    var kontrolle := AIR_CONTROL if not is_on_floor() else 1.0
+
+    # Weiche Beschleunigung/Verzögerung
+    velocity.x = lerp(velocity.x, ziel_speed, 10.0 * kontrolle * delta)
+
+    # --- SPRITE FLIPPEN ---
+    if richtung != 0:
+        sprite.flip_h = richtung < 0
+
+    # --- ANIMATION (Modul 10) ---
+    if not is_on_floor():
+        animations.play("springen" if velocity.y < 0 else "fallen")
+    elif richtung != 0:
+        animations.play("laufen")
+    else:
+        animations.play("idle")
+
+    move_and_slide()
+
+var was_on_floor: bool = false
+func _process(_delta: float) -> void:
+    was_on_floor = is_on_floor()
+
+------------------------------------------------------------------------
+7.3  CharacterBody3D — der 3D-Spieler
+------------------------------------------------------------------------
+
+Szenen-Aufbau für einen First-Person-Spieler:
+  CharacterBody3D         ← Physik-Körper, Skript hier
+  ├── CollisionShape3D    ← Kapsel-Form (CapsuleShape3D)
+  ├── Kopf (Node3D)       ← Rotiert nur vertikal (Maus Y-Achse)
+  │   └── Camera3D        ← Die Kamera folgt dem Kopf
+  └── MeshInstance3D      ← Körper-Mesh (für Third-Person)
+
+Vollständiger FPS-Spieler:
+  extends CharacterBody3D
+
+  const SPEED: float = 5.0
+  const SPRINT_SPEED: float = 8.0
+  const JUMP_VELOCITY: float = 4.5
+  const MAUS_SENSITIVITAET: float = 0.003
+  const GRAVITY: float = 9.8   # In 3D benutzt Godot reale Meter/s²
+
+  @onready var kopf: Node3D = $Kopf
+  @onready var kamera: Camera3D = $Kopf/Camera3D
+
+  func _ready() -> void:
+      Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+  func _input(event: InputEvent) -> void:
+      # Maus-Umsehen
+      if event is InputEventMouseMotion:
+          var motion := event as InputEventMouseMotion
+          rotate_y(-motion.relative.x * MAUS_SENSITIVITAET)
+          kopf.rotate_x(-motion.relative.y * MAUS_SENSITIVITAET)
+          kopf.rotation.x = clamp(kopf.rotation.x, deg_to_rad(-85), deg_to_rad(85))
+
+      # Escape: Maus freigeben
+      if event.is_action_pressed("ui_cancel"):
+          Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+  func _physics_process(delta: float) -> void:
+      # Gravitation
+      if not is_on_floor():
+          velocity.y -= GRAVITY * delta
+
+      # Springen
+      if Input.is_action_just_pressed("jump") and is_on_floor():
+          velocity.y = JUMP_VELOCITY
+
+      # Bewegen
+      var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+      # Richtung relativ zur Spieler-Rotation (wichtig in 3D!)
+      var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+
+      var aktuelle_speed := SPRINT_SPEED if Input.is_action_pressed("sprint") else SPEED
+
+      if direction:
+          velocity.x = direction.x * aktuelle_speed
+          velocity.z = direction.z * aktuelle_speed
+      else:
+          # Weiche Abbremsung
+          velocity.x = lerp(velocity.x, 0.0, delta * 10.0)
+          velocity.z = lerp(velocity.z, 0.0, delta * 10.0)
+
+      move_and_slide()
+
+------------------------------------------------------------------------
+7.4  Third-Person-Kamera
+------------------------------------------------------------------------
+
+extends SpringArm3D   # SpringArm verhindert dass Kamera durch Wände geht!
+
+@export var kamera_sensitivitaet: float = 0.005
+@export var min_pitch: float = -60.0
+@export var max_pitch: float = 30.0
+
+func _input(event: InputEvent) -> void:
+    if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+        var motion := event as InputEventMouseMotion
+        # Horizontale Rotation: Spieler-Node (Elternelement) drehen
+        get_parent().rotate_y(-motion.relative.x * kamera_sensitivitaet)
+        # Vertikale Rotation: Nur der Arm (damit Kamera hoch/runter schaut)
+        rotation_degrees.x -= motion.relative.y * (kamera_sensitivitaet * 57.29)  # rad→deg
+        rotation_degrees.x = clamp(rotation_degrees.x, min_pitch, max_pitch)
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+1. Baue eine vollständige 2D-Platformer-Szene:
+     - TileMap als Boden (StaticBody2D/TileSet — einfache Plattformen reichen)
+     - Spieler (CharacterBody2D) mit Bewegung und Sprung
+2. Implementiere Doppel-Sprung.
+3. Füge "Coyote Time" hinzu (0.12 Sekunden nach dem Abgrund noch springen).
+4. Implementiere Variable Jump Height (kurzes Tippen = kleiner Sprung).
+5. Bonus 3D: Baue eine First-Person-Szene (WorldEnvironment + ein paar
+     CSGBox3D als Boden/Wände, FPS-Spieler mit Maus-Umsehen).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: RigidBody & Physics — realistische Physik
+================================================================================
+
+------------------------------------------------------------------------
+8.1  RigidBody2D — automatische Physik-Simulation
+------------------------------------------------------------------------
+
+RigidBody2D wird von Godots Physik-Engine gesteuert. Du gibst Kräfte/Impulse —
+die Engine berechnet Bewegung, Kollisionen, Rotation, alles automatisch.
+
+  extends RigidBody2D
+
+  @export var explodier_kraft: float = 500.0
+
+  func _ready() -> void:
+      # Gravitation reduzieren (Standard ist 1.0):
+      gravity_scale = 0.5
+      # Rotation sperren (für Top-Down-Spiele):
+      # freeze_mode = RigidBody2D.FREEZE_MODE_KINEMATIC
+
+  func explosion_in_der_naehe(ort: Vector2) -> void:
+      var richtung: Vector2 = (global_position - ort).normalized()
+      var abstand: float = global_position.distance_to(ort)
+      var kraft: float = explodier_kraft / max(abstand, 1.0)
+      apply_impulse(richtung * kraft)   # Sofortiger Impuls
+      apply_torque_impulse(randf_range(-100, 100))  # Rotation
+
+Kräfte vs. Impulse:
+  apply_force(kraft: Vector2)          # Kontinuierliche Kraft (pro Sekunde)
+  apply_impulse(impuls: Vector2)       # Sofortiger Schlag (einmalig)
+  apply_central_force(kraft: Vector2)  # Kraft ohne Rotation
+  apply_torque(drehmoment: float)      # Kontinuierliches Drehmoment
+
+Inspector-Einstellungen:
+  Mass                → Masse in kg (beeinflusst Trägheit)
+  Gravity Scale       → Multiplikator für Schwerkraft
+  Linear Damp         → Luftwiderstand (linear)
+  Angular Damp        → Luftwiderstand (rotational)
+  Freeze              → Physik einfrieren (für statische Phasen)
+
+Kollisions-Callbacks bei RigidBody:
+  func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+      # Läuft im Physik-Thread — sicherer Weg um Physik zu modifizieren
+      for i in range(state.get_contact_count()):
+          var kontakt_pos := state.get_contact_local_position(i)
+          print("Kollision bei: ", kontakt_pos)
+
+------------------------------------------------------------------------
+8.2  RigidBody3D — für Minecraft-Klone, Physics-Spielzeug, etc.
+------------------------------------------------------------------------
+
+  extends RigidBody3D
+
+  # Beispiel: Kiste die man aufheben kann
+  var wird_getragen: bool = false
+  var traeger: Node3D = null
+
+  func aufheben(von_spieler: Node3D) -> void:
+      wird_getragen = true
+      traeger = von_spieler
+      freeze = true       # Physik einfrieren — Spieler trägt sie manuell
+      # Kiste als Kind des Spielers setzen:
+      reparent(von_spieler)
+      position = Vector3(0, 0, -2)   # Vor dem Spieler
+
+  func fallen_lassen() -> void:
+      wird_getragen = false
+      freeze = false
+      # Zurück in die Welt:
+      reparent(get_tree().current_scene)
+      # Impuls in Blickrichtung:
+      apply_impulse(traeger.global_transform.basis.z * -10.0)
+      traeger = null
+
+------------------------------------------------------------------------
+8.3  Physik-Material — Reibung und Elastizität
+------------------------------------------------------------------------
+
+Ein PhysicsMaterial (als Resource) definiert das physikalische Verhalten:
+  friction: float = 1.0      # Reibung (0 = Eis, 1 = normal, höher = klebrig)
+  bounce: float = 0.0        # Elastizität (0 = kein Abprallen, 1 = perfekt)
+  rough: bool = false        # Kombinationsregel für Reibung
+  absorbent: bool = false    # Kombinationsregel für Bounce
+
+Per Code setzen:
+  var material := PhysicsMaterial.new()
+  material.bounce = 0.8      # Superball!
+  material.friction = 0.1
+  physics_material_override = material
+
+------------------------------------------------------------------------
+8.4  Joints — Verbindungen zwischen RigidBodies
+------------------------------------------------------------------------
+
+Joints verbinden zwei RigidBodies miteinander. Essenziell für:
+  - Ragdoll-Charaktere
+  - Kettenglieder (Human: Fall Flat-Style!)
+  - Fahrzeuge, Türen, Seile
+
+PinJoint2D/3D     → Punkt-Verbindung (dreht sich frei, kann nicht wegbewegen)
+HingeJoint3D      → Scharnier (Türen, Knie)
+SliderJoint3D     → Gleitet entlang einer Achse
+ConeTwistJoint3D  → Schultergelenk (für Ragdoll)
+Generic6DOFJoint3D → Vollständig konfigurierbar
+
+Beispiel: Einfaches Seil aus RigidBody3D-Kugeln:
+  func seil_erstellen(laenge: int) -> void:
+      var vorheriger: RigidBody3D = null
+      for i in range(laenge):
+          var kugel := SeilGlied.instantiate() as RigidBody3D
+          add_child(kugel)
+          kugel.global_position = Vector3(0, -i * 0.5, 0)
+          if vorheriger:
+              var joint := PinJoint3D.new()
+              add_child(joint)
+              joint.global_position = Vector3(0, -i * 0.5 + 0.25, 0)
+              joint.set_node_a(vorheriger.get_path())
+              joint.set_node_b(kugel.get_path())
+          vorheriger = kugel
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+1. Erstelle eine 2D-Szene mit 10 RigidBody2D-Objekten (Kisten/Kreise).
+     Sie sollen auf einer StaticBody2D-Plattform landen.
+2. Klicke auf einen RigidBody → "Explosion" an der Mausposition,
+     alle RigidBodies werden weggeschleudert (apply_impulse).
+3. Variiere PhysicsMaterial: Erstelle einen Superball (bounce=0.95).
+4. Bonus 3D: Erstelle ein Seil aus 8 RigidBody3D-Kugeln (PinJoint3D).
+     Das obere Ende soll fest sein (freeze=true), die anderen fallen frei.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Kollision, Areas und Trigger
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Kollisions-Layer und Masken verstehen
+------------------------------------------------------------------------
+
+Das ist eines der am häufigsten missverstandenen Konzepte in Godot:
+
+  Collision Layer  → AUF welchem Layer befindet sich dieser Body?
+  Collision Mask   → MIT WELCHEN Layern kollidiert/interagiert dieser Body?
+
+Beispiel-Setup für ein RPG:
+  Layer 1: Spieler
+  Layer 2: Feinde
+  Layer 3: Umwelt (Wände, Böden)
+  Layer 4: Projektile
+  Layer 5: Trigger/Areas
+  Layer 6: Items
+
+  Spieler:
+    Layer: 1 (Spieler-Layer)
+    Mask:  2 | 3 | 4 | 5 | 6  (reagiert auf Feinde, Umwelt, Projektile, Trigger, Items)
+
+  Feind:
+    Layer: 2
+    Mask:  1 | 3 | 4  (reagiert auf Spieler, Umwelt, Projektile)
+    Mask NICHT: 2 (Feinde kollidieren nicht miteinander — Performance!)
+
+  Projektil (Spieler):
+    Layer: 4
+    Mask:  2 | 3  (trifft Feinde und Wände)
+    Mask NICHT: 1 (trifft nicht den eigenen Spieler)
+
+Per Code setzen:
+  # Einzelne Bits setzen:
+  collision_layer = 1 << 0   # Layer 1
+  collision_layer |= 1 << 2  # Zusätzlich Layer 3
+
+  # Oder direkt:
+  collision_layer = 0b00001001   # Layer 1 und 4
+
+  # Einzelnen Layer-Bit per Methode:
+  set_collision_layer_value(1, true)   # Layer 1 an
+  set_collision_mask_value(3, false)   # Mask Layer 3 aus
+
+------------------------------------------------------------------------
+9.2  Area2D und Area3D — Trigger-Zonen
+------------------------------------------------------------------------
+
+Area-Nodes erkennen wenn andere Bodies/Areas eintreten oder austreten.
+Kein Blockieren, kein Physik-Einfluss — nur Erkennung.
+
+Szenen-Aufbau:
+  Area2D                    ← Skript hier
+  └── CollisionShape2D      ← PFLICHT, definiert die Zone
+
+Signale (in _ready() verbinden oder im Editor per Node-Panel):
+  func _ready() -> void:
+      body_entered.connect(_on_body_entered)
+      body_exited.connect(_on_body_exited)
+      area_entered.connect(_on_area_entered)
+
+  func _on_body_entered(body: Node2D) -> void:
+      if body.is_in_group("spieler"):
+          print("Spieler betritt Zone")
+          schadenszone_aktivieren()
+
+  func _on_body_exited(body: Node2D) -> void:
+      if body.is_in_group("spieler"):
+          schadenszone_deaktivieren()
+
+Anwendungsbeispiele:
+
+  Schadenszone:
+    func _physics_process(delta: float) -> void:
+        for body in get_overlapping_bodies():
+            if body.has_method("schaden_nehmen"):
+                body.schaden_nehmen(schaden_pro_sekunde * delta)
+
+  Pickup (Item aufheben):
+    extends Area2D
+    @export var item_name: String = "Münze"
+    @export var wert: int = 1
+
+    func _on_body_entered(body: Node) -> void:
+        if body.is_in_group("spieler"):
+            body.gold += wert
+            queue_free()
+
+  Checkpoint:
+    extends Area2D
+    signal checkpoint_erreicht(position: Vector2)
+
+    func _on_body_entered(body: Node) -> void:
+        if body.is_in_group("spieler"):
+            checkpoint_erreicht.emit(global_position)
+            $AnimationPlayer.play("aktivieren")
+            monitoring = false   # Einmalig — nicht mehr triggern
+
+  Level-Ende (Portal):
+    func _on_body_entered(body: Node) -> void:
+        if body.is_in_group("spieler"):
+            get_tree().change_scene_to_file("res://scenes/Level2.tscn")
+
+------------------------------------------------------------------------
+9.3  Raycast — Sichtlinie und Abfragen
+------------------------------------------------------------------------
+
+RayCast sendet einen Strahl und meldet das erste Objekt das getroffen wird.
+Unverzichtbar für: Sichtlinien, Schusswaffen, Boden-Check, Interaktion.
+
+RayCast2D/3D als Node:
+  @onready var ray: RayCast2D = $RayCast2D
+
+  func _physics_process(_delta: float) -> void:
+      if ray.is_colliding():
+          var getroffen := ray.get_collider()
+          var punkt: Vector2 = ray.get_collision_point()
+          var normale: Vector2 = ray.get_collision_normal()
+          print("Getroffen: ", getroffen.name, " bei ", punkt)
+
+Raycast per Code (ohne Node — direkt):
+  func schiessen(richtung: Vector3) -> void:
+      var space_state := get_world_3d().direct_space_state
+      var anfang: Vector3 = global_position
+      var ende: Vector3 = anfang + richtung * schussweite
+
+      var query := PhysicsRayQueryParameters3D.create(anfang, ende)
+      query.exclude = [self]               # Sich selbst ausschließen
+      query.collision_mask = 0b00000110    # Nur Feinde und Umwelt
+
+      var ergebnis: Dictionary = space_state.intersect_ray(query)
+      if ergebnis:
+          var getroffener: Node = ergebnis["collider"]
+          var punkt: Vector3 = ergebnis["position"]
+          if getroffener.has_method("schaden_nehmen"):
+              getroffener.schaden_nehmen(schaden)
+          einschlag_effekt_spawnen(punkt)
+
+Mehrere Treffer (für Durchschuss-Munition):
+  var query := PhysicsRayQueryParameters3D.create(anfang, ende)
+  var treffer: Array = space_state.intersect_ray_list(query, 5)
+  # Treffer sind sortiert nach Entfernung
+
+------------------------------------------------------------------------
+9.4  ShapeCast — Breite Abfragen
+------------------------------------------------------------------------
+
+ShapeCast ist wie RayCast aber mit einer Form statt einem Punkt.
+Nützlich für: Splash-Schaden, Nahkampf-Angriffe, breite Sensorik.
+
+Per Code:
+  func nahkampf_angriff() -> void:
+      var space_state := get_world_2d().direct_space_state
+      var query := PhysicsShapeQueryParameters2D.new()
+      var form := CircleShape2D.new()
+      form.radius = angriffs_reichweite
+      query.shape = form
+      query.transform = global_transform
+      query.collision_mask = 0b00000010   # Nur Feinde
+
+      var treffer: Array = space_state.intersect_shape(query)
+      for treffer_info in treffer:
+          var feind: Node = treffer_info["collider"]
+          feind.schaden_nehmen(schaden)
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+1. Erstelle eine Schadenszone (Area2D) die dem Spieler pro Sekunde HP abzieht.
+     Zeige den HP-Verlust per Label an.
+2. Erstelle einen Pickup (Area2D) der bei Berührung "Gold" erhöht und sich
+     dann selbst zerstört (queue_free).
+3. Implementiere einen Raycast-Schuss: Klick → Strahl von Spieler zu Mausposition.
+     Zeige einen Punkt (Sprite2D) an der Auftreffstelle.
+4. Richte Kollisions-Layer korrekt ein:
+     Spieler auf Layer 1, Feind auf Layer 2, Wand auf Layer 3.
+     Projektil trifft Feinde und Wände, NICHT den Spieler.
+5. Bonus: Interaktions-System — wenn Spieler nah an einem Objekt ist UND
+     "interact" drückt, wird ein Text angezeigt ("Truhe geöffnet!").
+     Nutze dafür eine Area2D + _unhandled_input.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Animationen — AnimationPlayer & AnimationTree
+================================================================================
+
+------------------------------------------------------------------------
+10.1  AnimationPlayer — der Kern
+------------------------------------------------------------------------
+
+AnimationPlayer ist ein Node der beliebige Eigenschaften über Zeit verändert.
+Er kann Position, Rotation, Farbe, Sichtbarkeit, Audio, Signale — alles
+keyframen. Kein Code nötig für einfache Animationen.
+
+Szenen-Aufbau:
+  CharacterBody2D
+  ├── Sprite2D
+  └── AnimationPlayer     ← Animationen werden hier erstellt
+
+Im Editor:
+  1. AnimationPlayer auswählen → unten öffnet sich das Animations-Panel
+  2. "Animation" → "Neu" → Name eingeben ("laufen", "springen", "idle")
+  3. Eigenschaft auswählen (z.B. Sprite2D → Texture) → Schloss-Symbol klicken
+     → Jetzt wird diese Eigenschaft getracked
+  4. Keyframes setzen: Position im Timeline, Wert ändern, "Keyframe hinzufügen"
+
+Per Code steuern:
+  @onready var anim: AnimationPlayer = $AnimationPlayer
+
+  anim.play("laufen")                # Animation abspielen
+  anim.play("idle")
+  anim.stop()                        # Anhalten
+  anim.pause()                       # Pausieren
+  anim.play_backwards("laufen")      # Rückwärts
+
+  # Überblendung (smooth transition):
+  anim.play("laufen", -1, 1.0, false)  # blend_time=-1 (auto), speed=1.0
+  anim.play("idle", 0.2)               # 0.2 Sek. Überblendung
+
+  # Aktuelle Animation:
+  anim.current_animation                # Name
+  anim.is_playing()                     # bool
+
+  # Events — diese Signale nutzen:
+  anim.animation_finished.connect(_on_animation_fertig)
+
+  func _on_animation_fertig(anim_name: StringName) -> void:
+      if anim_name == "sterben":
+          queue_free()
+
+Animationen mit Loop:
+  Im Editor: bei jeder Animation gibt es ein Loop-Symbol.
+  "idle" und "laufen" → Loop einschalten.
+  "springen", "sterben" → Loop aus.
+
+------------------------------------------------------------------------
+10.2  AnimationTree — State Machine für Animationen
+------------------------------------------------------------------------
+
+AnimationTree ist der professionelle Weg für Spiele mit vielen Animationen.
+Er verbindet AnimationPlayer-Animationen in einer State Machine — kein
+manuelles play() mehr nötig.
+
+Aufbau:
+  AnimationPlayer       ← definiert die Animations-Clips
+  AnimationTree         ← steuert welcher Clip läuft
+    → Tree Root: AnimationNodeStateMachine
+
+Im Editor:
+  1. AnimationTree Node hinzufügen
+  2. "anim_player" auf AnimationPlayer setzen
+  3. "Tree Root" → "AnimationNodeStateMachine"
+  4. Im StateMachine-Editor: States hinzufügen, Übergänge ziehen
+
+States und Übergänge:
+  Jeden State kannst du mit einer Animation verbinden.
+  Übergänge haben Bedingungen (Parameters im Inspector) und Überblendzeiten.
+
+Parameter aus GDScript steuern:
+  @onready var anim_tree: AnimationTree = $AnimationTree
+  @onready var anim_state: AnimationNodeStateMachinePlayback = \
+      anim_tree.get("parameters/playback")
+
+  func _physics_process(delta: float) -> void:
+      # Parameter setzen die die State Machine steuern:
+      anim_tree.set("parameters/conditions/am_boden", is_on_floor())
+      anim_tree.set("parameters/conditions/bewegt_sich", velocity.length() > 10)
+      anim_tree.set("parameters/conditions/springt", Input.is_action_just_pressed("jump"))
+
+      # Blend-Wert für 2D-Richtungs-Blending:
+      anim_tree.set("parameters/Blend2/blend_amount", velocity.x / speed)
+
+Für One-Shot-Animationen (Angriff, Treffer):
+  anim_state.travel("angriff")    # Wechselt zur State "angriff", kehrt dann zurück
+  # (wenn "angriff" keinen Ausgang hat, bleibt er hängen — also exit-Übergang nötig!)
+
+------------------------------------------------------------------------
+10.3  Tweens — schnelle Animations-Helfer
+------------------------------------------------------------------------
+
+Tween ist perfekt für UI-Animationen, einfache Übergänge,
+und alles was nicht den vollen AnimationPlayer braucht.
+
+  # Kamera-Zoom:
+  var tween := create_tween()
+  tween.tween_property(kamera, "zoom", Vector2(2, 2), 0.5)
+  tween.tween_property(kamera, "zoom", Vector2(1, 1), 0.3)
+  # Erst zu 2x zoom, dann zurück zu 1x — hintereinander!
+
+  # Parallele Animationen:
+  var tween := create_tween().set_parallel(true)
+  tween.tween_property(spieler, "position", ziel_pos, 1.0)
+  tween.tween_property(spieler, "modulate", Color.RED, 0.5)
+  # Beides gleichzeitig!
+
+  # Easing:
+  tween.tween_property(node, "position", ziel, 0.3).set_ease(Tween.EASE_OUT)
+  tween.tween_property(node, "position", ziel, 0.3).set_trans(Tween.TRANS_BOUNCE)
+
+  # Funktion aufrufen:
+  tween.tween_callback(func(): print("Tween fertig!"))
+
+  # Endlos-Loop (z.B. pulsierender Effekt):
+  var tween := create_tween().set_loops()
+  tween.tween_property(sprite, "modulate:a", 0.3, 0.5)
+  tween.tween_property(sprite, "modulate:a", 1.0, 0.5)
+
+Tween-Transitions (Easing-Kurven):
+  TRANS_LINEAR     → Gleichmäßig
+  TRANS_SINE       → Sanfter Start/Ende
+  TRANS_QUAD       → Schnellerer Start
+  TRANS_CUBIC      → Noch schneller
+  TRANS_QUART/QUINT → Sehr dramatisch
+  TRANS_BOUNCE     → Springt am Ende
+  TRANS_ELASTIC    → Federt am Ende
+  TRANS_BACK       → Überschießt kurz
+
+------------------------------------------------------------------------
+10.4  Sprite-Sheet-Animationen
+------------------------------------------------------------------------
+
+AnimatedSprite2D — einfachste Variante:
+  @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
+  anim_sprite.play("laufen")
+  anim_sprite.stop()
+  anim_sprite.frame = 0
+  anim_sprite.speed_scale = 1.5   # Schneller abspielen
+
+  # Signal:
+  anim_sprite.animation_finished.connect(func(): print("Fertig"))
+
+SpriteFrames-Resource:
+  Definiert die Frames für AnimatedSprite2D. Im Editor erstellbar:
+  AnimatedSprite2D auswählen → "Frames" → "Neu SpriteFrames"
+  → Animationen hinzufügen, Textur als Sprite-Sheet importieren.
+
+Per Code aus Sprite-Sheet laden:
+  var frames := SpriteFrames.new()
+  var sheet: Texture2D = load("res://sprites/held_spritesheet.png")
+
+  frames.add_animation("laufen")
+  frames.set_animation_speed("laufen", 8)   # 8 FPS
+  frames.set_animation_loop("laufen", true)
+
+  # Jedes Frame aus dem Sheet ausschneiden (64x64 pro Frame):
+  for i in range(8):   # 8 Frames
+      var atlas := AtlasTexture.new()
+      atlas.atlas = sheet
+      atlas.region = Rect2(i * 64, 0, 64, 64)   # Zeile 0, Spalten 0-7
+      frames.add_frame("laufen", atlas)
+
+  anim_sprite.sprite_frames = frames
+
+------------------------------------------------------------------------
+10.5  Skeletal Animation — 2D-Bones
+------------------------------------------------------------------------
+
+Für flüssigere 2D-Charaktere ohne Frame-by-Frame-Animation:
+  Skeleton2D → Bone2D (mehrere) + Polygon2D mit Weights
+  → AnimationPlayer steuert Bone-Rotationen
+
+Das ist eher Editor-Arbeit (Bones positionieren, Skin/Weights malen).
+GDScript-seitig ist es dann genauso wie AnimationPlayer/AnimationTree.
+
+Für 3D-Charaktere:
+  ImportiertesMesh + Skelett → Skin → AnimationPlayer
+  (Aus Blender/Maya exportiert, als .glb/.gltf importiert)
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+1. Erstelle einen AnimationPlayer mit 3 Animationen für einen Node2D:
+     "idle"     → Sprite skaliert sanft auf 1.05 und zurück (Atemeffekt, Loop)
+     "treffer"  → Sprite wird kurz rot (modulate), dann wieder normal
+     "sterben"  → Node fällt nach unten (position.y += 200), wird transparent
+2. Baue eine State Machine mit AnimationTree:
+     States: idle, laufen, springen, fallen
+     Übergänge: Parameter "am_boden", "speed", "velocity_y"
+3. Erstelle eine Tween-Animation: Wenn ein Item gespawnt wird,
+     soll es von oben rein-tweenen (TRANS_BOUNCE) und dann sanft pulsieren.
+4. Bonus: Binde animation_finished so, dass nach "sterben" queue_free() aufgerufen wird.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 2
+################################################################################
+
+INPUT:
+  Input.is_action_pressed("name")       → gedrückt gehalten
+  Input.is_action_just_pressed("name")  → gerade gedrückt
+  Input.is_action_just_released("name") → gerade losgelassen
+  Input.get_axis("links", "rechts")     → -1.0 bis 1.0
+  Input.get_vector("l","r","o","u")     → normalisierter Vector2
+  get_global_mouse_position()           → Maus in Welt-Koordinaten
+
+CHARACTERBODY2D:
+  velocity.x / velocity.y              → Geschwindigkeit setzen
+  is_on_floor() / is_on_wall()         → Kollisions-Check
+  move_and_slide()                     → Bewegung ausführen
+  IMMER in _physics_process(delta)!
+
+RIGIDBODY:
+  apply_impulse(vector)               → Sofort-Impuls
+  apply_force(vector)                 → Kontinuierliche Kraft
+  apply_torque_impulse(float)         → Rotation-Impuls
+  freeze = true/false                 → Physik ein/ausschalten
+
+AREA:
+  body_entered / body_exited          → Signale (connect in _ready)
+  get_overlapping_bodies()            → Alle Bodies in der Area
+  get_overlapping_areas()             → Alle Areas in der Area
+
+RAYCAST:
+  is_colliding()                      → bool
+  get_collider()                      → getroffener Node
+  get_collision_point()               → Auftreffpunkt (Vector2/3)
+  get_collision_normal()              → Normale (Vector2/3)
+
+ANIMATIONPLAYER:
+  anim.play("name")                   → Abspielen
+  anim.play("name", 0.2)              → Mit Überblendung
+  anim.stop() / anim.pause()
+  anim.animation_finished.connect(...)
+
+TWEEN:
+  var t := create_tween()
+  t.tween_property(node, "prop", wert, dauer)
+  t.tween_callback(func(): ...)
+  .set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+================================================================================
+ENDE TEIL 2 — Weiter mit Teil 3: Spielsysteme und Daten
+================================================================================

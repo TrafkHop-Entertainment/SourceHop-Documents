@@ -1,0 +1,1573 @@
+================================================================================
+ASSEMBLY KOMPLETTKURS — TEIL 4 von 4
+Optimierung · Bootloader · Grafik · RCT-Architektur · Komplettes Spiel
+================================================================================
+
+Das ist der Abschlussteil. Hier fließt alles zusammen.
+Nach diesem Teil kannst du — wie Chris Sawyer — ein komplettes Spiel
+in Assembly schreiben. Wir bauen explizit die Kernkonzepte auf,
+die RollerCoaster Tycoon (1999) verwendete.
+
+================================================================================
+MODUL 24: Micro-Optimierung — Code wie ein Compiler schreiben
+================================================================================
+
+------------------------------------------------------------------------
+24.1  Wie moderne CPUs Instruktionen ausführen
+------------------------------------------------------------------------
+
+Moderne CPUs sind SUPERSCALAR und OUT-OF-ORDER:
+
+  Superscalar: Die CPU kann mehrere Instruktionen PRO TAKT starten.
+    Ryzen 9000: bis zu 6 Instruktionen pro Takt!
+
+  Out-of-Order: Die CPU führt Instruktionen in einer anderen Reihenfolge
+    aus als im Code, solange das Ergebnis dasselbe ist.
+
+  Der Ablauf (vereinfacht):
+
+    1. Fetch:    Instruktionen aus dem Cache holen
+    2. Decode:   CISC-Instruktionen zu Micro-Ops übersetzen
+    3. Rename:   Register-Umbenennung (eliminiert falsche Abhängigkeiten)
+    4. Dispatch: Micro-Ops in Ausführungseinheiten schicken (Out-of-Order!)
+    5. Execute:  Rechnen in parallelen Execution Ports
+    6. Retire:   Ergebnisse in Reihenfolge committen
+
+  Ausführungseinheiten (AMD Zen 4 Beispiel):
+    4 × Integer ALU (add, sub, xor, etc.)
+    2 × Integer Multiply
+    2 × Load (RAM lesen)
+    2 × Store (RAM schreiben)
+    2 × FP/SIMD ALU
+    2 × FP/SIMD Multiply
+    1 × Branch
+
+  Das bedeutet: wenn du pro Takt mehr als 1 unabhängige Operation hast,
+  führt die CPU mehrere GLEICHZEITIG aus!
+
+------------------------------------------------------------------------
+24.2  Abhängigkeiten und Latenz
+------------------------------------------------------------------------
+
+  Latenz (Takte bis das Ergebnis bereit ist):
+    mov    1 Takt
+    add    1 Takt
+    imul   3 Takte  (dann 1 pro Takt = Throughput)
+    div    ~20-80 Takte! (Deshalb: Division durch Multiplikation ersetzen!)
+    load   4-5 Takte (L1-Cache) bis 200+ Takte (RAM)
+
+  Daten-Abhängigkeit (RAW = Read After Write):
+    add  rax, rbx    ; rax verändert
+    add  rax, rcx    ; muss warten bis erste add fertig ist → SEQUENZIELL!
+
+  Keine Abhängigkeit → parallel ausführbar:
+    add  rax, rbx    ; unabhängig
+    add  rcx, rdx    ; unabhängig → beide starten gleichzeitig!
+    add  r8,  r9     ; noch eine → alle drei gleichzeitig!
+
+  Tipp: Wenn du eine lange Kette von Abhängigkeiten hast, versuche
+  mehrere Akkumulatoren zu benutzen:
+
+    ; Langsam (Kette):
+    xor  rax, rax
+    add  rax, [arr + 0]
+    add  rax, [arr + 8]
+    add  rax, [arr + 16]
+    add  rax, [arr + 24]
+
+    ; Schneller (zwei unabhängige Ketten):
+    xor  rax, rax
+    xor  rbx, rbx
+    add  rax, [arr + 0]
+    add  rbx, [arr + 8]
+    add  rax, [arr + 16]
+    add  rbx, [arr + 24]
+    add  rax, rbx        ; am Ende zusammenführen
+
+    ; Der CPU kann beide chains parallel ausführen → ~2× schneller!
+
+------------------------------------------------------------------------
+24.3  Branch Prediction und Branches vermeiden
+------------------------------------------------------------------------
+
+  Moderne CPUs SCHÄTZEN ob eine Verzweigung genommen wird (Branch Prediction).
+  Wenn die Vorhersage falsch ist: 15-20 Takte Strafe (Branch Misprediction).
+
+  Schlechtes Muster (unvorhersehbar):
+    cmp  rax, [zufallsdaten + rcx*8]
+    je   .irgendwo
+    ; Die CPU kann nicht vorhersagen ob der Sprung genommen wird.
+
+  Gute Muster (vorhersehbar):
+    ; Schleife: wird oft genommen (wenn n > 0), dann am Ende nicht.
+    ; CPUs lernen dieses Muster schnell.
+    dec  rcx
+    jnz  .schleife
+
+  CMOV statt Sprung:
+    ; Statt:
+    cmp  rax, rbx
+    jl   .kleiner
+    mov  rax, rbx    ; rax = rbx wenn rax < rbx (min-Funktion)
+    jmp  .fertig
+    .kleiner:
+    .fertig:
+
+    ; Besser:
+    cmp  rax, rbx
+    cmovl rax, rbx   ; KEINE Verzweigung → KEINE Branch-Penalty!
+
+  SET-Instruktionen (Bedingung in 0/1 umwandeln):
+    setl  al       ; al = 1 wenn Carry < 0, sonst 0 (nach cmp)
+    sete  al       ; al = 1 wenn ZF = 1 (gleich)
+    setg  al       ; al = 1 wenn signed greater
+    movzx rax, al  ; zu 64-Bit erweitern
+
+    ; Nützlich für: if (a == b) counter++
+    cmp  rax, rbx
+    sete al
+    movzx rcx, al
+    add  [counter], rcx    ; kein Sprung!
+
+------------------------------------------------------------------------
+24.4  Cache-bewusste Programmierung
+------------------------------------------------------------------------
+
+  Cache-Hierarchie (typisch, AMD Zen 4):
+    L1-Datencache:  32 KB pro Core, 4-5 Takte Latenz
+    L2-Cache:       1 MB pro Core, ~12 Takte
+    L3-Cache:       32-96 MB geteilt, ~30-50 Takte
+    RAM:            unbegrenzt, ~200-400 Takte
+
+  Cache-Line: 64 Bytes. Das ist die kleinste Einheit die geladen wird.
+  Wenn du ein Byte liest, werden die umliegenden 63 Bytes AUCH geladen.
+
+  Spatial Locality (räumliche Lokalität) — nutze Nachbardaten:
+    ; GUT: Array sequenziell durchlaufen (jeder Zugriff ist im Cache)
+    for i = 0 to n:
+        sum += arr[i]   ; sequenziell → alle Daten im Cache nach erstem Zugriff
+
+    ; SCHLECHT: Spaltenweise Matrix-Zugriff (für row-major Matrizen)
+    for i = 0 to n:
+        sum += matrix[i][j]   ; Spalte: Sprünge von N*sizeof Element
+
+  Temporal Locality — benutze Daten mehrmals bevor sie aus dem Cache fallen:
+    ; GUT: alle Operationen auf einem Element, dann nächstes
+    for i:
+        ergebnis[i] = a[i] * b[i] + c[i]   ; 3 Reads, 1 Write, dann nächstes i
+
+    ; SCHLECHT: mehrere Passes über dasselbe Array
+    for i: partial[i] = a[i] * b[i]    ; Pass 1
+    for i: ergebnis[i] = partial[i] + c[i]  ; Pass 2 (partial muss neu geladen werden)
+
+  Prefetching:
+    prefetcht0  [rsi + 256]   ; Daten in 256 Bytes vorladen (in L1)
+    prefetcht1  [rsi + 512]   ; in L2
+    prefetcht2  [rsi + 1024]  ; in L3
+
+    ; Prefetch ~100-200 Takte VOR dem Zugriff starten (da RAM-Latenz so lang ist)
+    ; Zu früh: Daten fallen aus Cache bevor wir sie brauchen
+    ; Zu spät: Daten noch nicht geladen wenn wir sie brauchen
+
+  False Sharing (vermeiden in Multithreading!):
+    ; Wenn zwei Threads dieselbe Cache-Line beschreiben → gegenseitige Invalidierung
+    ; Obwohl sie auf VERSCHIEDENE Variablen zugreifen!
+    ; Lösung: Threads-spezifische Daten mit Padding auf Cache-Line-Größe trennen:
+
+    section .bss
+        align 64                        ; Cache-Line-Alignment!
+        thread0_counter  resq 1
+        resb 56                         ; 64 - 8 = 56 Bytes Padding
+        thread1_counter  resq 1
+        resb 56
+
+------------------------------------------------------------------------
+24.5  Division durch Konstanten — der Compiler-Trick
+------------------------------------------------------------------------
+
+  Division ist langsam (20-80 Takte). Division durch KONSTANTEN kann
+  durch Multiplikation mit dem Kehrwert ersetzt werden:
+
+  n / 7  →  n * (2^32 / 7 + 1) >> 32  (ungefähr)
+
+  Genauer: Der "Magic Number" Trick:
+    ; n / 7 (unsigned, 32-Bit) mit Multiplikation:
+    ; Schritt 1: Magic Number = ⌈2^32 / 7⌉ + 1 = 613566757 (0x24924925)
+    ; Schritt 2: (n * magic) >> 32 = Quotient
+
+    ; Was gcc -O2 aus n/7 macht:
+    ;   mov  eax, edi        ; eax = n
+    ;   mov  ecx, 0x24924925 ; Magic Number für /7
+    ;   imul rcx, rax        ; 64-Bit Multiplikation
+    ;   shr  rcx, 32         ; obere 32 Bit = Quotient
+    ;   mov  eax, ecx
+
+  Für Potenzen von 2 ist es noch einfacher:
+    n / 4   → shr rax, 2    (viel schneller als div!)
+    n / 8   → shr rax, 3
+    n / 16  → shr rax, 4
+    n % 8   → and rax, 7    (Modulo mit Potenz von 2 = AND mit Maske!)
+
+  Allgemein: Wenn du durch eine Potenz von 2 teilst, benutze IMMER SHR/AND.
+
+------------------------------------------------------------------------
+24.6  Loop Unrolling
+------------------------------------------------------------------------
+
+  ; Statt:
+  mov  rcx, 1000
+  .loop:
+      add  rax, [rbx + rcx*8 - 8]
+      dec  rcx
+      jnz  .loop
+
+  ; Entrollte Version (4× unrolled — 4 Iterationen pro Schleifendurchlauf):
+  mov  rcx, 250          ; 1000 / 4 = 250 Durchläufe
+  .loop:
+      add  rax, [rbx]
+      add  rax, [rbx + 8]
+      add  rax, [rbx + 16]
+      add  rax, [rbx + 24]
+      add  rbx, 32       ; Zeiger um 4 Elemente vorrücken
+      dec  rcx
+      jnz  .loop
+
+  ; Vorteile:
+  ;   - Weniger Schleifenoverhead (dec + jnz weniger oft)
+  ;   - CPU kann mehr Parallelismus sehen
+  ; Nachteile:
+  ;   - Mehr Code → mehr Platz im Instruction Cache
+  ;   - Nicht jede Arraygröße ist durch 4 teilbar → Rest-Handling nötig
+
+  ; Automatisches Unrolling — Rest behandeln:
+  mov  rcx, n
+  mov  rbx, arr
+  xor  rax, rax
+
+  ; Rest (n % 4 Elemente):
+  mov  rdx, rcx
+  and  rdx, 3            ; rdx = n % 4
+  jz   .main_loop        ; kein Rest
+  .rest_loop:
+      add  rax, [rbx]
+      add  rbx, 8
+      dec  rdx
+      jnz  .rest_loop
+
+  .main_loop:
+      shr  rcx, 2        ; rcx = n / 4 Iterationen
+      jz   .fertig
+  .loop4:
+      add  rax, [rbx]
+      add  rax, [rbx+8]
+      add  rax, [rbx+16]
+      add  rax, [rbx+24]
+      add  rbx, 32
+      dec  rcx
+      jnz  .loop4
+  .fertig:
+
+------------------------------------------------------------------------
+24.7  SIMD-optimiertes memset und memcpy
+------------------------------------------------------------------------
+
+  ; memset(dest, val, n) — extrem schnelle Version mit AVX:
+  fast_memset:
+      ; rdi = Ziel, esi = Byte-Wert, rdx = Länge
+      ; Wert auf 256-Bit verteilen:
+      movzx  eax, sil              ; Wert (sil = untere 8 Bits von rsi)
+      imul   eax, 0x01010101       ; alle 4 Bytes = Wert
+      vmovd  xmm0, eax
+      vpbroadcastd ymm0, xmm0      ; alle 8 Dwords = Wert (32 Bytes)
+
+      ; Aligned-Hauptschleife (32 Bytes pro Iteration):
+      mov    rcx, rdx
+      shr    rcx, 5                ; rcx = n / 32
+  .loop:
+      vmovups [rdi], ymm0
+      add     rdi, 32
+      dec     rcx
+      jnz     .loop
+
+      ; Rest:
+      and     rdx, 31
+      ; ... (kleine Bytes mit stosb abhandeln)
+      vzeroupper
+      ret
+
+  ; memcpy mit AVX (nicht-temporales Speichern für große Kopien):
+  fast_memcpy_nt:
+      ; rdi = Ziel, rsi = Quelle, rdx = Länge
+      ; Für große Kopien (> L3-Cache): "non-temporal stores" (kein Cache-Pollution!)
+      mov    rcx, rdx
+      shr    rcx, 5                ; rcx = n / 32
+  .loop:
+      vmovups ymm0, [rsi]
+      vmovntps [rdi], ymm0         ; NT = Non-Temporal (schreibt direkt in RAM, Cache bypass)
+      add     rsi, 32
+      add     rdi, 32
+      dec     rcx
+      jnz     .loop
+      sfence                       ; NT-Stores brauchen sfence danach!
+      vzeroupper
+      ret
+
+  ; NT-Stores: bis zu 2× schneller als normale Stores bei großen Kopien,
+  ; weil kein Cache-Fill-Overhead entsteht.
+
+--------------------------------------------------------------------------------
+ÜBUNG 24:
+Optimiere die Matrix-Multiplikation aus Übung 19:
+  1. Benutze mehrere Akkumulatoren um Daten-Abhängigkeiten zu brechen
+  2. Nutze Prefetch um RAM-Zugriffe zu verstecken
+  3. Entrolle die innere Schleife 4×
+  4. Miss die Takte mit rdtsc vorher und nachher
+  5. Vergleiche die Ergebnisse für verschiedene Matrizengrößen
+
+Ziel: Komme so nah wie möglich an die theoretische FLOPS-Kapazität der CPU.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 25: Bare Metal — Bootloader in Assembly
+================================================================================
+
+------------------------------------------------------------------------
+25.1  Was passiert wenn der Computer startet
+------------------------------------------------------------------------
+
+  1. Power On → CPU springt zu physikalischer Adresse 0xFFFFFFF0 (Reset Vector)
+  2. Dort liegt das BIOS/UEFI (in ROM)
+  3. BIOS macht POST (Power-On Self Test), initialisiert Hardware
+  4. BIOS sucht nach bootbarem Medium (erstes Sektor = 512 Bytes)
+  5. Erster Sektor (MBR) wird nach Adresse 0x7C00 geladen
+  6. CPU springt zu 0x7C00 — DAS ist der Bootloader!
+
+  Im Bootloader läuft die CPU im "Real Mode":
+    - 16-Bit-Modus (x86 verhält sich wie ein 8086!)
+    - Nur 1 MB Speicher adressierbar (20-Bit Segmentadressen)
+    - KEINE virtuellen Adressen
+    - Kein Schutz, kein Ring-System
+
+  Übergang zu Protected Mode → Long Mode (64-Bit):
+    Bootloader muss das manuell einrichten.
+
+------------------------------------------------------------------------
+25.2  Ein minimaler Bootsektor
+------------------------------------------------------------------------
+
+  ; bootloader.asm — 512 Bytes, läuft direkt vom BIOS
+  ; NASM-Syntax: [bits 16] für Real-Mode-Code
+
+  [bits 16]
+  [org 0x7C00]          ; Der Code ist bei 0x7C00 im Speicher
+
+  start:
+      ; Segmentregister initialisieren:
+      xor  ax, ax
+      mov  ds, ax       ; Data Segment = 0
+      mov  es, ax       ; Extra Segment = 0
+      mov  ss, ax       ; Stack Segment = 0
+      mov  sp, 0x7C00   ; Stack wächst von 0x7C00 nach unten
+
+      ; Bildschirm löschen (BIOS-Interrupt 10h):
+      mov  ax, 0x0003   ; AH=0 (Set Video Mode), AL=3 (80x25 Textmodus)
+      int  0x10
+
+      ; "Hallo Welt!" ausgeben:
+      mov  si, msg       ; SI = Pointer auf String
+  .print_loop:
+      lodsb              ; AL = [SI], SI++
+      test al, al
+      jz   .done
+      mov  ah, 0x0E      ; BIOS Teletype-Ausgabe (INT 10h, AH=0Eh)
+      mov  bh, 0         ; Seite 0
+      int  0x10
+      jmp  .print_loop
+  .done:
+
+      ; Endlos-Schleife (Bootloader darf nicht "zurückkehren"):
+      cli                ; Interrupts deaktivieren
+      hlt                ; CPU anhalten
+      jmp  $             ; Sicherheit: falls CPU aufwacht, hält sie wieder an
+
+  msg  db  "Hallo aus dem Bootloader!", 13, 10, 0
+       ; 13 = Carriage Return, 10 = Line Feed, 0 = Ende
+
+  ; Bootsignatur: letzten 2 Bytes des 512-Byte-Sektors MÜSSEN 0xAA55 sein!
+  times 510 - ($ - $$) db 0    ; Rest des Sektors mit Nullen auffüllen
+  dw 0xAA55                    ; Magic Bytes: Boot-Signatur
+
+  ; Build und Test:
+  ;   nasm -f bin bootloader.asm -o bootloader.bin
+  ;   qemu-system-x86_64 -drive format=raw,file=bootloader.bin
+
+------------------------------------------------------------------------
+25.3  In den Protected Mode wechseln
+------------------------------------------------------------------------
+
+  ; Um 32-Bit (Protected Mode) oder 64-Bit (Long Mode) zu benutzen,
+  ; muss der Bootloader mehrere Schritte durchführen:
+
+  ; Schritt 1: A20-Line aktivieren (ermöglicht Zugriff auf > 1 MB)
+  aktiviere_a20:
+      in   al, 0x92    ; Port 0x92 = Fast A20 Gate
+      or   al, 2       ; Bit 1 setzen
+      out  0x92, al
+      ret
+
+  ; Schritt 2: GDT (Global Descriptor Table) aufsetzen
+  ; GDT definiert Speichersegmente für Protected Mode
+  gdt_start:
+      ; Null-Deskriptor (immer erster Eintrag, muss leer sein):
+      dq 0
+
+      ; Code-Segment (Ring 0, 32-Bit):
+      dw 0xFFFF    ; Limit 0-15
+      dw 0x0000    ; Base 0-15
+      db 0x00      ; Base 16-23
+      db 10011010b ; Access: Present, Ring0, Code, Executable, Readable
+      db 11001111b ; Flags: 4KB Granularity, 32-Bit, Limit 16-19 = 0xF
+      db 0x00      ; Base 24-31
+
+      ; Data-Segment (Ring 0, 32-Bit):
+      dw 0xFFFF
+      dw 0x0000
+      db 0x00
+      db 10010010b ; Access: Present, Ring0, Data, Writable
+      db 11001111b
+      db 0x00
+  gdt_end:
+
+  gdt_pointer:
+      dw gdt_end - gdt_start - 1   ; GDT-Größe - 1
+      dd gdt_start                 ; GDT-Adresse (32-Bit im Protected Mode)
+
+  CODE_SEG equ 0x08   ; Offset des Code-Deskriptors in GDT
+  DATA_SEG equ 0x10   ; Offset des Data-Deskriptors in GDT
+
+  wechsel_zu_protected_mode:
+      ; Interrupts deaktivieren:
+      cli
+
+      ; GDT laden:
+      lgdt [gdt_pointer]
+
+      ; CR0 Bit 0 setzen = Protected Mode aktivieren:
+      mov  eax, cr0
+      or   eax, 1
+      mov  cr0, eax
+
+      ; Far Jump zum 32-Bit Code (flush instruction pipeline):
+      jmp  CODE_SEG:pm32_start
+
+  [bits 32]
+  pm32_start:
+      ; Jetzt im 32-Bit Protected Mode!
+      mov  ax, DATA_SEG
+      mov  ds, ax
+      mov  es, ax
+      mov  fs, ax
+      mov  gs, ax
+      mov  ss, ax
+      ; ...
+
+------------------------------------------------------------------------
+25.4  Der Weg zu 64-Bit (Long Mode) — Übersicht
+------------------------------------------------------------------------
+
+  Real Mode (16-Bit)
+    → A20 aktivieren
+    → GDT für 32-Bit laden
+    → CR0.PE setzen
+  Protected Mode (32-Bit)
+    → PAE (Physical Address Extension) aktivieren: CR4.PAE = 1
+    → Page Tables aufsetzen (4-Level für Long Mode)
+    → IA32_EFER.LME setzen (Long Mode Enable im MSR)
+    → CR0.PG setzen (Paging aktivieren) → jetzt im Compatibility Mode
+    → Far Jump mit 64-Bit Code-Segment → Long Mode!
+  Long Mode (64-Bit)
+    → Jetzt läuft normaler 64-Bit Code wie in Teil 1-3
+
+  Das ist viel Arbeit — echte Bootloader (GRUB, systemd-boot) erledigen
+  das für dich. Aber zu wissen WIE es funktioniert ist essentiell.
+
+--------------------------------------------------------------------------------
+ÜBUNG 25:
+Schreibe einen Bootloader der:
+1. Den Bildschirm in eine beliebige Farbe füllt (VGA Grafikmodus)
+2. Ein 20×20 Pixel großes weißes Rechteck in der Mitte zeichnet
+3. In einer Endlos-Schleife auf eine Taste wartet (BIOS INT 16h, AH=0)
+4. Bei Tastendruck die Farbe des Rechtecks ändert (z.B. zyklisch)
+
+VGA Grafikmodus: INT 10h, AH=0, AL=0x13 → 320×200, 256 Farben
+Framebuffer:     0xA0000 (Byte pro Pixel, Index in 256-Farb-Palette)
+Pixel zeichnen:  mov [0xA0000 + y*320 + x], al
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 26: Grafik in Assembly — Framebuffer und Pixel-Rendering
+================================================================================
+
+------------------------------------------------------------------------
+26.1  Direkt in den Framebuffer schreiben (Linux)
+------------------------------------------------------------------------
+
+  Unter Linux gibt es /dev/fb0 — den Framebuffer-Device.
+  Datei öffnen, an bestimmten Offset schreiben = Pixel setzen.
+
+  ; Auflösung und Format aus /sys/class/graphics/fb0/... lesen oder
+  ; hartcodiert für typisches System (1920×1080, 32 Bit/Pixel):
+
+  FB_BREITE    equ 1920
+  FB_HOEHE     equ 1080
+  FB_TIEFE     equ 4           ; Bytes pro Pixel (32-Bit: B G R X)
+  FB_GROESSE   equ FB_BREITE * FB_HOEHE * FB_TIEFE
+
+  ; Framebuffer öffnen und in Speicher mappen:
+  fb_init:
+      ; open("/dev/fb0", O_RDWR)
+      mov  rax, 2
+      lea  rdi, [rel fb_pfad]
+      mov  rsi, 2              ; O_RDWR
+      xor  rdx, rdx
+      syscall
+      mov  [fb_fd], rax        ; fd sichern
+
+      ; mmap(NULL, FB_GROESSE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)
+      mov  rax, 9
+      xor  rdi, rdi            ; addr = NULL
+      mov  rsi, FB_GROESSE
+      mov  rdx, 3              ; PROT_READ | PROT_WRITE
+      mov  r10, 1              ; MAP_SHARED (damit Änderungen sichtbar werden!)
+      mov  r8,  [fb_fd]
+      xor  r9,  r9
+      syscall
+      mov  [fb_ptr], rax       ; Framebuffer-Pointer sichern
+      ret
+
+  section .data
+      fb_pfad  db  "/dev/fb0", 0
+  section .bss
+      fb_fd    resq 1
+      fb_ptr   resq 1
+
+------------------------------------------------------------------------
+26.2  Pixel und Linien zeichnen
+------------------------------------------------------------------------
+
+  ; Pixel setzen (x, y, farbe):
+  ; rdi=x, rsi=y, edx=farbe (0x00RRGGBB)
+  set_pixel:
+      ; Offset = (y * Breite + x) * 4
+      imul rsi, FB_BREITE      ; y * Breite
+      add  rsi, rdi            ; + x
+      shl  rsi, 2              ; * 4 (Bytes pro Pixel)
+      mov  rax, [fb_ptr]
+      mov  [rax + rsi], edx   ; 32-Bit Farbe schreiben
+      ret
+
+  ; Linie zeichnen (Bresenham-Algorithmus):
+  ; rdi=x0, rsi=y0, rdx=x1, rcx=y1, r8=farbe
+  draw_line:
+      push r12
+      push r13
+      push r14
+      push r15
+      push rbp
+
+      mov  r12, rdi    ; x0
+      mov  r13, rsi    ; y0
+      mov  r14, rdx    ; x1
+      mov  r15, rcx    ; y1
+      mov  rbp, r8     ; farbe
+
+      ; dx = |x1 - x0|
+      mov  rax, r14
+      sub  rax, r12
+      mov  r8, rax
+      neg  rax
+      cmovl r8, rax    ; r8 = |dx| (abs)
+
+      ; dy = -|y1 - y0|
+      mov  rax, r15
+      sub  rax, r13
+      neg  rax
+      mov  r9, rax
+      neg  r9
+      cmovg r9, rax    ; r9 = -|dy|
+
+      ; sx = sign(x1-x0), sy = sign(y1-y0)
+      xor  r10, r10    ; sx = 0
+      cmp  r12, r14
+      jge  .sx_check
+      mov  r10, 1
+      jmp  .sy
+  .sx_check:
+      mov  r10, -1
+  .sy:
+      xor  r11, r11
+      cmp  r13, r15
+      jge  .sy_check
+      mov  r11, 1
+      jmp  .bresenham
+  .sy_check:
+      mov  r11, -1
+
+  .bresenham:
+      ; err = dx + dy
+      mov  rax, r8
+      add  rax, r9
+      ; ... (vollständige Bresenham-Implementierung mit error-Tracking)
+      ; Pixel setzen, Fehler akkumulieren, x/y anpassen
+      ; Überlassen als Übung — Algorithmus in Lehrbüchern gut dokumentiert
+
+      pop  rbp
+      pop  r15
+      pop  r14
+      pop  r13
+      pop  r12
+      ret
+
+------------------------------------------------------------------------
+26.3  Rechteck und Kreis
+------------------------------------------------------------------------
+
+  ; Gefülltes Rechteck:
+  ; rdi=x, rsi=y, rdx=breite, rcx=hoehe, r8=farbe
+  fill_rect:
+      push r12
+      push r13
+      push r14
+      push r15
+      push rbp
+
+      mov  r12, rdi    ; x
+      mov  r13, rsi    ; y_start
+      mov  r14, rdx    ; breite
+      mov  r15, rcx    ; hoehe
+      mov  rbp, r8     ; farbe
+
+      ; Für jede Zeile: memset mit SIMD
+      mov  rax, [fb_ptr]
+      ; Zeilenweise füllen mit SSE (4 Pixel = 16 Bytes auf einmal):
+      ; Farbe in xmm0 broadcasten:
+      movd xmm1, ebp
+      pshufd xmm0, xmm1, 0    ; alle 4 Dwords = Farbe
+
+  .zeilen_loop:
+      test r15, r15
+      jz   .fertig
+      ; Zieladresse berechnen:
+      mov  rcx, r13
+      imul rcx, FB_BREITE
+      add  rcx, r12
+      shl  rcx, 2
+      lea  rdi, [rax + rcx]    ; Start dieser Zeile
+
+      ; Breite Pixel setzen (mit rep stosd für 32-Bit):
+      mov  ecx, r14d
+      mov  eax, ebp
+      rep  stosd               ; Zeile füllen
+
+      inc  r13                 ; y++
+      dec  r15
+      jmp  .zeilen_loop
+  .fertig:
+      pop  rbp
+      pop  r15
+      pop  r14
+      pop  r13
+      pop  r12
+      ret
+
+  ; Kreis (Midpoint Circle Algorithm):
+  ; rdi=cx, rsi=cy, rdx=r, rcx=farbe
+  draw_circle:
+      ; ... (Midpoint/Bresenham-Kreis-Algorithmus)
+      ; Symmetrie benutzen: für jeden Oktanten nur 1/8 berechnen
+      ; Dann 8 Pixel symmetrisch setzen
+      ret
+
+------------------------------------------------------------------------
+26.4  Double Buffering — flackerfreie Animation
+------------------------------------------------------------------------
+
+  ; Problem: Direkt in FB0 schreiben → Bildschirm-Tearing sichtbar.
+  ; Lösung: Erst in "Back Buffer" (Speicher) schreiben, dann in einem
+  ; Schritt in den echten Framebuffer kopieren.
+
+  section .bss
+      align 32
+      back_buffer  resb  FB_GROESSE    ; Kopie des Framebuffers im RAM
+
+  ; Alles auf Back Buffer zeichnen:
+  clear_back_buffer:
+      mov  rdi, back_buffer
+      xor  eax, eax            ; Schwarz (0x00000000)
+      mov  rcx, FB_GROESSE / 4
+      rep  stosd
+      ret
+
+  ; Back Buffer in echten FB kopieren (mit AVX):
+  present_frame:
+      mov  rsi, back_buffer    ; Quelle
+      mov  rdi, [fb_ptr]       ; Ziel (echter Framebuffer)
+      mov  rcx, FB_GROESSE / 32  ; Anzahl 32-Byte-Blöcke
+
+  .copy_loop:
+      vmovups ymm0, [rsi]
+      vmovntps [rdi], ymm0     ; Non-Temporal Store (direkt in RAM, kein Cache)
+      add  rsi, 32
+      add  rdi, 32
+      dec  rcx
+      jnz  .copy_loop
+      sfence
+      vzeroupper
+      ret
+
+------------------------------------------------------------------------
+26.5  Sprites und Tiles
+------------------------------------------------------------------------
+
+  ; Sprite blitten (kopieren, transparent wenn Alpha = 0):
+  ; rdi=ziel_x, rsi=ziel_y, rdx=sprite_ptr, rcx=breite, r8=hoehe
+
+  blit_sprite:
+      ; Für jeden Pixel im Sprite:
+      ; wenn Farbe != transparenz_farbe: in Back Buffer schreiben
+
+      ; Mit SSE4.1 pcmpeqd kann man 4 Pixel gleichzeitig prüfen:
+      movd  xmm7, [transparenz_farbe]
+      pshufd xmm7, xmm7, 0    ; xmm7 = [transp, transp, transp, transp]
+
+      ; ... Zeile für Zeile, 4 Pixel auf einmal:
+      ; movdqu xmm0, [sprite_ptr + offset]
+      ; pcmpeqd xmm1, xmm0, xmm7    ; Maske: 0xFFFFFFFF wo transparent
+      ; pandn xmm1, xmm0             ; Null wo transparent, Pixel sonst
+      ; ... zurückschreiben (mit pblendvb für sauberes Blending)
+      ret
+
+  ; Tile-Map rendern (isometrisch wie RollerCoaster Tycoon!):
+  ; Eine Tile-Map ist ein 2D-Array von Tile-IDs.
+  ; Jede Tile-ID zeigt auf ein Sprite im Tile-Sheet.
+
+  section .data
+      karte   db  0, 1, 0, 2, 1   ; Tile-IDs für eine 5-Breite Zeile
+              db  1, 0, 2, 0, 1
+              ; ...
+      KARTE_BREITE  equ 5
+      TILE_GROESSE  equ 32        ; 32×32 Pixel pro Tile
+
+  render_tilemap:
+      ; Für jede Zeile y, für jede Spalte x:
+      ; tile_id = karte[y * KARTE_BREITE + x]
+      ; Sprite-Adresse = tile_sheet + tile_id * TILE_GROESSE * TILE_GROESSE * 4
+      ; blit_sprite(x * TILE_GROESSE, y * TILE_GROESSE, sprite_adresse, ...)
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 26:
+Schreibe ein vollständiges Grafikprogramm das:
+1. /dev/fb0 als Framebuffer öffnet und mappt
+2. Den Bildschirm in einem Farbverlauf füllt (Farbe abhängig von x/y)
+3. Eine weiße Linie von oben-links nach unten-rechts zeichnet
+4. Einen roten Kreis in der Mitte zeichnet
+5. "Press any key" als Text schreibt (mit eigener Bitmap-Schriftart!)
+6. Tastatureingabe liest (stdin) und dann sauber beendet
+
+Für die Schrift: Definiere Zeichen als 8×8-Bit-Bitmaps in .data,
+dann zeichne jeden gesetzten Bit als weißen Pixel.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 27: Die RollerCoaster Tycoon Architektur
+================================================================================
+
+------------------------------------------------------------------------
+27.1  Was Chris Sawyer gemacht hat
+------------------------------------------------------------------------
+
+Chris Sawyer schrieb RollerCoaster Tycoon (1999) zu 99% in x86-Assembly.
+Nur eine kleine Menge Glue-Code war in C.
+
+Warum war das möglich und was machte es so performant?
+
+  1. Keine Overhead durch Hochsprachen-Abstraktion.
+     Jede Instruktion die ausgeführt wird, ist eine die Sawyer wollte.
+
+  2. Präzise Kontrolle über Speicher-Layout.
+     Häufig benutzte Daten zusammenhalten = bessere Cache-Nutzung.
+
+  3. SIMD für Rendering-Operationen.
+     MMX (1997) für Sprite-Blitting und Farboperationen.
+
+  4. Fixed-Point Arithmetik statt Float.
+     Floating-Point war 1999 langsam (1-2 Takte für Grundoperationen).
+     Fixed-Point: normale Integer-Instruktionen!
+
+  5. Intelligentes Tile-Rendering.
+     Isometrische Karte, nur veränderte Tiles neu gezeichnet.
+
+------------------------------------------------------------------------
+27.2  Fixed-Point Arithmetik
+------------------------------------------------------------------------
+
+  ; Floating-Point ist oft unnötig. Für Spielphysik, Positionen,
+  ; Geschwindigkeiten reicht oft Fixed-Point.
+
+  ; Q16.16 Format: 32-Bit Integer, 16 Bit Ganzzahl + 16 Bit Nachkommastellen
+  ; Wert = raw_integer / 65536.0
+
+  ; 1.0  = 0x00010000 = 65536
+  ; 0.5  = 0x00008000 = 32768
+  ; 2.5  = 0x00028000 = 163840
+  ; -1.0 = 0xFFFF0000 (Zweierkomplement)
+
+  %define FIXED_ONE    65536
+  %define FIXED_HALF   32768
+
+  ; Integer zu Fixed:
+  ; eax = integer n → ecx = n als Fixed (einfach links schieben)
+  int_to_fixed:
+      shl  eax, 16       ; eax * 65536 = Fixed-Point-Darstellung
+      ret
+
+  ; Fixed zu Integer (abschneiden, nicht runden):
+  fixed_to_int:
+      sar  eax, 16       ; arithmetisch schieben (Vorzeichen erhalten)
+      ret
+
+  ; Fixed zu Integer (runden):
+  fixed_to_int_round:
+      add  eax, FIXED_HALF   ; + 0.5 vor dem Truncate
+      sar  eax, 16
+      ret
+
+  ; Fixed-Point Multiplikation:
+  ; eax × ebx (beide Fixed), Ergebnis in eax
+  fixed_mul:
+      imul eax, ebx          ; 64-Bit Ergebnis in edx:eax
+      ; Aber wir benutzen 32-Bit imul (2-Operanden), das ist gefährlich bei Overflow!
+      ; Besser mit vollen 64-Bit:
+      movsxd rax, eax        ; 32-Bit zu 64-Bit sign-extended
+      movsxd rcx, ebx
+      imul   rax, rcx        ; 64-Bit Multiplikation (kein Overflow)
+      sar    rax, 16         ; Schiebe 16 Bits raus (die Nachkommastellen von einem Faktor)
+      ; rax = Fixed-Point Ergebnis (noch 16 Bits Nachkomma)
+      ret
+
+  ; Fixed-Point Division (a / b):
+  ; Vor Division: a × 65536 (um Präzision zu erhalten)
+  fixed_div:
+      ; rdi = a (Fixed), rsi = b (Fixed)
+      movsxd rax, edi
+      shl    rax, 16         ; Zähler skalieren
+      movsxd rcx, esi
+      idiv   ecx             ; 32-Bit Division (Achtung: Overflow wenn Ergebnis > 2^31!)
+      ret
+
+------------------------------------------------------------------------
+27.3  Isometrische Projektion
+------------------------------------------------------------------------
+
+  ; RollerCoaster Tycoon benutzt isometrische Projektion.
+  ; 3D-Karte (x, y, z) → 2D-Bildschirm (screen_x, screen_y)
+
+  ; Isometrische Projektion (vereinfacht):
+  ; screen_x = (x - y) * TILE_HALBBREITE
+  ; screen_y = (x + y) * TILE_HALBHOEHE - z * HOEHE_SKALIERUNG
+
+  TILE_W      equ 64     ; Tile-Breite in Pixeln
+  TILE_H      equ 32     ; Tile-Höhe (halb wegen Isometrie)
+  TILE_HW     equ 32     ; Halbbreite
+  TILE_HH     equ 16     ; Halbhöhe
+  Z_SKALA     equ 20     ; Höhen-Skalierung
+
+  ; iso_project(x, y, z) → screen_x in rax, screen_y in rdx
+  ; rdi=x, rsi=y, rdx=z
+  iso_project:
+      ; screen_x = (x - y) * TILE_HW
+      mov  rax, rdi
+      sub  rax, rsi
+      imul rax, TILE_HW
+
+      ; screen_y = (x + y) * TILE_HH - z * Z_SKALA
+      mov  rcx, rdi
+      add  rcx, rsi
+      imul rcx, TILE_HH
+      push rcx             ; sichern
+
+      mov  rcx, rdx        ; z
+      imul rcx, Z_SKALA
+
+      pop  rdx             ; (x+y)*TILE_HH wiederherstellen
+      sub  rdx, rcx        ; - z * Z_SKALA
+      ret
+
+------------------------------------------------------------------------
+27.4  Spielschleife (Game Loop) in Assembly
+------------------------------------------------------------------------
+
+  ; Die fundamentale Spielschleife:
+  ; - Input lesen
+  ; - Spielzustand updaten (Physik, KI, etc.)
+  ; - Rendern
+  ; - Synchronisieren (konstante Framerate)
+
+  ; Einfache Implementierung mit rdtsc für Timing:
+
+  TARGET_FPS   equ 60
+  TICKS_PER_MS equ 3000000   ; Ticks pro Millisekunde (bei 3 GHz CPU)
+  FRAME_TICKS  equ TICKS_PER_MS * 1000 / TARGET_FPS  ; Ticks pro Frame
+
+  game_loop:
+      ; Startzeit messen:
+  .frame:
+      rdtsc
+      shl  rdx, 32
+      or   rax, rdx
+      mov  r15, rax          ; Frame-Startzeit
+
+      ; 1. Input verarbeiten:
+      call process_input      ; Liest stdin oder /dev/input/eventX
+      ; r14 enthält Input-Flags (welche Tasten gedrückt)
+
+      ; 2. Spielzustand updaten:
+      call update_game        ; Physik, KI, Timer
+
+      ; 3. Rendern:
+      call clear_back_buffer
+      call render_scene       ; Alle sichtbaren Tiles, Entities, GUI
+      call present_frame      ; Back Buffer → Framebuffer
+
+      ; 4. Framerate begrenzen:
+      rdtsc
+      shl  rdx, 32
+      or   rax, rdx
+      sub  rax, r15           ; Verbrauchte Ticks
+
+      cmp  rax, FRAME_TICKS
+      jge  .no_sleep          ; Wir sind zu langsam → kein Warten
+
+      ; Warte die restliche Zeit:
+      mov  rcx, FRAME_TICKS
+      sub  rcx, rax           ; Restliche Ticks
+      ; Umrechnen in Nanosekunden für nanosleep:
+      ; ... (nanosleep Syscall = Syscall 35)
+
+  .no_sleep:
+      ; Programm beenden?
+      test r14, INPUT_QUIT
+      jz   .frame            ; weiter loopen
+
+      ; Aufräumen und beenden:
+      call fb_cleanup
+      xor  rdi, rdi
+      mov  rax, 60
+      syscall
+
+------------------------------------------------------------------------
+27.5  Entity-Component-System (ECS) in Assembly
+------------------------------------------------------------------------
+
+  ; Moderne Spiel-Architektur für hohe Performance:
+  ; Entities sind nur IDs.
+  ; Components sind reine Daten (SoA — Structure of Arrays).
+  ; Systems operieren auf Components.
+
+  ; Statt Array von Structs (AoS — langsam für SIMD):
+  ; struct Entity { float x, y, vx, vy; int health; ... }
+  ; Entity entities[1000];
+
+  ; Benutze Arrays of Components (AoC / SoA — SIMD-freundlich!):
+  section .bss
+      entity_count  resq 1
+
+      ; Jede Komponente ist ein eigenes Array:
+      align 32
+      comp_x     resd 1000    ; float x[1000]
+      comp_y     resd 1000    ; float y[1000]
+      comp_vx    resd 1000    ; float vx[1000]
+      comp_vy    resd 1000    ; float vy[1000]
+      comp_hp    resd 1000    ; int   health[1000]
+      comp_flags resb 1000    ; uint8 flags[1000]
+
+  ; Physics-System — alle Entities auf einmal updaten (SIMD!):
+  system_physics:
+      ; Bespiel: Position += Geschwindigkeit für alle Entities auf einmal
+      ; Mit AVX: 8 Entities pro Instruktion!
+      mov  rcx, [entity_count]
+      shr  rcx, 3              ; rcx = count / 8
+
+      lea  rsi, [comp_x]
+      lea  rdi, [comp_vx]
+      lea  rbx, [comp_y]
+      lea  rdx, [comp_vy]
+
+  .loop:
+      vmovups ymm0, [rsi]      ; x[0..7]
+      vmovups ymm1, [rdi]      ; vx[0..7]
+      vaddps  ymm0, ymm0, ymm1 ; x += vx (8 Entities gleichzeitig!)
+      vmovups [rsi], ymm0
+
+      vmovups ymm2, [rbx]      ; y[0..7]
+      vmovups ymm3, [rdx]      ; vy[0..7]
+      vaddps  ymm2, ymm2, ymm3 ; y += vy
+      vmovups [rbx], ymm2
+
+      add  rsi, 32             ; nächste 8 Entities
+      add  rdi, 32
+      add  rbx, 32
+      add  rdx, 32
+      dec  rcx
+      jnz  .loop
+      vzeroupper
+      ret
+
+------------------------------------------------------------------------
+27.6  Vollständige KI in Assembly — Wegfindung
+------------------------------------------------------------------------
+
+  ; A*-Algorithmus für Gitter-basierte Karten (wie in RCT):
+  ; Vereinfachte Version (BFS = Breadth-First Search):
+
+  MAP_BREITE   equ 64
+  MAP_HOEHE    equ 64
+  MAP_GROESSE  equ MAP_BREITE * MAP_HOEHE
+
+  section .bss
+      karte_hindernisse  resb  MAP_GROESSE   ; 0=frei, 1=Hindernis
+      bfs_besucht        resb  MAP_GROESSE   ; 0=nicht besucht
+      bfs_vorgaenger     resw  MAP_GROESSE   ; Vorgänger-Knoten (16-Bit Index)
+      bfs_warteschlange  resw  MAP_GROESSE   ; FIFO-Queue
+
+  ; bfs(start_x, start_y, ziel_x, ziel_y) → Pfad in pfad_puffer
+  ; rdi=sx, rsi=sy, rdx=zx, rcx=zy
+  bfs_wegfindung:
+      ; Alle Felder als "nicht besucht" markieren:
+      push rdi
+      push rsi
+      push rdx
+      push rcx
+      mov  rdi, bfs_besucht
+      xor  al, al
+      mov  rcx, MAP_GROESSE
+      rep  stosb
+      pop  rcx
+      pop  rdx
+      pop  rsi
+      pop  rdi
+
+      ; Start-Index berechnen:
+      imul rax, rsi, MAP_BREITE
+      add  rax, rdi
+      ; Start als besucht markieren:
+      mov  byte [bfs_besucht + rax], 1
+      ; in Warteschlange:
+      mov  [bfs_warteschlange], ax
+      mov  rdi, 0    ; queue_head
+      mov  rsi, 1    ; queue_tail
+
+      ; Ziel-Index:
+      imul rbx, rcx, MAP_BREITE
+      add  rbx, rdx
+
+  .bfs_loop:
+      cmp  rdi, rsi
+      jge  .kein_pfad        ; Queue leer
+
+      ; Nächsten Knoten aus Queue holen:
+      movzx rax, word [bfs_warteschlange + rdi*2]
+      inc  rdi
+
+      cmp  rax, rbx
+      je   .ziel_gefunden    ; Ziel erreicht!
+
+      ; Nachbarn prüfen (oben, unten, links, rechts):
+      ; Oben (Index - MAP_BREITE):
+      ; Unten (Index + MAP_BREITE):
+      ; Links (Index - 1, nur wenn nicht am linken Rand):
+      ; Rechts (Index + 1, nur wenn nicht am rechten Rand):
+      ; (Implementierung als Schleife über 4 Direktionen)
+
+      ; Wenn Nachbar frei und nicht besucht:
+      ;   Vorgänger[nachbar] = aktueller Knoten
+      ;   besucht[nachbar] = 1
+      ;   Queue[tail++] = nachbar
+
+      jmp  .bfs_loop
+
+  .ziel_gefunden:
+      ; Pfad rekonstruieren (vom Ziel zum Start via Vorgänger-Array):
+      ; ...
+      ret
+
+  .kein_pfad:
+      xor  rax, rax          ; kein Pfad gefunden
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 27:
+Implementiere einen minimierten Themenpark-Simulator:
+  - 32×32 Tile-Karte (Gras, Weg, Hindernis)
+  - 5 Besucher (Entities) mit zufälligen Positionen
+  - Besucher wandern zufällig auf Wegen (BFS für Pathfinding)
+  - Isometrische Darstellung auf /dev/fb0
+  - Pro Sekunde: jeder Besucher macht einen Schritt
+  - Tastatur: 'q' = beenden
+
+Das ist RollerCoaster Tycoon im Kleinen. Wenn du das schaffst,
+hast du die Grundlage für alles weitere.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 28: Das komplette Projekt — Pong in Assembly (Vorlage)
+================================================================================
+
+------------------------------------------------------------------------
+28.1  Projektstruktur
+------------------------------------------------------------------------
+
+  pong_asm/
+  ├── Makefile
+  ├── main.asm          ; Einstiegspunkt, Game Loop
+  ├── graphics.asm      ; Framebuffer-Zugriff, Zeichenfunktionen
+  ├── input.asm         ; Tastaturabfrage
+  ├── physics.asm       ; Ball- und Schläger-Bewegung
+  ├── ai.asm            ; KI-Gegner
+  ├── audio.asm         ; Einfache Töne über /dev/dsp (optional)
+  └── macros.inc        ; Gemeinsame Makros und Konstanten
+
+------------------------------------------------------------------------
+28.2  Vollständige main.asm
+------------------------------------------------------------------------
+
+  %include "macros.inc"
+
+  ; Spielzustand:
+  section .bss
+      ; Ball:
+      ball_x      resd 1    ; Fixed-Point Q16.16
+      ball_y      resd 1
+      ball_vx     resd 1
+      ball_vy     resd 1
+      ; Schläger:
+      p1_y        resd 1    ; Spieler 1 (links)
+      p2_y        resd 1    ; Spieler 2 (rechts, KI)
+      ; Punkte:
+      score_p1    resd 1
+      score_p2    resd 1
+      ; Laufzeit:
+      fb_fd       resq 1
+      fb_ptr      resq 1
+      running     resb 1
+
+  section .data
+      ; Spielfeld-Konstanten:
+      BREITE      equ 800
+      HOEHE       equ 600
+      SCHLAEGER_H equ 80    ; Schläger-Höhe
+      SCHLAEGER_B equ 12    ; Schläger-Breite
+      BALL_R      equ 8
+      P1_X        equ 30
+      P2_X        equ (BREITE - 30 - SCHLAEGER_B)
+
+      ; Startgeschwindigkeiten (Fixed-Point, ca. 3 Pixel/Frame):
+      BALL_START_VX  equ (2 * 65536)   ; 2.0
+      BALL_START_VY  equ (1 * 65536)   ; 1.0
+
+  section .text
+  global main
+
+  main:
+      push rbp
+      mov  rbp, rsp
+
+      ; Initialisierung:
+      call fb_init
+      call spiel_reset
+      mov  byte [running], 1
+
+  .game_loop:
+      cmp  byte [running], 0
+      je   .beenden
+
+      ; Frame-Startzeit:
+      rdtsc
+      shl  rdx, 32
+      or   rax, rdx
+      push rax                 ; auf Stack sichern
+
+      ; Input:
+      call input_lesen         ; rax = Tasten-Bitfeld
+      test rax, TASTE_Q
+      jnz  .exit_flag
+      call input_verarbeiten   ; Spieler-Schläger bewegen
+
+      ; Update:
+      call ball_updaten
+      call kollision_pruefen
+      call ai_updaten
+
+      ; Rendern:
+      call bildschirm_leeren
+      call spielfeld_rendern
+      call schlaeger_rendern
+      call ball_rendern
+      call punkte_rendern
+      call frame_praesentieren
+
+      ; Frame-Timing:
+      pop  r15                 ; Startzeit
+      rdtsc
+      shl  rdx, 32
+      or   rax, rdx
+      sub  rax, r15
+      ; Wenn zu schnell: nanosleep
+      cmp  rax, FRAME_TICKS_60FPS
+      jae  .game_loop
+      call frame_warten
+
+      jmp  .game_loop
+
+  .exit_flag:
+      pop  r15                 ; Stack aufräumen
+  .beenden:
+      call fb_cleanup
+      xor  eax, eax
+      pop  rbp
+      ret
+
+------------------------------------------------------------------------
+28.3  Kollisionsbehandlung
+------------------------------------------------------------------------
+
+  ball_updaten:
+      ; Position += Geschwindigkeit (Fixed-Point):
+      mov  eax, [ball_x]
+      add  eax, [ball_vx]
+      mov  [ball_x], eax
+
+      mov  eax, [ball_y]
+      add  eax, [ball_vy]
+      mov  [ball_y], eax
+      ret
+
+  kollision_pruefen:
+      ; Ball mit oberer/unterer Wand:
+      mov  eax, [ball_y]
+      sar  eax, 16             ; Fixed zu Integer
+      cmp  eax, BALL_R
+      jl   .wand_oben
+      cmp  eax, (HOEHE - BALL_R)
+      jge  .wand_unten
+      jmp  .schlaeger_check
+
+  .wand_oben:
+      neg  dword [ball_vy]    ; Y-Richtung umkehren
+      mov  dword [ball_y], (BALL_R * 65536)  ; Ball aus Wand rücken
+      jmp  .schlaeger_check
+
+  .wand_unten:
+      neg  dword [ball_vy]
+      mov  dword [ball_y], ((HOEHE - BALL_R) * 65536)
+      jmp  .schlaeger_check
+
+  .schlaeger_check:
+      ; Ball mit Schläger 1 (links):
+      mov  eax, [ball_x]
+      sar  eax, 16
+      cmp  eax, (P1_X + SCHLAEGER_B + BALL_R)
+      jg   .schlaeger_p2
+      ; Y-Überlappung prüfen:
+      mov  ecx, [ball_y]
+      sar  ecx, 16
+      mov  edx, [p1_y]
+      sar  edx, 16
+      cmp  ecx, edx
+      jl   .punkt_p2
+      add  edx, SCHLAEGER_H
+      cmp  ecx, edx
+      jge  .punkt_p2
+      ; Kollision! Ball abprallen:
+      neg  dword [ball_vx]
+      ; Spin hinzufügen (abhängig von Treffpunkt):
+      ; ... (gibt dem Spiel mehr Tiefe)
+      jmp  .fertig
+
+  .schlaeger_p2:
+      ; Ball mit Schläger 2 (rechts): ähnliche Logik
+      ; ...
+
+  .punkt_p2:
+      ; P2 bekommt Punkt:
+      inc  dword [score_p2]
+      call spiel_reset
+      jmp  .fertig
+
+  .fertig:
+      ; Ball hinter linkem Rand?
+      mov  eax, [ball_x]
+      sar  eax, 16
+      cmp  eax, 0
+      jl   .punkt_p1
+      ; Ball hinter rechtem Rand?
+      cmp  eax, BREITE
+      jge  .punkt_p2_rechts
+      ret
+
+  .punkt_p1:
+      inc  dword [score_p1]
+      call spiel_reset
+      ret
+  .punkt_p2_rechts:
+      inc  dword [score_p2]
+      call spiel_reset
+      ret
+
+------------------------------------------------------------------------
+28.4  KI-Schläger
+------------------------------------------------------------------------
+
+  ; Einfache KI: Verfolge den Ball
+  ai_updaten:
+      ; Schläger-Mitte berechnen:
+      mov  eax, [p2_y]
+      sar  eax, 16
+      add  eax, (SCHLAEGER_H / 2)  ; Mitte des Schlägers
+
+      ; Ball-Y:
+      mov  ecx, [ball_y]
+      sar  ecx, 16
+
+      ; Wenn Ball über Schläger: nach oben
+      cmp  ecx, eax
+      jge  .nach_unten
+      sub  dword [p2_y], (3 * 65536)  ; 3 Pixel/Frame hoch
+      jmp  .bounds_check
+
+  .nach_unten:
+      add  dword [p2_y], (3 * 65536)  ; 3 Pixel/Frame runter
+
+  .bounds_check:
+      ; Schläger darf nicht aus dem Bildschirm:
+      cmp  dword [p2_y], 0
+      jge  .check_unten
+      mov  dword [p2_y], 0
+  .check_unten:
+      mov  eax, (HOEHE - SCHLAEGER_H) * 65536
+      cmp  [p2_y], eax
+      jle  .fertig
+      mov  [p2_y], eax
+  .fertig:
+      ret
+
+------------------------------------------------------------------------
+28.5  Makefile für das Projekt
+------------------------------------------------------------------------
+
+  NAME    = pong
+  SRCS    = main.asm graphics.asm input.asm physics.asm ai.asm
+  OBJS    = $(SRCS:.asm=.o)
+  NASM    = nasm
+  NFLAGS  = -f elf64 -g -F dwarf -I./
+  LD      = gcc
+  LFLAGS  = -no-pie
+
+  $(NAME): $(OBJS)
+      $(LD) $(LFLAGS) -o $@ $^
+
+  %.o: %.asm macros.inc
+      $(NASM) $(NFLAGS) -o $@ $<
+
+  clean:
+      rm -f $(OBJS) $(NAME)
+
+  run: $(NAME)
+      ./$(NAME)
+
+  debug: $(NAME)
+      gdb -ex "set disassembly-flavor intel" ./$(NAME)
+
+--------------------------------------------------------------------------------
+ÜBUNG 28 (Abschlussprojekt):
+Baue Pong aus diesem Modul vollständig und füge dann hinzu:
+  1. Highscore-Tracking (bestimme wer nach 5 Punkten gewinnt)
+  2. Schwierigkeitsgrade für die KI (1 = langsam, 3 = mittel, 5 = schnell)
+  3. Pause-Funktion (Leertaste)
+  4. Menü-Bildschirm mit eigenem Bitmap-Text
+  5. Ballegeschwindigkeit steigt nach jedem Punkt
+
+Wenn du Pong hast, ist RollerCoaster Tycoon nur eine Frage der Zeit.
+Die Grundbausteine sind alle dieselben — nur mehr davon.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 29: Der Weg zu RollerCoaster Tycoon
+================================================================================
+
+------------------------------------------------------------------------
+29.1  Was du jetzt weißt
+------------------------------------------------------------------------
+
+Du hast in diesem Kurs gelernt:
+
+  Teil 1:  Register, Speicher, MOV, Arithmetik, Syscalls, Kontrollfluss
+  Teil 2:  Stack, Funktionen, Calling Conventions, Rekursion, C-Interop, GDB
+  Teil 3:  Strings, Floats, SIMD/SSE/AVX, Strukturen, Speicherverwaltung,
+           Multithreading, CPUID
+  Teil 4:  Micro-Optimierung, Bootloader, Grafik, RCT-Architektur, Pong
+
+Das ist alles was Chris Sawyer wusste — plus einiges mehr (SSE, AVX, 64-Bit).
+RollerCoaster Tycoon (1999) war 16-Bit und 32-Bit, ohne SIMD-Vektoroperationen.
+
+------------------------------------------------------------------------
+29.2  Was RollerCoaster Tycoon braucht
+------------------------------------------------------------------------
+
+  Spielwelt:
+    - Tile-basierte isometrische Karte (Gras, Wege, Gebäude, Achterbahnen)
+    - Höhenmap für 3D-Terrain
+    - Verschiedene Tile-Typen mit Eigenschaften (begehbar, Preis, etc.)
+
+  Entities:
+    - Besucher (KI, Pathfinding, Mood-System, Hunger/Durst/Müdigkeit)
+    - Mitarbeiter (Techniker, Reinigungskräfte, Security)
+    - Achterbahnen (physikalische Simulation, Streckenbau)
+    - Fahrgeschäfte (Warteschlangen, Kapazität)
+
+  Simulation:
+    - Zeitfluss (Tage, Monate, Jahre)
+    - Wirtschaft (Eintrittspreise, Fahrtkosten, Ausgaben)
+    - Wettersystem
+    - Besucher-Psychologie (Meinungen, Bewertungen)
+
+  Rendering:
+    - Isometrische Tile-Darstellung
+    - Sprite-Blitting (Besucher, Fahrgeschäfte)
+    - GUI (Menus, Info-Panels, Geldanzeige)
+
+  Steuerung:
+    - Maus-Input (via /dev/input/mice oder X11)
+    - Karten-Navigation (Scrollen, Zoom)
+
+------------------------------------------------------------------------
+29.3  Schritt-für-Schritt Plan
+------------------------------------------------------------------------
+
+  Phase 1: Infrastruktur (aus diesem Kurs)
+    [x] Framebuffer-Zugriff
+    [x] Keyboard-Input
+    [x] Game Loop mit Timing
+    [x] Grundlegende Grafikfunktionen
+    [x] Tile-Rendering
+
+  Phase 2: Spielwelt
+    - 2D-Karte mit Tile-Types definieren
+    - Isometrischen Renderer ausbauen (mehrere Ebenen, Tiefensortierung)
+    - Karten-Editor (Tiles platzieren)
+    - Heightmap-Support
+
+  Phase 3: Entities
+    - Entity-System (SoA für SIMD-Effizienz)
+    - Besucher-KI (BFS-Pathfinding, Zielauswahl)
+    - Sprite-System für Besucher
+
+  Phase 4: Simulation
+    - Zeit-System (Ticks, Days, Months)
+    - Einfaches Wirtschaftsmodell
+    - Achterbahn-Physik (Schwerkraft, Geschwindigkeit, G-Kräfte)
+
+  Phase 5: UI und Polish
+    - Bitmap-Schrift für Anzeigen
+    - Menüs und Dialoge
+    - Sound (via /dev/dsp, beep, oder ioctl)
+
+------------------------------------------------------------------------
+29.4  Weiterführende Ressourcen
+------------------------------------------------------------------------
+
+  Bücher:
+    "Computer Systems: A Programmer's Perspective" (CS:APP)
+      Das beste Buch über Low-Level-Programmierung, Speicher, und Assembler.
+
+    "Assembly Language for x86 Processors" — Irvine
+      Klassisches Assembly-Lehrbuch.
+
+    "The Art of Assembly Language" — Randall Hyde (kostenlos online)
+      Sehr ausführlich, viele Beispiele.
+
+    "Hacker's Delight" — Warren
+      Bit-Manipulation-Tricks, Mathe-Optimierungen.
+
+  Online-Ressourcen:
+    https://agner.org/optimize/         → Agner Fog: CPU-Mikroarchitektur, Instruktions-Latenz
+    https://gcc.godbolt.org/            → Compiler Explorer: sieh was C-Code in Assembly wird
+    https://uops.info/                  → Instruktions-Durchsatz für AMD/Intel
+    https://www.felixcloutier.com/x86/  → Intel x86 Instruktionsreferenz
+    https://wiki.osdev.org/             → Bootloader, OS-Entwicklung
+    https://cs.lmu.edu/~ray/notes/x86assembly/  → gute Kurzreferenz
+
+  Zum Chris-Sawyer-Code:
+    "Let's Build a Roller Coaster" (OpenRCT2-Blog)
+      Das OpenRCT2-Projekt hat den Code re-engineered → gute Einblicke.
+    https://github.com/OpenRCT2/OpenRCT2
+
+  Tools:
+    nasm        → Der Assembler (immer aktuell halten)
+    gdb         → Debugger
+    pwndbg      → GDB-Plugin (viel besser als stock GDB)
+    valgrind    → Speicherfehler finden
+    perf        → Linux Performance-Profiling
+    objdump -d  → Disassemblieren von Binaries
+    strace      → System-Calls eines Programms mitschneiden
+
+------------------------------------------------------------------------
+29.5  Letzter Rat
+------------------------------------------------------------------------
+
+Assembly ist kein Sprint, es ist ein Marathon.
+
+Chris Sawyer brauchte ZWEI JAHRE um RollerCoaster Tycoon zu schreiben.
+Er hatte davor auch schon mehrere Spiele in Assembly gemacht (Transport Tycoon!).
+
+Dein Weg:
+
+  Woche 1-2:   Teil 1 Übungen vollständig implementieren
+  Woche 3-4:   Teil 2 — eigene String-Library, Rekursion, GDB beherrschen
+  Monat 2:     Teil 3 — SIMD-Experimente, Benchmark-Vergleiche
+  Monat 3:     Pong vollständig bauen (aus Modul 28)
+  Monat 4-6:   Tile-Renderer + Karten-System
+  Monat 7-12:  Entity-System + KI + Simulation
+  Jahr 2:      RollerCoaster Tycoon-ähnliches Spiel fertigstellen
+
+Wenn du nach Woche 1 aufhörst weil "Assembly zu schwer ist":
+Du hast es zu früh aufgegeben. Die erste Hürde ist das Konzept
+der Direktheit — keine Fehlerabfangung, kein Debugging durch print().
+Sobald du GDB beherrschst und register-Denken natürlich wird,
+wird es immer einfacher.
+
+Der größte Trick: Compiliere viel C-Code mit -O0 und -O2 und schau
+dir das disassemblierte Ergebnis an. Du wirst schnell erkennen,
+was der Compiler macht — und wo du es besser kannst.
+
+  gcc -O2 -S -masm=intel -fno-asynchronous-unwind-tables datei.c
+  → Gibt Intel-Syntax Assembly aus
+
+Dann kannst du sehen, wie ein Experte (der Compiler) Assembly schreibt.
+Und manchmal wirst du sagen: "Ich hätte das besser gemacht."
+Wenn du an diesem Punkt bist, bist du wirklich ein Assembly-Programmierer.
+
+================================================================================
+ENDE — ASSEMBLY KOMPLETTKURS ABGESCHLOSSEN
+================================================================================
+
+   Du hast jetzt das Werkzeug. Den Rest macht die Zeit.
+   Viel Erfolg beim Bauen.
+
+================================================================================

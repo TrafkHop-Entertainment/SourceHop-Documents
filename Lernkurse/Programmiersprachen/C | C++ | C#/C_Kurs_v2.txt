@@ -1,0 +1,4477 @@
+================================================================================
+C — VOLLSTÄNDIGER PROFIKURS v2
+Von den Grundlagen bis zur Systemprogrammierung
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+Alle Rechte vorbehalten. Erstellt mit Unterstützung von Claude (Anthropic).
+================================================================================
+
+Dieser Kurs macht dich zum C-Profi — nicht nur für Prüfungen, sondern wirklich.
+Du wirst nach diesem Kurs verstehen wie Betriebssysteme, Treiber und
+Hochleistungssoftware funktionieren. Kein Thema wird ausgelassen.
+
+Struktur:
+  TEIL 1 — Fundament (Module 1–5)
+  TEIL 2 — Pointer & Speicher (Module 6–8)
+  TEIL 3 — Strukturen & I/O (Module 9–11)
+  TEIL 4 — Algorithmen & Datenstrukturen (Module 12–15)
+  TEIL 5 — Systemnahe Programmierung (Module 16–19)
+  TEIL 6 — Profi-Themen (Module 20–23)
+  SCHNELLREFERENZ
+
+================================================================================
+TEIL 1 — FUNDAMENT
+================================================================================
+
+================================================================================
+MODUL 1: Das Fundament — Kompilierung, Struktur, Typen, Operatoren
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Was ist C — und warum ist es anders als alles andere
+------------------------------------------------------------------------
+
+C ist keine "moderne" Sprache im Sinne von Python oder Java. C ist aus den
+1970ern (Dennis Ritchie, Bell Labs, 1972) und fast jede andere Sprache
+ist davon beeinflusst. Warum lernst du C?
+
+  Weil C dir zeigt, was wirklich passiert.
+  Kein Garbage Collector. Kein Runtime-Overhead. Du verwaltst den Speicher
+  selbst. Du arbeitest direkt mit Adressen. C ist das Fundament.
+
+C vs. andere Sprachen:
+  Python:   Garbage Collector, dynamische Typen, Interpreter → langsam aber einfach
+  Java:     JVM, Garbage Collector, OOP erzwungen → mittel
+  C:        kein GC, statische Typen, Compiler → sehr schnell, sehr nah am Prozessor
+  C++:      C + OOP + Templates → noch mehr Kontrolle, noch mehr Komplexität
+  C#:       managed, .NET, ähnlich Java aber von Microsoft → modern, GC vorhanden
+  Rust:     kein GC, Ownership-System, memory-safe ohne GC → neuere Alternative zu C
+  Go:       GC, einfach, gut für Server → schnelle Entwicklung
+
+Wo wird C benutzt?
+  → Betriebssysteme (Linux-Kernel ist fast vollständig in C)
+  → Embedded-Systeme (Mikrocontroller, Arduino, STM32, ESP32)
+  → Gerätetreiber und Kernel-Module
+  → Datenbanken (PostgreSQL, SQLite, MySQL — alle in C)
+  → Interpreter (CPython, Ruby MRI, PHP sind in C)
+  → Kompressionsalgorithmen, Kryptographie
+  → Überall wo Geschwindigkeit und Kontrolle wichtiger sind als Komfort
+
+C-Standards:
+  C89/C90   ANSI C — der erste Standard, sehr portabel
+  C99       Wichtige Erweiterungen: inline, // Kommentare, stdint.h, flexible Arrays
+  C11       _Generic, _Atomic, _Thread_local, anonyme Structs/Unions, checked bounds
+  C17       Hauptsächlich Bug-Fixes, kein neues Feature
+  C23       (aktuell) Typeof, nullptr, #embed, binary literals, auto
+
+------------------------------------------------------------------------
+1.2  Kompilierung — wie C-Code zu einem Programm wird
+------------------------------------------------------------------------
+
+C ist eine kompilierte Sprache. Dein Code wird NICHT direkt ausgeführt —
+er wird zuerst in Maschinencode übersetzt.
+
+Der Weg von Quellcode zu Programm hat 4 Schritte:
+
+  1. Preprocessing (Vorverarbeitung):
+       gcc -E datei.c -o datei.i
+       → #include wird durch den Dateiinhalt ersetzt
+       → #define-Makros werden eingesetzt
+       → Kommentare werden entfernt
+       → Ergebnis: eine riesige .i-Datei (reiner C-Code, keine Direktiven mehr)
+
+  2. Compilation (eigentliche Übersetzung):
+       gcc -S datei.i -o datei.s
+       → C-Code wird zu Assembler-Code übersetzt
+       → Syntaxfehler werden hier gefunden
+       → Ergebnis: .s-Datei (Assembler)
+
+  3. Assembling:
+       gcc -c datei.s -o datei.o
+       → Assembler wird zu Maschinencode (Object-File)
+       → Ergebnis: .o-Datei (Binär, noch nicht ausführbar)
+
+  4. Linking:
+       gcc datei.o -o programm
+       → Alle .o-Dateien werden zusammengeführt
+       → Bibliotheken (z.B. printf aus libc) werden eingebunden
+       → Ergebnis: ausführbares Programm
+
+In der Praxis macht man alles auf einmal:
+  gcc datei.c -o programm
+  gcc datei.c -o programm -Wall -Wextra   ← mit allen Warnungen (IMMER benutzen!)
+
+Wichtige gcc-Flags (vollständig):
+  -Wall           alle Standard-Warnungen aktivieren
+  -Wextra         noch mehr Warnungen
+  -Wpedantic      streng nach Standard, keine Erweiterungen
+  -Werror         Warnungen als Fehler behandeln (sehr strikt)
+  -g              Debug-Infos einbauen (für gdb)
+  -g3             maximale Debug-Infos inkl. Macro-Definitionen
+  -O0             keine Optimierung (Standard, gut für Debugging)
+  -O1             minimale Optimierung
+  -O2             empfohlene Optimierung für Release
+  -O3             aggressive Optimierung (kann Verhalten ändern!)
+  -Os             auf Dateigröße optimieren
+  -Og             Debug-freundliche Optimierung
+  -std=c11        C-Standard festlegen (c89, c99, c11, c17, c2x)
+  -o name         Name der Ausgabedatei
+  -lm             math.h-Bibliothek einbinden
+  -lpthread       POSIX Threads einbinden
+  -lssl -lcrypto  OpenSSL einbinden
+  -shared         Shared Library (.so) erstellen
+  -fPIC           Position-Independent Code (für Shared Libraries)
+  -I/pfad         Include-Suchpfad hinzufügen
+  -L/pfad         Library-Suchpfad hinzufügen
+  -D NAME=wert    Makro definieren (wie #define)
+  -DNDEBUG        assert() deaktivieren (für Release)
+  -fsanitize=address   AddressSanitizer (Speicherfehler finden)
+  -fsanitize=undefined  UBSanitizer (Undefined Behavior finden)
+  -fsanitize=thread    ThreadSanitizer (Datenwettläufe finden)
+  -fstack-protector  Stack-Smashing-Schutz
+  -march=native   auf aktuelle CPU optimieren (nicht portabel)
+
+Beispiel: mehrere .c-Dateien kompilieren:
+  gcc main.c funktionen.c -o programm -Wall -lm
+
+Das ELF-Format (Executable and Linkable Format):
+  Auf Linux sind ausführbare Dateien im ELF-Format.
+  readelf -h programm    → ELF-Header anzeigen
+  readelf -S programm    → Sections anzeigen (.text, .data, .bss, ...)
+  objdump -d programm    → Disassemblierung
+
+  .text   → Maschinencode (readonly)
+  .data   → initialisierte globale Variablen (readwrite)
+  .bss    → nicht-initialisierte globale Variablen (0-initialisiert)
+  .rodata → String-Literale und const-Daten
+
+------------------------------------------------------------------------
+1.3  Das erste Programm — und was jede Zeile bedeutet
+------------------------------------------------------------------------
+
+  #include <stdio.h>
+
+  int main(void) {
+      printf("Hallo Welt!\n");
+      return 0;
+  }
+
+Zeile für Zeile:
+
+  #include <stdio.h>
+    → Präprozessor-Direktive (beginnt immer mit #)
+    → Fügt den Inhalt der Headerdatei stdio.h ein
+    → stdio = Standard Input/Output
+    → Darin ist printf() deklariert
+    → <stdio.h> in spitzen Klammern = Systemheader
+    → "meine_header.h" in Anführungszeichen = eigene Header
+
+  int main(void)
+    → Jedes C-Programm braucht genau eine main-Funktion
+    → int = Rückgabetyp (gibt einen Integer zurück)
+    → void = keine Parameter
+    → Alternative: int main(int argc, char *argv[]) für Kommandozeilen-Args
+    → Alternative: int main(int argc, char *argv[], char *envp[]) + Env-Vars
+
+  printf("Hallo Welt!\n");
+    → printf = "print formatted" — gibt Text aus
+    → \n = Zeilenumbruch (Newline)
+    → Das Semikolon ; beendet jede Anweisung — PFLICHT in C
+
+  return 0;
+    → Rückgabewert an das Betriebssystem
+    → 0 = Erfolg (in Bash: 0 ist OK, $? gibt den Wert aus)
+    → Jeder andere Wert = Fehler
+
+  EXIT_SUCCESS und EXIT_FAILURE aus <stdlib.h>:
+    return EXIT_SUCCESS;  // besser als return 0; (portabler)
+    return EXIT_FAILURE;  // besser als return 1;
+
+Escapesequenzen in Strings:
+  \n    Newline (neue Zeile)
+  \t    Tab (horizontaler Tabulator)
+  \v    Vertikaler Tabulator
+  \r    Carriage Return (Cursor ans Zeilenanfang)
+  \\    Backslash selbst
+  \"    Anführungszeichen im String
+  \'    Apostroph im Char-Literal
+  \0    Null-Byte (String-Ende in C!)
+  \a    Bell (Piep-Ton)
+  \b    Backspace
+  \f    Form Feed (neue Seite)
+  \xNN  Hex-Wert (z.B. \x1B = Escape für ANSI-Farben)
+  \NNN  Oktalwert (z.B. \033 = Escape)
+  \uNNNN  Unicode-Codepoint (C11)
+
+ANSI-Farben in der Konsole:
+  printf("\033[31mRot\033[0m\n");     // Roter Text, dann Reset
+  printf("\033[1;32mFett Grün\033[0m\n");
+  printf("\033[4mUnterstrichen\033[0m\n");
+  printf("\033[44mBlauer Hintergrund\033[0m\n");
+
+  Farben: 30=schwarz 31=rot 32=grün 33=gelb 34=blau 35=magenta 36=cyan 37=weiß
+  Hintergrund: +10 (40=schwarz, 41=rot, ...)
+  Stile: 0=reset 1=fett 2=gedimmt 4=unterstrichen 7=invers
+
+------------------------------------------------------------------------
+1.4  Datentypen in C — vollständig
+------------------------------------------------------------------------
+
+C hat keine eingebauten Strings oder Listen. Alles sind Zahlen und Speicher.
+
+INTEGER-TYPEN (ganze Zahlen):
+  char            1 Byte    -128 bis 127 (ODER 0-255 unsigned — implementationsabhängig!)
+  short           2 Byte    -32.768 bis 32.767
+  int             4 Byte    -2.147.483.648 bis 2.147.483.647
+  long            4 oder 8 Byte (32-Bit System: 4, 64-Bit: 8)
+  long long       8 Byte    -9.223.372.036.854.775.808 bis +...807
+
+  Mit unsigned (vorzeichenlos):
+  unsigned char   1 Byte    0 bis 255
+  unsigned short  2 Byte    0 bis 65.535
+  unsigned int    4 Byte    0 bis 4.294.967.295
+  unsigned long long 8 Byte 0 bis 18.446.744.073.709.551.615
+
+FLIESSKOMMA-TYPEN:
+  float           4 Byte    ~7 Dezimalstellen Genauigkeit, ±3.4×10^38
+  double          8 Byte    ~15 Dezimalstellen Genauigkeit (Standard!)
+  long double     10 oder 16 Byte   sehr hohe Genauigkeit (Implementierungsabhängig)
+
+BOOLEAN (C99):
+  #include <stdbool.h>
+  bool flag = true;    // intern: 0 oder 1
+  bool flag2 = false;
+  // Ohne Header: 0 = false, alles andere = true
+
+KOMPLEXE ZAHLEN (C99):
+  #include <complex.h>
+  double complex z = 3.0 + 4.0 * I;
+  printf("%.1f + %.1fi\n", creal(z), cimag(z));  // 3.0 + 4.0i
+  printf("Betrag: %.1f\n", cabs(z));              // 5.0
+
+Größe eines Typs prüfen mit sizeof():
+  printf("%zu\n", sizeof(int));         → 4
+  printf("%zu\n", sizeof(double));      → 8
+  printf("%zu\n", sizeof(char));        → 1
+  printf("%zu\n", sizeof(void*));       → 8 (auf 64-Bit)
+
+Exakte Typen aus <stdint.h> (IMMER benutzen für portablen Code!):
+  int8_t    int16_t    int32_t    int64_t     (mit Vorzeichen)
+  uint8_t   uint16_t   uint32_t   uint64_t    (ohne Vorzeichen)
+  intptr_t  / uintptr_t           (groß genug für Pointer)
+  size_t    (für Größen, immer unsigned)
+  ptrdiff_t (für Pointer-Differenzen, immer signed)
+  ssize_t   (POSIX: signed size_t, für Fehlerwerte)
+
+  int32_t x = 42;   → immer 32 Bit, egal auf welchem System
+  uint8_t byte = 0xFF;   // = 255
+
+Minimale und maximale Werte (<limits.h>, <stdint.h>):
+  INT_MIN      -2147483648
+  INT_MAX       2147483647
+  UINT_MAX      4294967295
+  INT32_MIN    -2147483648
+  INT64_MAX     9223372036854775807
+  SIZE_MAX      (größtmögliche size_t, systemabhängig)
+
+Literale in verschiedenen Basen:
+  int dez = 255;       // Dezimal
+  int hex = 0xFF;      // Hexadezimal (0x oder 0X)
+  int okt = 0377;      // Oktal (führende 0!)
+  int bin = 0b11111111; // Binär (C23 / gcc-Erweiterung)
+
+Literale mit Suffixen:
+  long l = 42L;
+  long long ll = 42LL;
+  unsigned u = 42U;
+  unsigned long ul = 42UL;
+  float f = 3.14f;      // ohne f wäre es double!
+  long double ld = 3.14L;
+
+Integer-Promotion und Usual Arithmetic Conversions:
+  → Kleine Typen (char, short) werden bei Berechnungen IMMER zu int promoted
+  → char c = 255; int i = c + 1; → i könnte -0 sein! (signed char)
+  → Bei gemischten Typen: kleinerer wird zu größerem konvertiert
+  → Bei signed+unsigned: signed wird zu unsigned konvertiert!
+  
+  GEFÄHRLICH:
+    unsigned int u = 0;
+    int i = -1;
+    if (i < u)  // FALSE! -1 wird zu 4294967295 konvertiert!
+
+------------------------------------------------------------------------
+1.5  Variablen — Deklaration, Initialisierung, Scope, Linkage
+------------------------------------------------------------------------
+
+In C muss jede Variable DEKLARIERT werden bevor sie benutzt wird.
+
+  int alter;           → deklariert (Wert ist UNDEFINIERT — zufälliger Speicher!)
+  int alter = 17;      → deklariert und initialisiert
+  double pi = 3.14159;
+  char buchstabe = 'A';   ← einzelne Zeichen mit einfachen Anführungszeichen!
+
+IMMER initialisieren! Nicht initialisierte Variablen sind in C legal
+aber gefährlich — sie enthalten was auch immer zufällig im Speicher stand.
+
+Mehrere Variablen auf einmal:
+  int a = 1, b = 2, c = 3;   ← möglich, aber oft schlechter Stil
+
+const — unveränderliche Variablen:
+  const double PI = 3.14159265358979;
+  PI = 3.0;   → FEHLER
+
+  const int *ptr;         // Pointer auf const int (Wert unveränderlich)
+  int * const ptr;        // const Pointer auf int (Adresse unveränderlich)
+  const int * const ptr;  // beides unveränderlich
+
+  Einprägeregel: Lies von rechts nach links:
+    const int *ptr   → ptr ist Pointer auf const int
+    int * const ptr  → ptr ist const Pointer auf int
+
+volatile — Compiler-Optimierung verhindern:
+  volatile int sensor_wert;  // Wert kann sich außerhalb des Programms ändern
+  // → Compiler darf Wert nicht in Register cachen!
+  // Wichtig für: Hardwareregister, Shared Memory, Signal-Handler-Variablen
+
+restrict (C99) — Aliasing-Hinweis:
+  void kopiere(int * restrict ziel, const int * restrict quelle, size_t n) {
+      // Compiler-Versprechen: ziel und quelle überlappen NICHT
+      // → Compiler kann aggressiver optimieren
+      for (size_t i = 0; i < n; i++) ziel[i] = quelle[i];
+  }
+  // memcpy in der Standardbibliothek benutzt restrict!
+
+_Atomic (C11) — atomare Operationen:
+  #include <stdatomic.h>
+  _Atomic int zaehler = 0;
+  atomic_fetch_add(&zaehler, 1);   // atomares Increment
+
+Scope (Gültigkeitsbereich):
+  {
+      int x = 5;    ← x ist nur innerhalb dieser Klammern gültig
+  }
+  printf("%d", x);   → FEHLER: x ist nicht mehr gültig
+
+  // Variablen in gleicher Scope überdecken äußere:
+  int x = 5;
+  {
+      int x = 10;   // neues x, überdeckt das äußere
+      printf("%d\n", x);  // 10
+  }
+  printf("%d\n", x);  // 5 (äußeres x)
+
+Storage Classes (Speicherklassen):
+  auto     Standard für lokale Variablen (wird selten geschrieben)
+  static   Persistente Lebensdauer, nur in eigenem Scope sichtbar
+  extern   Variable in anderer .c-Datei deklarieren
+  register Hinweis an Compiler, Variable in Register zu legen (heute obsolet)
+
+  static lokale Variablen:
+    void zaehler(void) {
+        static int count = 0;   // NUR beim ersten Aufruf initialisiert!
+        count++;
+        printf("%d\n", count);
+    }
+    // Erste Aufruf: 1, zweiter: 2, dritter: 3 — Wert bleibt erhalten!
+
+  Globale static (File scope):
+    static int intern = 42;   // nur in dieser .c-Datei sichtbar!
+    // WICHTIG: ohne static wäre die Variable in allen .c-Dateien sichtbar!
+
+  extern:
+    // datei1.c:
+    int globale_variable = 42;  // Definition
+    
+    // datei2.c:
+    extern int globale_variable;  // Deklaration (nur Ankündigung)
+    printf("%d\n", globale_variable);  // Zugriff
+
+Linkage (Sichtbarkeit über Dateigrenzen):
+  External linkage: Globale Variablen ohne static → überall sichtbar
+  Internal linkage: Globale Variablen MIT static → nur in dieser Datei
+  No linkage:       Lokale Variablen → nur im Block
+
+------------------------------------------------------------------------
+1.6  Operatoren (vollständig)
+------------------------------------------------------------------------
+
+ARITHMETISCH:
+  +    Addition
+  -    Subtraktion
+  *    Multiplikation
+  /    Division (bei int: ganzzahlige Division! 7/2 = 3, NICHT 3.5!)
+  %    Modulo (Rest)   7 % 2 = 1
+
+Ganzzahl-Division Falle:
+  int a = 7, b = 2;
+  printf("%d\n", a / b);         → 3     (nicht 3.5!)
+  printf("%f\n", (double)a / b); → 3.500000   ← cast zu double!
+  printf("%f\n", a / (double)b); → 3.500000   ← alternative
+
+VERGLEICH (Ergebnis ist 0 oder 1):
+  ==   gleich      !=   ungleich
+  <    kleiner     >    größer
+  <=   kleiner od. gleich    >=   größer od. gleich
+
+LOGISCH:
+  &&   UND (short-circuit: zweiter Operand wird nicht ausgewertet wenn erster false)
+  ||   ODER (short-circuit: zweiter nicht ausgewertet wenn erster true)
+  !    NICHT
+
+  Short-Circuit Beispiel:
+    if (ptr != NULL && ptr->wert > 0)  // sicher: ptr wird nur dereferenziert wenn != NULL
+    if (i < n && arr[i] == ziel)        // arr[i] nur wenn i < n
+
+BITWEISE (sehr wichtig in C, hardwarenah):
+  &    bitweises UND
+  |    bitweises ODER
+  ^    bitweises XOR
+  ~    bitweises NICHT (Einerkomplement)
+  <<   Linksshift  (x << n = x * 2^n, wenn kein Overflow)
+  >>   Rechtsshift (x >> n = x / 2^n für positive, signed: implementierungsabhängig!)
+
+  Wichtig: >> für signed integers:
+    Arithmetischer Shift (gcc): Vorzeichen-Bit wird kopiert
+    Logischer Shift: 0 wird eingeschoben
+    → Für portablen Code: nur >> auf unsigned verwenden!
+
+Bitoperationen Beispiele:
+  int a = 0b00001100;   // = 12
+  int b = 0b00001010;   // = 10
+  printf("%d\n", a & b);   → 0b00001000 = 8
+  printf("%d\n", a | b);   → 0b00001110 = 14
+  printf("%d\n", a ^ b);   → 0b00000110 = 6
+  printf("%d\n", ~a);       → alle Bits flippen = -13 (signed!)
+  printf("%d\n", a << 1);  → 0b00011000 = 24   (= 12 * 2)
+  printf("%d\n", a >> 1);  → 0b00000110 = 6    (= 12 / 2)
+
+Bit-Tricks (wichtig für Embedded/System-Programmierung):
+  // Bit n setzen:
+  x |= (1 << n);
+  
+  // Bit n löschen:
+  x &= ~(1 << n);
+  
+  // Bit n umschalten (toggle):
+  x ^= (1 << n);
+  
+  // Prüfen ob Bit n gesetzt:
+  if (x & (1 << n)) { ... }
+  
+  // Unterste n Bits maskieren:
+  x & ((1 << n) - 1)
+  
+  // Ist x eine Zweierpotenz?
+  (x != 0) && ((x & (x - 1)) == 0)
+  
+  // Niedrigstes gesetztes Bit (LSB) isolieren:
+  x & (-x)    // oder: x & (~x + 1)
+  
+  // Alle Bits löschen bis auf niedersten gesetzten:
+  x &= -x
+  
+  // Anzahl der gesetzten Bits zählen (Hamming-Gewicht):
+  // gcc Built-in (sehr schnell):
+  int bits = __builtin_popcount(x);    // für unsigned int
+  int bits = __builtin_popcountll(x);  // für unsigned long long
+  
+  // Anzahl führender Nullen:
+  int clz = __builtin_clz(x);         // count leading zeros
+  // Anzahl nachfolgender Nullen:
+  int ctz = __builtin_ctz(x);         // count trailing zeros
+
+FLAGS/Bitfelder in der Praxis:
+  // Zugriffsrechte wie in Unix:
+  #define LESEN     (1 << 0)  // 0b001 = 1
+  #define SCHREIBEN (1 << 1)  // 0b010 = 2
+  #define AUSFUEHREN (1 << 2) // 0b100 = 4
+
+  int rechte = LESEN | SCHREIBEN;    // = 3 (beide gesetzt)
+  if (rechte & LESEN) printf("Lesen erlaubt\n");
+  rechte |= AUSFUEHREN;              // Ausführen hinzufügen
+  rechte &= ~SCHREIBEN;              // Schreiben entziehen
+
+INKREMENT/DEKREMENT:
+  x++   Post-Inkrement: erst benutzen, dann erhöhen
+  ++x   Pre-Inkrement:  erst erhöhen, dann benutzen
+  x--   Post-Dekrement
+  --x   Pre-Dekrement
+
+ZUWEISUNGSOPERATOREN (Kurzschreibweisen):
+  x += 5;    x -= 3;    x *= 2;    x /= 4;    x %= 3;
+  x <<= 1;   x >>= 2;   x &= 0xFF; x |= 0x0F; x ^= 0xAA;
+
+TERNÄRER OPERATOR:
+  int max = (a > b) ? a : b;
+  // Kurzschreibweise für: if(a>b) max=a; else max=b;
+
+COMMA-OPERATOR (selten, aber vorhanden):
+  int x = (a = 3, b = 4, a + b);   // x = 7 (letzter Ausdruck)
+  // Nützlich in for-Schleifen: for (i = 0, j = n; i < j; i++, j--)
+
+SIZEOF-OPERATOR:
+  sizeof(int)       // zur Compilezeit ausgewertet! Kein Funktionsaufruf!
+  sizeof x          // auch ohne Klammern bei Variablen (aber mit Klammern besser)
+  sizeof(arr)/sizeof(arr[0])  // Array-Länge
+
+ALIGNOF (C11):
+  _Alignof(double)  // Alignment-Anforderung des Typs (in Bytes)
+  // Beispiel: Auf den meisten Systemen 8 für double
+
+Operatoren-Priorität (von höchster zu niedrigster Bindung):
+  () [] -> .          Postfix
+  ++ -- ! ~ - + & * (cast) sizeof  Unäre Prefix-Ops
+  * / %               Multiplikativ
+  + -                 Additiv
+  << >>               Shift
+  < <= > >=           Relational
+  == !=               Gleichheit
+  &                   Bitweises UND
+  ^                   Bitweises XOR
+  |                   Bitweises ODER
+  &&                  Logisches UND
+  ||                  Logisches ODER
+  ?:                  Ternär
+  = += -= etc.        Zuweisung
+  ,                   Komma (niedrigste Priorität!)
+
+  TIPP: Klammern setzen statt Priorität auswendig lernen!
+
+------------------------------------------------------------------------
+1.7  printf und scanf — formatierte Ein-/Ausgabe (vollständig)
+------------------------------------------------------------------------
+
+printf — Ausgabe:
+  printf("Format-String", arg1, arg2, ...);
+
+Format-Specifier:
+  %d oder %i    int (dezimal)
+  %u            unsigned int
+  %ld           long
+  %lld          long long
+  %lu           unsigned long
+  %llu          unsigned long long
+  %f            float/double (Standard: 6 Nachkommastellen)
+  %lf           long double (bei scanf!)
+  %e oder %E    Exponentialschreibweise (z.B. 1.234500e+02)
+  %g oder %G    kürzer von %f und %e (kein Trail-Nullen)
+  %a oder %A    Hexadezimal-Fließkomma (C99)
+  %c            char (einzelnes Zeichen)
+  %s            String (char-Array, bis \0)
+  %p            Pointer-Adresse (Hex)
+  %x oder %X    unsigned int hexadezimal (klein/groß)
+  %o            unsigned int oktal
+  %n            Anzahl bisher geschriebener Zeichen (int* Argument!)
+  %%            Prozentzeichen selbst
+  %zu           size_t (z für size_t modifier)
+  %zd           signed size_t
+  %td           ptrdiff_t
+  %jd           intmax_t
+  %ju           uintmax_t
+  %hhd          signed char
+  %hd           short
+
+Breite, Präzision, Flags:
+  printf("%10d\n", 42);       →         42  (rechtsbündig, 10 breit)
+  printf("%-10d|\n", 42);     → 42        | (linksbündig)
+  printf("%010d\n", 42);      → 0000000042 (mit Nullen auffüllen)
+  printf("%+d\n", 42);        → +42 (immer Vorzeichen)
+  printf("% d\n", 42);        →  42 (Leerzeichen statt +)
+  printf("%#x\n", 255);       → 0xff (mit Präfix 0x)
+  printf("%#o\n", 8);         → 010 (mit Präfix 0)
+  printf("%.2f\n", 3.14159);  → 3.14 (2 Nachkommastellen)
+  printf("%8.2f\n", 3.14159); →     3.14 (8 breit, 2 NK)
+  printf("%.5s\n", "Hallo Welt"); → Hallo (nur 5 Zeichen)
+  printf("%*d\n", 10, 42);    →         42 (Breite als Argument)
+  printf("%.*f\n", 2, 3.14159); → 3.14 (Präzision als Argument)
+
+  Dynamische Breite/Präzision:
+    int breite = 10;
+    printf("%*d\n", breite, 42);   // Breite zur Laufzeit
+
+scanf — Eingabe:
+  int alter;
+  scanf("%d", &alter);   ← WICHTIG: & vor der Variable!
+
+scanf Rückgabewert IMMER prüfen:
+  int n = scanf("%d %d", &a, &b);
+  if (n != 2) {
+      fprintf(stderr, "Eingabe fehlgeschlagen!\n");
+      // stdin leeren:
+      int c;
+      while ((c = getchar()) != '\n' && c != EOF);
+  }
+
+Sichere Eingabe-Alternativen:
+  char buf[100];
+  
+  // fgets (sicher, liest Newline mit):
+  fgets(buf, sizeof(buf), stdin);
+  buf[strcspn(buf, "\n")] = '\0';  // \n entfernen
+  
+  // sscanf aus String parsen:
+  int a, b;
+  sscanf(buf, "%d %d", &a, &b);
+  
+  // getchar() Schleife:
+  int c;
+  int i = 0;
+  while ((c = getchar()) != '\n' && c != EOF && i < sizeof(buf)-1) {
+      buf[i++] = c;
+  }
+  buf[i] = '\0';
+
+Ausgabe in Dateien / Strings:
+  fprintf(stderr, "Fehler: %s\n", meldung);   // in stderr
+  fprintf(datei, "Wert: %d\n", x);             // in Datei
+  
+  char buf[100];
+  snprintf(buf, sizeof(buf), "%d + %d = %d", a, b, a+b);  // in String
+  // snprintf: SICHERER als sprintf, begrenzt auf n-1 Zeichen
+
+================================================================================
+MODUL 2: Kontrollfluss — if, switch, Schleifen, goto
+================================================================================
+
+------------------------------------------------------------------------
+2.1  if / else if / else
+------------------------------------------------------------------------
+
+Grundstruktur:
+  if (bedingung) {
+      // wird ausgeführt wenn bedingung != 0 (= true)
+  } else if (andere_bedingung) {
+      // sonst wenn andere_bedingung != 0
+  } else {
+      // sonst
+  }
+
+Häufige Falle — = statt ==:
+  int x = 5;
+  if (x = 10)     // ZUWEISUNG, kein Vergleich! immer true!
+  if (x == 10)    // VERGLEICH
+
+  Tipp (Yoda-Schreibweise): if (10 == x) → Compiler-Fehler bei versehentlichem =
+  
+  Noch besser: -Wall aktivieren! Gcc warnt bei if (x = 10)
+
+IMMER geschweifte Klammern (Apple SSL Bug):
+  if (fehler)
+      goto cleanup;
+      return;    // BUG! läuft IMMER!
+  // Deshalb: IMMER {}!
+
+------------------------------------------------------------------------
+2.2  switch / case (vollständig)
+------------------------------------------------------------------------
+
+switch ist für ganzzahlige Ausdrücke (int, char, enum). Kein switch auf strings!
+
+  switch (ausdruck) {
+      case wert1:
+          // Code
+          break;       // PFLICHT! Ohne break fällt man durch!
+      case wert2:
+      case wert3:      // Mehrere Cases für denselben Code
+          // Code
+          break;
+      default:
+          // wenn kein case passt
+          break;
+  }
+
+Deliberates Fallthrough (bewusst, mit Kommentar dokumentieren):
+  switch (stufe) {
+      case 3:
+          printf("Level 3\n");
+          /* FALLTHROUGH */  // expliziter Hinweis, kein Bug!
+      case 2:
+          printf("Level 2 oder höher\n");
+          break;
+      case 1:
+          printf("Level 1\n");
+          break;
+  }
+
+switch-Sprung-Tabelle Optimierung:
+  Wenn die Cases dicht beieinanderliegen (z.B. 0-10), generiert der Compiler
+  eine Sprungtabelle → O(1) statt O(n) wie bei if-else-Ketten!
+
+C99: Deklaration von Variablen in switch-Cases:
+  switch (x) {
+      case 1: {          // Blockanfang für lokale Variablen
+          int temp = 42;
+          printf("%d\n", temp);
+          break;
+      }
+      case 2:
+          break;
+  }
+
+------------------------------------------------------------------------
+2.3  Schleifen — while, do-while, for
+------------------------------------------------------------------------
+
+WHILE-Schleife:
+  int i = 0;
+  while (i < 10) {
+      printf("%d\n", i);
+      i++;
+  }
+
+DO-WHILE-Schleife (mindestens einmal ausgeführt):
+  int x;
+  do {
+      printf("Positive Zahl: ");
+      scanf("%d", &x);
+  } while (x <= 0);
+
+FOR-Schleife:
+  for (int i = 0; i < 10; i++) {
+      printf("%d\n", i);
+  }
+
+  // Alle Teile optional:
+  for (;;) {    // Endlosschleife
+      // ...
+  }
+
+  // Mehrere Variablen:
+  for (int i = 0, j = 10; i < j; i++, j--) {
+      printf("%d %d\n", i, j);
+  }
+
+BREAK und CONTINUE:
+  for (int i = 0; i < 10; i++) {
+      if (i == 3) continue;   // 3 überspringen
+      if (i == 7) break;      // bei 7 aufhören
+      printf("%d\n", i);
+  }
+  // Ausgabe: 0 1 2 4 5 6
+
+VERSCHACHTELTE Schleifen mit outer-break:
+  // Methode 1: Flag-Variable
+  int gefunden = 0;
+  for (int i = 0; i < n && !gefunden; i++) {
+      for (int j = 0; j < m; j++) {
+          if (arr[i][j] == ziel) {
+              gefunden = 1;
+              break;
+          }
+      }
+  }
+
+  // Methode 2: goto (hier legitim!)
+  for (int i = 0; i < n; i++) {
+      for (int j = 0; j < m; j++) {
+          if (arr[i][j] == ziel) goto gefunden;
+      }
+  }
+  gefunden:
+  printf("Fertig\n");
+
+------------------------------------------------------------------------
+2.4  goto — wann es sinnvoll ist
+------------------------------------------------------------------------
+
+goto hat einen schlechten Ruf (Dijkstras "Go To Statement Considered Harmful").
+Aber in C gibt es LEGITIME Verwendungen:
+
+1. Aus verschachtelten Schleifen ausbrechen (siehe oben)
+2. Fehlerbehandlung mit Ressourcen-Freigabe:
+
+  int verarbeite_datei(const char *pfad) {
+      FILE *f = NULL;
+      int *puffer = NULL;
+      int result = -1;
+      
+      f = fopen(pfad, "r");
+      if (!f) goto cleanup;
+      
+      puffer = malloc(1024);
+      if (!puffer) goto cleanup;
+      
+      // ... Verarbeitung ...
+      result = 0;
+      
+  cleanup:
+      free(puffer);  // free(NULL) ist ok!
+      if (f) fclose(f);
+      return result;
+  }
+  
+  // PATTERN: IMMER alle Ressourcen am Ende freigeben → kein Leak!
+
+Was NIEMALS mit goto:
+  → Rückwärts springen (außer als Endlos-Schleife)
+  → In einen Block springen (über Initialisierungen hinweg)
+  → Unleserlichen Spaghetti-Code erstellen
+
+================================================================================
+MODUL 3: Arrays und Strings
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Arrays — Grundlagen und Fallstricke
+------------------------------------------------------------------------
+
+Ein Array ist eine Sammlung von Elementen DESSELBEN TYPS, im Speicher hintereinander.
+
+Deklaration:
+  int zahlen[5];               // 5 ints, UNDEFINIERTER Inhalt!
+  int zahlen[5] = {1,2,3,4,5}; // mit Initializer
+  int zahlen[] = {1,2,3,4,5};  // Größe automatisch: 5
+  int zahlen[5] = {0};          // Alle auf 0 initialisiert
+  int zahlen[5] = {1};          // Erster = 1, Rest = 0
+
+C99: Variable Length Arrays (VLA):
+  int n;
+  scanf("%d", &n);
+  int arr[n];    // Größe erst zur Laufzeit bekannt! AUF DEM STACK!
+  // VORSICHT: Kein sizeof(arr) zur Laufzeit zuverlässig,
+  // Stack-Overflow bei großem n möglich!
+  // In C11 optional, besser: malloc verwenden!
+
+Größe eines Arrays:
+  int arr[] = {1,2,3,4,5};
+  int groesse = sizeof(arr) / sizeof(arr[0]);   // = 5
+  // ACHTUNG: Funktioniert NUR wenn arr das ORIGINALE Array ist,
+  //           nicht wenn arr als Pointer übergeben wurde!
+
+C PRÜFT KEINE Array-Grenzen — das musst DU tun:
+  int arr[5];
+  arr[5] = 99;   // KEIN Compilerfehler! Undefined Behavior!
+  arr[-1] = 0;   // auch möglich und auch UB!
+
+Flexible Array Members (C99):
+  typedef struct {
+      int laenge;
+      int daten[];   // Flexibles Array am Ende
+  } DynArray;
+  
+  DynArray *a = malloc(sizeof(DynArray) + 10 * sizeof(int));
+  a->laenge = 10;
+  a->daten[0] = 42;
+
+------------------------------------------------------------------------
+3.2  Mehrdimensionale Arrays und Row-Major Order
+------------------------------------------------------------------------
+
+  int matrix[3][4];   // 3 Zeilen, 4 Spalten
+
+  // Initialisierung:
+  int matrix[2][3] = {
+      {1, 2, 3},   // Zeile 0
+      {4, 5, 6}    // Zeile 1
+  };
+
+  // Zugriff:
+  printf("%d\n", matrix[1][2]);   // 6
+
+Im Speicher ist eine Matrix EIN großes Array (Row-Major Order):
+  matrix[0][0], matrix[0][1], matrix[0][2], matrix[1][0], matrix[1][1], matrix[1][2]
+  
+  Adresse von matrix[i][j] = Basisadresse + (i * Spalten + j) * sizeof(Element)
+  
+  WICHTIG für Performance: Innere Schleife über j (Spalten) ist cache-freundlich!
+  // GUT: Zeile für Zeile lesen
+  for (int i = 0; i < ZEILEN; i++)
+      for (int j = 0; j < SPALTEN; j++)
+          verarbeite(matrix[i][j]);
+  
+  // SCHLECHT: Spalte für Spalte (viele Cache-Misses!)
+  for (int j = 0; j < SPALTEN; j++)
+      for (int i = 0; i < ZEILEN; i++)
+          verarbeite(matrix[i][j]);
+
+Dynamisches 2D-Array:
+  // Methode 1: Array von Pointern
+  int **matrix = malloc(ZEILEN * sizeof(int*));
+  for (int i = 0; i < ZEILEN; i++)
+      matrix[i] = malloc(SPALTEN * sizeof(int));
+  
+  // Zugriff: matrix[i][j]
+  // Freigeben:
+  for (int i = 0; i < ZEILEN; i++) free(matrix[i]);
+  free(matrix);
+
+  // Methode 2: Flaches Array (besser für Cache-Performance!)
+  int *matrix = malloc(ZEILEN * SPALTEN * sizeof(int));
+  // Zugriff: matrix[i * SPALTEN + j]
+  free(matrix);
+
+------------------------------------------------------------------------
+3.3  Strings in C — vollständig
+------------------------------------------------------------------------
+
+In C gibt es keinen String-Typ. Ein String ist ein char-Array mit \0 am Ende.
+
+  char name[6] = "Hallo";    // 5 Zeichen + \0 = 6 Bytes
+  char *s = "Welt";          // String-Literal (readonly! Kein Schreiben!)
+  
+  // FALSCH:
+  char *s = "Hallo";
+  s[0] = 'h';   // UNDEFINED BEHAVIOR! String-Literal ist readonly!
+  
+  // RICHTIG (wenn Modifikation nötig):
+  char s[] = "Hallo";   // Kopie auf Stack
+  s[0] = 'h';           // OK
+
+Wichtige String-Funktionen aus <string.h>:
+  strlen(s)              → Länge OHNE \0, O(n)
+  strcpy(ziel, src)      → kopiert (GEFÄHRLICH wenn ziel zu klein!)
+  strncpy(ziel, src, n)  → max n Zeichen (ACHTUNG: füllt mit \0 auf wenn src kürzer,
+                             aber terminiert NICHT wenn src >= n Zeichen!)
+  strlcpy(ziel, src, n)  → BESSER (BSD/POSIX): terminiert immer, gibt benötigte Länge zurück
+  strcat(ziel, src)      → anhängen (GEFÄHRLICH)
+  strncat(ziel, src, n)  → sicherer (n = max hinzugefügte Zeichen, terminiert immer)
+  strcmp(s1, s2)         → 0=gleich, <0=s1<s2, >0=s1>s2
+  strncmp(s1, s2, n)     → max n Zeichen vergleichen
+  strcasecmp(s1, s2)     → case-insensitiv (POSIX)
+  strchr(s, c)           → erstes Vorkommen von c (oder NULL)
+  strrchr(s, c)          → letztes Vorkommen von c
+  strstr(s, sub)         → erstes Vorkommen von Teilstring
+  strtok(s, delim)       → Tokenizer (NICHT thread-sicher! Modifiziert s!)
+  strtok_r(s, delim, &sp)→ thread-sichere Version
+  sprintf(buf, fmt, ...) → in Buffer schreiben (GEFÄHRLICH wenn zu klein!)
+  snprintf(buf, n, fmt, ...)→ SICHER: max n-1 Zeichen
+  memcpy(ziel, src, n)   → n Bytes kopieren (keine Überlappung!)
+  memmove(ziel, src, n)  → n Bytes kopieren (Überlappung erlaubt!)
+  memset(ptr, wert, n)   → n Bytes auf wert setzen
+  memcmp(p1, p2, n)      → n Bytes vergleichen
+
+String zu Zahl (aus <stdlib.h>):
+  atoi(s)         → int (kein Fehler-Checking!)
+  atof(s)         → double (kein Fehler-Checking!)
+  strtol(s, &end, base)  → long, Fehler-Checking über endptr und errno
+  strtoll(s, &end, base) → long long
+  strtod(s, &end)        → double
+  
+  // BESSER: strtol mit Fehlerprüfung:
+  char *endptr;
+  errno = 0;
+  long wert = strtol("42abc", &endptr, 10);
+  if (errno != 0) { perror("strtol"); }
+  if (*endptr != '\0') { printf("Reststring: %s\n", endptr); }
+
+String zu Zahl mit sscanf:
+  int x;
+  if (sscanf("42", "%d", &x) == 1) {
+      printf("Geparst: %d\n", x);
+  }
+
+Tokenizer-Beispiel (strtok_r ist thread-sicher):
+  char zeile[] = "Max:17:Steyr";
+  char *saveptr;
+  char *token = strtok_r(zeile, ":", &saveptr);
+  while (token != NULL) {
+      printf("%s\n", token);
+      token = strtok_r(NULL, ":", &saveptr);
+  }
+  // Max
+  // 17
+  // Steyr
+
+POSIX Extended Reguläre Ausdrücke (<regex.h>):
+  #include <regex.h>
+  
+  regex_t re;
+  regcomp(&re, "^[0-9]+$", REG_EXTENDED);  // Nur Ziffern
+  int treffer = regexec(&re, "12345", 0, NULL, 0);
+  if (treffer == 0) printf("Match!\n");
+  else              printf("Kein Match\n");
+  regfree(&re);
+  
+  // Mit Gruppen:
+  regex_t re2;
+  regmatch_t matches[3];
+  regcomp(&re2, "([a-z]+):([0-9]+)", REG_EXTENDED);
+  char text[] = "name:42";
+  if (regexec(&re2, text, 3, matches, 0) == 0) {
+      printf("Gruppe 1: %.*s\n",
+             (int)(matches[1].rm_eo - matches[1].rm_so),
+             text + matches[1].rm_so);
+      printf("Gruppe 2: %.*s\n",
+             (int)(matches[2].rm_eo - matches[2].rm_so),
+             text + matches[2].rm_so);
+  }
+  regfree(&re2);
+
+================================================================================
+MODUL 4: Funktionen — Call by Value, Call by Reference, Rekursion
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Funktionen — Grundlagen und Prototypen
+------------------------------------------------------------------------
+
+Aufbau:
+  rückgabetyp name(typ param1, typ param2) {
+      return wert;
+  }
+
+Function Prototypes:
+  int addiere(int a, int b);   // Deklaration (in Header-Datei)
+  
+  int main(void) {
+      printf("%d\n", addiere(3, 5));
+  }
+  
+  int addiere(int a, int b) {   // Definition (in .c-Datei)
+      return a + b;
+  }
+
+inline-Funktionen (C99):
+  static inline int max(int a, int b) {
+      return a > b ? a : b;
+  }
+  // Compiler-Hinweis: Funktion direkt einbetten statt aufzurufen
+  // Vorteil: Kein Funktionsaufruf-Overhead
+  // Kein __VA_ARGS__ Problem wie bei Makros
+
+Variadic Functions (variable Argumentanzahl):
+  #include <stdarg.h>
+  
+  int summe(int anzahl, ...) {
+      va_list args;
+      va_start(args, anzahl);   // args initialisieren
+      
+      int sum = 0;
+      for (int i = 0; i < anzahl; i++) {
+          sum += va_arg(args, int);   // nächstes Argument holen
+      }
+      
+      va_end(args);   // aufräumen
+      return sum;
+  }
+  
+  printf("%d\n", summe(3, 10, 20, 30));   // 60
+  printf("%d\n", summe(5, 1, 2, 3, 4, 5)); // 15
+
+  // printf ist selbst eine variadic function!
+  // Eigene printf-ähnliche Funktion:
+  void debug_print(const char *fmt, ...) {
+      va_list args;
+      va_start(args, fmt);
+      vprintf(fmt, args);   // vprintf nimmt va_list!
+      va_end(args);
+  }
+
+------------------------------------------------------------------------
+4.2  Call by Value und Call by Reference
+------------------------------------------------------------------------
+
+Call by Value (Standard):
+  void verdopple(int x) {
+      x = x * 2;   // NUR lokale Kopie
+  }
+  int zahl = 5;
+  verdopple(zahl);
+  printf("%d\n", zahl);   // noch immer 5!
+
+Call by Reference (mit Pointer):
+  void verdopple(int *x) {
+      *x = *x * 2;
+  }
+  int zahl = 5;
+  verdopple(&zahl);   // Adresse übergeben
+  printf("%d\n", zahl);   // 10
+
+Arrays sind immer Call-by-Reference:
+  void doppelt(int arr[], int n) {
+      for (int i = 0; i < n; i++) arr[i] *= 2;   // ändert Original!
+  }
+  // arr als Parameter IST ein Pointer (arr ≡ int *arr)
+
+Mehrere Rückgabewerte via Pointer:
+  void division_und_rest(int a, int b, int *ergebnis, int *rest) {
+      *ergebnis = a / b;
+      *rest = a % b;
+  }
+  
+  int erg, rest;
+  division_und_rest(17, 5, &erg, &rest);
+  printf("%d Rest %d\n", erg, rest);   // 3 Rest 2
+
+------------------------------------------------------------------------
+4.3  Rekursion — vollständig
+------------------------------------------------------------------------
+
+Grundregeln der Rekursion:
+  1. Es muss einen BASISFALL geben (Abbruchbedingung)
+  2. Jeder rekursive Aufruf muss dem Basisfall näherkommen
+  3. Kein Stack-Overflow (typisch: max 10.000-100.000 Ebenen tief)
+
+Fakultät:
+  long long fakultaet(int n) {
+      if (n <= 1) return 1;                   // Basisfall
+      return n * fakultaet(n - 1);            // Rekursiver Fall
+  }
+
+Fibonacci (naiv vs. Memoization):
+  // Naiv: O(2^n) — für n=50 dauert das Stunden!
+  int fib_naiv(int n) {
+      if (n <= 1) return n;
+      return fib_naiv(n-1) + fib_naiv(n-2);
+  }
+  
+  // Memoization: O(n) — Ergebnisse cachen
+  long long memo[100] = {0};   // globaler Cache
+  long long fib_memo(int n) {
+      if (n <= 1) return n;
+      if (memo[n] != 0) return memo[n];   // Cache-Treffer!
+      memo[n] = fib_memo(n-1) + fib_memo(n-2);
+      return memo[n];
+  }
+  
+  // Iterativ: O(n), O(1) Speicher — oft beste Lösung
+  long long fib_iter(int n) {
+      if (n <= 1) return n;
+      long long a = 0, b = 1;
+      for (int i = 2; i <= n; i++) {
+          long long temp = a + b;
+          a = b;
+          b = temp;
+      }
+      return b;
+  }
+
+Tail Recursion (Endrekursion):
+  // Compiler kann tail calls optimieren (kein Stack-Wachstum):
+  int fakultaet_tail(int n, int akku) {
+      if (n <= 1) return akku;
+      return fakultaet_tail(n - 1, n * akku);   // letzter Aufruf = tail call
+  }
+  int fak(int n) { return fakultaet_tail(n, 1); }
+  
+  // gcc mit -O2 optimiert das zu einer Schleife!
+
+Türme von Hanoi (klassisches Rekursionsproblem):
+  void hanoi(int n, char von, char nach, char hilf) {
+      if (n == 1) {
+          printf("Scheibe 1: %c → %c\n", von, nach);
+          return;
+      }
+      hanoi(n - 1, von, hilf, nach);
+      printf("Scheibe %d: %c → %c\n", n, von, nach);
+      hanoi(n - 1, hilf, nach, von);
+  }
+  // hanoi(3, 'A', 'C', 'B');
+  // Benötigt 2^n - 1 Züge für n Scheiben
+
+Backtracking — N-Queens Problem:
+  #define N 8
+  int brett[N][N] = {0};
+  
+  int sicher(int zeile, int spalte) {
+      for (int i = 0; i < zeile; i++)
+          if (brett[i][spalte]) return 0;
+      for (int i = zeile - 1, j = spalte - 1; i >= 0 && j >= 0; i--, j--)
+          if (brett[i][j]) return 0;
+      for (int i = zeile - 1, j = spalte + 1; i >= 0 && j < N; i--, j++)
+          if (brett[i][j]) return 0;
+      return 1;
+  }
+  
+  int koeniginnen_setzen(int zeile) {
+      if (zeile == N) return 1;   // alle gesetzt!
+      for (int spalte = 0; spalte < N; spalte++) {
+          if (sicher(zeile, spalte)) {
+              brett[zeile][spalte] = 1;
+              if (koeniginnen_setzen(zeile + 1)) return 1;
+              brett[zeile][spalte] = 0;   // zurücksetzen (Backtracking!)
+          }
+      }
+      return 0;
+  }
+
+================================================================================
+MODUL 5: Pointer und Pointer-Arithmetik
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Was ist ein Pointer?
+------------------------------------------------------------------------
+
+Ein Pointer ist eine Variable die eine SPEICHERADRESSE enthält.
+
+  int zahl = 42;
+  int *ptr = &zahl;   // ptr enthält Adresse von zahl
+
+  printf("Wert:    %d\n", zahl);   // 42
+  printf("Adresse: %p\n", (void*)&zahl); // z.B. 0x7ffd4b2a1234
+  printf("Pointer: %p\n", (void*)ptr);   // gleich
+  printf("Deref:   %d\n", *ptr);         // 42
+
+  *ptr = 99;           // zahl durch Pointer ändern
+  printf("%d\n", zahl); // 99
+
+Pointer-Typen:
+  int    *ip;    // Pointer auf int (4 Bytes lesen bei Dereferenzierung)
+  double *dp;    // Pointer auf double (8 Bytes)
+  char   *cp;    // Pointer auf char (1 Byte)
+  void   *vp;    // Void-Pointer: generischer Pointer ohne Typ
+  int    (*fp)(int);   // Pointer auf Funktion
+
+NULL-Pointer:
+  int *ptr = NULL;   // zeigt auf nichts (Adresse 0)
+  if (ptr != NULL) { /* sicher */ }
+  // NULL dereferenzieren → Segmentation Fault!
+
+------------------------------------------------------------------------
+5.2  Pointer-Arithmetik (vollständig)
+------------------------------------------------------------------------
+
+Pointer + n springt n ELEMENTE weiter (nicht n Bytes!):
+
+  int arr[] = {10, 20, 30, 40, 50};
+  int *p = arr;
+  
+  printf("%d\n", *p);     // 10
+  p++;                     // springt 4 Bytes (sizeof int)
+  printf("%d\n", *p);     // 20
+  p += 2;
+  printf("%d\n", *p);     // 40
+  p--;
+  printf("%d\n", *p);     // 30
+  
+  // Pointer-Differenz:
+  int *a = arr;
+  int *b = &arr[4];
+  printf("%td\n", b - a);   // 4 (ptrdiff_t!)
+  
+  // ACHTUNG: Pointer-Arithmetik NUR auf Arrays!
+  // Arithmetik auf wilden Pointern ist undefined behavior!
+
+Array-Zugriff mit Pointer-Arithmetik:
+  int arr[] = {10, 20, 30};
+  int *p = arr;
+  
+  arr[1]    ≡  *(arr + 1)    // beides = 20
+  p[2]      ≡  *(p + 2)      // beides = 30
+  *(p + i)  ≡  p[i]          // exakt identisch in C!
+
+Void-Pointer:
+  void *vptr = malloc(100);   // malloc gibt void* zurück
+  
+  // Kein Dereferenzieren ohne Cast:
+  // *vptr = 42;   // FEHLER: void* kann nicht direkt dereferenziert werden!
+  int *ip = (int*)vptr;
+  *ip = 42;
+  
+  // Typisches Muster für generische Funktionen:
+  void drucke(const void *data, size_t groesse) {
+      const unsigned char *bytes = (const unsigned char*)data;
+      for (size_t i = 0; i < groesse; i++) {
+          printf("%02X ", bytes[i]);
+      }
+      printf("\n");
+  }
+  
+  int x = 0xDEADBEEF;
+  drucke(&x, sizeof(x));   // Bytes von x anzeigen
+
+------------------------------------------------------------------------
+5.3  Pointer und Arrays — der tiefe Zusammenhang
+------------------------------------------------------------------------
+
+Array-Name = konstanter Pointer auf erstes Element:
+  int arr[] = {1, 2, 3, 4, 5};
+  // arr ≡ &arr[0]   (Adresse des ersten Elements)
+  
+  // Diese Zugriffe sind IDENTISCH:
+  arr[2]      ≡  *(arr + 2)
+  
+  // Wo sie sich UNTERSCHEIDEN:
+  sizeof(arr)     = 20  (gesamte Array-Größe)
+  sizeof(&arr[0]) = 8   (Pointer-Größe auf 64-Bit)
+  
+  // Array "zerfällt" zum Pointer bei Übergabe an Funktionen!
+  // → Deshalb muss Größe extra übergeben werden
+
+Pointer auf Arrays vs. Pointer auf erstes Element:
+  int arr[5];
+  int (*pa)[5] = &arr;   // Pointer AUF DAS ARRAY (nicht auf Element!)
+  (*pa)[0] = 1;           // Zugriff via pa
+  
+  // pa++ springt 5*4 = 20 Bytes weiter!
+  // &arr[0]++ springt 4 Bytes weiter!
+
+------------------------------------------------------------------------
+5.4  Komplexe Pointer-Deklarationen lesen
+------------------------------------------------------------------------
+
+Regel: Lies von innen nach außen, von rechts nach links.
+cdecl.org hilft beim Entschlüsseln!
+
+  int *p;              // p ist Pointer auf int
+  int *arr[10];        // arr ist Array von 10 Pointern auf int
+  int (*pa)[10];       // pa ist Pointer auf Array von 10 ints
+  int (*fp)(int);      // fp ist Pointer auf Funktion(int) die int zurückgibt
+  int *(*fpa)(void);   // fpa ist Pointer auf Funktion die int* zurückgibt
+  void (*fpv)(void);   // Pointer auf Funktion ohne Parameter ohne Rückgabewert
+  int (**pp)[5];       // pp ist Pointer auf Pointer auf Array[5] von int
+  const char * const cp = "Hallo";  // const Pointer auf const char
+
+Lese-Algorithmus (Clockwise/Spiral):
+  1. Starte beim Namen
+  2. Schau rechts: [n] (Array), (param) (Funktion)
+  3. Schau links: * (Pointer), const
+  4. Geh eine Ebene höher mit ()
+
+Beispiel: int (*fp)(int, char*)
+  fp          → fp ist
+  (fp)        → (in Klammern, erstmal Name)
+  *           → Pointer auf
+  (int, char*) → Funktion die (int, char*) nimmt
+  int          → und int zurückgibt
+  Ergebnis: "fp ist Pointer auf Funktion(int, char*) die int zurückgibt"
+
+------------------------------------------------------------------------
+5.5  Funktionspointer
+------------------------------------------------------------------------
+
+  // Pointer auf Funktion: Rückgabetyp (*Name)(Parametertypen)
+  int (*berechne)(int, int);
+  
+  int addiere(int a, int b) { return a + b; }
+  int subtrahiere(int a, int b) { return a - b; }
+  
+  berechne = addiere;
+  printf("%d\n", berechne(5, 3));    // 8
+  
+  berechne = subtrahiere;
+  printf("%d\n", berechne(5, 3));    // 2
+  
+  // Aufruf: berechne(5, 3) ODER (*berechne)(5, 3) — beide OK
+
+typedef für lesbare Funktionspointer-Typen:
+  typedef int (*RechenOp)(int, int);
+  
+  RechenOp ops[] = {addiere, subtrahiere};
+  for (int i = 0; i < 2; i++) {
+      printf("%d\n", ops[i](10, 5));
+  }
+
+Dispatch-Tabelle (Table-Driven Programming):
+  typedef void (*BefehlsFunktion)(void);
+  
+  struct Befehl {
+      const char *name;
+      BefehlsFunktion funktion;
+  };
+  
+  void befehl_hilfe(void)  { printf("Hilfe\n"); }
+  void befehl_beenden(void){ printf("Tschüss\n"); exit(0); }
+  
+  struct Befehl befehle[] = {
+      {"hilfe",   befehl_hilfe},
+      {"beenden", befehl_beenden},
+      {NULL, NULL}   // Sentinel
+  };
+  
+  // Suche und Aufruf:
+  char eingabe[100];
+  scanf("%s", eingabe);
+  for (int i = 0; befehle[i].name != NULL; i++) {
+      if (strcmp(eingabe, befehle[i].name) == 0) {
+          befehle[i].funktion();
+          break;
+      }
+  }
+
+qsort mit Funktionspointer:
+  int vergleiche_int(const void *a, const void *b) {
+      int ia = *(const int*)a;
+      int ib = *(const int*)b;
+      return (ia > ib) - (ia < ib);  // sicher, kein Overflow!
+      // NICHT: return *(int*)a - *(int*)b; (Overflow bei großen Zahlen!)
+  }
+  
+  int arr[] = {5, 2, 8, 1, 9};
+  qsort(arr, 5, sizeof(int), vergleiche_int);
+
+------------------------------------------------------------------------
+5.6  Häufige Pointer-Fehler (mit Diagnose)
+------------------------------------------------------------------------
+
+1. DANGLING POINTER:
+   int *p = malloc(4);
+   free(p);
+   *p = 42;   // FEHLER! p "hängt" jetzt im Nirgendwo
+   p = NULL;  // Lösung: sofort auf NULL setzen
+
+2. WILD POINTER:
+   int *p;    // zufälliger Wert!
+   *p = 42;   // schreibt irgendwohin → Absturz oder schlimmer
+   int *p = NULL;   // IMMER initialisieren
+
+3. NULL DEREFERENCE:
+   int *p = NULL;
+   *p = 42;   // SIGSEGV, Segmentation Fault
+   if (p != NULL) { *p = 42; }   // richtig
+
+4. BUFFER OVERFLOW:
+   int arr[5];
+   arr[5] = 99;    // Off-by-one! Index 0-4 gültig
+   arr[-1] = 0;    // auch UB
+
+5. DOUBLE FREE:
+   free(p);
+   free(p);   // FEHLER! Heap-Korruption!
+   p = NULL;  // nach free sofort auf NULL → zweites free(NULL) ist ok
+
+6. USE AFTER SCOPE:
+   int *p;
+   {
+       int x = 42;
+       p = &x;    // p zeigt auf stack-Variable
+   }              // x wird hier freigegeben!
+   printf("%d", *p);  // FEHLER: x ist weg
+
+   Erkennung mit: -fsanitize=address (AddressSanitizer)
+   Valgrind:      valgrind --leak-check=full ./programm
+
+
+================================================================================
+TEIL 2 — POINTER & SPEICHER
+================================================================================
+
+================================================================================
+MODUL 6: Speicherverwaltung — malloc, calloc, realloc, free
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Stack vs. Heap (vollständig)
+------------------------------------------------------------------------
+
+STACK:
+  → Automatisch verwaltet (LIFO - Last In First Out)
+  → Lokale Variablen, Funktionsparameter, Rücksprungadressen
+  → Sehr schnell (einfaches RSP-Decrement)
+  → Begrenzt (typisch 1-8 MB, einstellbar mit ulimit -s)
+  → Lebt nur bis zum Ende des Scopes
+  
+  Stack Frame bei Funktionsaufruf:
+    [Rücksprungadresse]
+    [Gespeicherte Register]
+    [Lokale Variablen]
+    [Parameter]
+
+HEAP:
+  → Manuell verwaltet (malloc/free)
+  → Dynamische Größe, erst zur Laufzeit bekannt
+  → Begrenzt durch RAM und OS-Limits
+  → Etwas langsamer (Heap-Verwaltungsstrukturen)
+  → Lebt bis free() oder Programmende
+
+GLOBALER BEREICH (BSS/Data-Section):
+  int globale = 42;       // .data-Section (initialisiert)
+  int uninitialisiert;    // .bss-Section (auf 0 gesetzt vom OS)
+  // lebt gesamte Programmlaufzeit
+
+STACK OVERFLOW erkennen und vermeiden:
+  // Großes Array auf Stack → Stack Overflow!
+  void schlecht(void) {
+      int huge[10000000];   // 40MB auf Stack → crash!
+  }
+  
+  // Besser: Heap benutzen
+  void gut(void) {
+      int *huge = malloc(10000000 * sizeof(int));
+      if (!huge) { /* Fehler */ return; }
+      // ... benutzen ...
+      free(huge);
+  }
+
+------------------------------------------------------------------------
+6.2  malloc, calloc, realloc, free
+------------------------------------------------------------------------
+
+malloc:
+  void *malloc(size_t bytes);
+  
+  int *arr = malloc(10 * sizeof(int));
+  if (arr == NULL) {
+      perror("malloc");
+      exit(EXIT_FAILURE);
+  }
+  // Inhalt ist UNDEFINIERT!
+
+calloc:
+  void *calloc(size_t n, size_t groesse);
+  
+  int *arr = calloc(10, sizeof(int));   // 10 ints, alle 0
+  // Etwas langsamer als malloc (wegen Nullsetzen)
+
+realloc:
+  void *realloc(void *ptr, size_t neue_groesse);
+  
+  // RICHTIG (sicheres Realloc):
+  int *neu = realloc(arr, neue_groesse);
+  if (neu == NULL) {
+      // arr ist noch gültig! Fehlerbehandlung
+      free(arr);   // aufräumen
+      return NULL;
+  }
+  arr = neu;   // erst NACH Prüfung zuweisen!
+  
+  // FALSCH (Memory Leak wenn NULL):
+  arr = realloc(arr, neue_groesse);   // Wenn NULL: altes arr verloren!
+
+free:
+  free(ptr);    // Speicher freigeben
+  free(NULL);   // ist sicher, macht nichts
+  ptr = NULL;   // IMMER danach! (verhindert dangling pointer)
+
+Dynamisch wachsendes Array (Vector-Muster):
+  typedef struct {
+      int *daten;
+      size_t laenge;
+      size_t kapazitaet;
+  } IntArray;
+  
+  void ia_init(IntArray *a) {
+      a->laenge = 0;
+      a->kapazitaet = 8;
+      a->daten = malloc(a->kapazitaet * sizeof(int));
+  }
+  
+  void ia_push(IntArray *a, int wert) {
+      if (a->laenge == a->kapazitaet) {
+          a->kapazitaet *= 2;   // Verdoppeln!
+          int *neu = realloc(a->daten, a->kapazitaet * sizeof(int));
+          if (!neu) { free(a->daten); exit(1); }
+          a->daten = neu;
+      }
+      a->daten[a->laenge++] = wert;
+  }
+  
+  void ia_free(IntArray *a) {
+      free(a->daten);
+      a->daten = NULL;
+      a->laenge = a->kapazitaet = 0;
+  }
+
+Memory Pool (Arena Allocator):
+  // Für viele kleine Allokationen → oft schneller als malloc
+  typedef struct {
+      char *anfang;
+      char *aktuell;
+      size_t groesse;
+  } Arena;
+  
+  Arena arena_erstellen(size_t groesse) {
+      Arena a = { malloc(groesse), 0, groesse };
+      a.aktuell = a.anfang;
+      return a;
+  }
+  
+  void *arena_alloc(Arena *a, size_t n) {
+      // Alignment sicherstellen:
+      size_t alignment = 8;
+      uintptr_t ptr = (uintptr_t)a->aktuell;
+      size_t offset = (alignment - (ptr % alignment)) % alignment;
+      
+      if (a->aktuell + offset + n > a->anfang + a->groesse) return NULL;
+      a->aktuell += offset;
+      void *result = a->aktuell;
+      a->aktuell += n;
+      return result;
+  }
+  
+  void arena_reset(Arena *a) {
+      a->aktuell = a->anfang;   // Alles freigeben auf einmal!
+  }
+  
+  void arena_freigeben(Arena *a) {
+      free(a->anfang);
+  }
+
+------------------------------------------------------------------------
+6.3  Memory-Debugging Tools
+------------------------------------------------------------------------
+
+VALGRIND:
+  gcc -g -O0 programm.c -o programm
+  valgrind --leak-check=full --show-leak-kinds=all ./programm
+  
+  Meldungen:
+    "definitely lost"     → echter Memory Leak
+    "indirectly lost"     → über verlorene Pointer
+    "possibly lost"       → eventuell ein Leak
+    "still reachable"     → am Programmende noch erreichbar (meist OK)
+    "Invalid read/write"  → Zugriff außerhalb Grenzen
+    "Use of uninitialised value" → undefinierter Wert benutzt
+
+ADDRESSSANITIZER (ASan) — schneller als Valgrind:
+  gcc -fsanitize=address -fsanitize=leak -g programm.c -o programm
+  ./programm   // zeigt Fehler direkt
+  
+  Findet: Buffer overflow, Heap-after-free, Stack-after-return, Leaks
+
+UNDEFINED BEHAVIOR SANITIZER (UBSan):
+  gcc -fsanitize=undefined -g programm.c -o programm
+  
+  Findet: Integer overflow, Null-Dereferenzierung, Out-of-bounds, Division durch 0
+
+THREAD SANITIZER (TSan):
+  gcc -fsanitize=thread -g programm.c -o programm
+  
+  Findet: Data races in Multi-Thread-Programmen
+
+================================================================================
+MODUL 7: Structs, Unions, Enums, Bitfelder
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Structs
+------------------------------------------------------------------------
+
+  typedef struct {
+      char name[50];
+      int  alter;
+      double groesse;
+  } Person;
+
+  Person p = {"Max", 17, 1.75};           // Initialisierung
+  Person p2 = {.name = "Lia", .alter = 16}; // Designated Initializers (C99)
+
+  // Zugriff mit . (Punkt):
+  p.alter++;
+
+  // Zugriff mit -> (Pfeil) via Pointer:
+  Person *ptr = &p;
+  ptr->alter++;
+  // ptr->alter ≡ (*ptr).alter   (identisch)
+
+Struct Padding und Alignment:
+  struct A { char c; int i; };
+  // In Speicher: c[1Byte] + Padding[3Byte] + i[4Byte] = 8 Bytes
+  
+  // ACHTUNG: Reihenfolge der Member beeinflusst Größe!
+  struct B { int i; char c; };
+  // Speicher: i[4Byte] + c[1Byte] + Padding[3Byte] = 8 Bytes
+  
+  struct C { char c1; char c2; int i; };
+  // Speicher: c1[1] + c2[1] + Padding[2] + i[4] = 8 Bytes
+  
+  // Ausgabe mit:
+  printf("%zu\n", sizeof(struct A));   // 8
+  printf("%zu\n", offsetof(struct A, i));  // 4
+
+  // Packed struct (kein Padding, aber langsamer + UB-Risiko!):
+  struct __attribute__((packed)) Packed { char c; int i; };
+  // Größe: 5 Bytes, ABER Zugriff auf i kann unaligned sein → langsam/crash
+
+Nested Structs:
+  typedef struct { double x, y; } Punkt;
+  typedef struct { Punkt mittelpunkt; double radius; } Kreis;
+  
+  Kreis k = {{3.0, 4.0}, 5.0};
+  printf("%.1f\n", k.mittelpunkt.x);   // 3.0
+
+Struct-Array und qsort:
+  Person klasse[30];
+  int vergleiche_nach_alter(const void *a, const void *b) {
+      return ((Person*)a)->alter - ((Person*)b)->alter;
+  }
+  qsort(klasse, 30, sizeof(Person), vergleiche_nach_alter);
+
+Struct als Rückgabewert (C erlaubt das):
+  Punkt mitte(Punkt a, Punkt b) {
+      return (Punkt){ (a.x+b.x)/2, (a.y+b.y)/2 };   // Compound Literal
+  }
+
+------------------------------------------------------------------------
+7.2  Unions und Type-Punning
+------------------------------------------------------------------------
+
+Union: alle Member teilen denselben Speicher:
+  typedef union {
+      int    als_int;
+      float  als_float;
+      char   bytes[4];
+  } Wort;
+  
+  Wort w;
+  w.als_int = 0x3F800000;   // IEEE 754 = 1.0f
+  printf("%f\n", w.als_float);   // 1.000000
+
+Typisches Anwendungsbeispiel — Tagged Union:
+  typedef enum { INT, FLOAT, STRING } TypTag;
+  
+  typedef struct {
+      TypTag typ;
+      union {
+          int    i;
+          double d;
+          char   s[32];
+      } wert;
+  } Variant;
+  
+  Variant v;
+  v.typ = INT;
+  v.wert.i = 42;
+  
+  if (v.typ == INT)    printf("Int: %d\n", v.wert.i);
+  if (v.typ == FLOAT)  printf("Float: %f\n", v.wert.d);
+  if (v.typ == STRING) printf("String: %s\n", v.wert.s);
+
+------------------------------------------------------------------------
+7.3  Bitfelder
+------------------------------------------------------------------------
+
+Bitfelder erlauben einzelne Bits in Structs zu addressieren:
+  typedef struct {
+      unsigned int lesen     : 1;  // 1 Bit
+      unsigned int schreiben : 1;
+      unsigned int ausfuehren: 1;
+      unsigned int reserved  : 5;  // 5 Bits unbenutzt (= 8 Bits = 1 Byte)
+  } Rechte;
+  
+  Rechte r = {1, 0, 1, 0};   // lesen=1, schreiben=0, ausfuehren=1
+  r.schreiben = 1;
+  printf("%d\n", sizeof(r));  // wahrscheinlich 4 (implementierungsabhängig!)
+
+  // Wichtig: Bitfeld-Größe und -Layout ist implementierungsabhängig!
+  // Für Hardware-Register: lieber uint32_t + Bit-Masken benutzen!
+
+------------------------------------------------------------------------
+7.4  Enums
+------------------------------------------------------------------------
+
+  typedef enum {
+      MONTAG    = 1,
+      DIENSTAG,      // 2 (auto-increment)
+      MITTWOCH,
+      DONNERSTAG,
+      FREITAG,
+      SAMSTAG,
+      SONNTAG
+  } Wochentag;
+
+  Wochentag tag = MITTWOCH;   // 3
+  
+  // Nützlich: enum für Zustandsmaschinen
+  typedef enum {
+      ZUSTAND_INIT,
+      ZUSTAND_WARTEN,
+      ZUSTAND_VERARBEITEN,
+      ZUSTAND_FEHLER,
+      ZUSTAND_FERTIG
+  } Zustand;
+
+  // String-Namen für Enum-Werte (X-Macro-Pattern):
+  #define FUER_ALLE_ZUSTAENDE(X) \
+      X(ZUSTAND_INIT,        "Init")       \
+      X(ZUSTAND_WARTEN,      "Warten")     \
+      X(ZUSTAND_VERARBEITEN, "Verarbeiten")\
+      X(ZUSTAND_FEHLER,      "Fehler")     \
+      X(ZUSTAND_FERTIG,      "Fertig")
+  
+  typedef enum {
+      #define ENUM_EINTRAG(name, str) name,
+      FUER_ALLE_ZUSTAENDE(ENUM_EINTRAG)
+      #undef ENUM_EINTRAG
+  } Zustand;
+  
+  const char *zustand_namen[] = {
+      #define NAME_EINTRAG(name, str) str,
+      FUER_ALLE_ZUSTAENDE(NAME_EINTRAG)
+      #undef NAME_EINTRAG
+  };
+  
+  printf("%s\n", zustand_namen[ZUSTAND_WARTEN]);  // "Warten"
+
+================================================================================
+MODUL 8: Dateioperationen in C
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Dateien öffnen und schließen
+------------------------------------------------------------------------
+
+  FILE *fopen(const char *pfad, const char *modus);
+  
+  Modi:
+    "r"    Lesen
+    "w"    Schreiben (erstellt/überschreibt!)
+    "a"    Anhängen
+    "r+"   Lesen und Schreiben
+    "w+"   Lesen und Schreiben (erstellt/überschreibt)
+    "a+"   Lesen und Anhängen
+    "rb" "wb" "ab" etc.   Binärmodus
+  
+  FILE *f = fopen("test.txt", "r");
+  if (f == NULL) {
+      perror("fopen");   // z.B. "fopen: No such file or directory"
+      return EXIT_FAILURE;
+  }
+  // ... benutzen ...
+  fclose(f);   // IMMER schließen (auch bei Fehler!)
+
+  // Besser: goto-Cleanup-Pattern
+  FILE *f = fopen("datei.txt", "r");
+  if (!f) { perror("fopen"); return 1; }
+  
+  char buf[4096] = {0};
+  if (!fread(buf, 1, sizeof(buf)-1, f)) { goto cleanup; }
+  // ... verarbeiten ...
+  
+  cleanup:
+  fclose(f);
+
+------------------------------------------------------------------------
+8.2  Text-I/O
+------------------------------------------------------------------------
+
+Lesen:
+  char zeile[256];
+  while (fgets(zeile, sizeof(zeile), f) != NULL) {
+      // zeile enthält \n am Ende!
+      zeile[strcspn(zeile, "\n")] = '\0';   // \n entfernen
+      printf("[%s]\n", zeile);
+  }
+  if (ferror(f)) { perror("Lesefehler"); }
+
+Schreiben:
+  fprintf(f, "Name: %s, Alter: %d\n", name, alter);
+  fputs("Zeile\n", f);
+  fputc('A', f);
+
+Zeichenweise:
+  int c;
+  while ((c = fgetc(f)) != EOF) {
+      putchar(c);
+  }
+
+------------------------------------------------------------------------
+8.3  Binäre Dateien
+------------------------------------------------------------------------
+
+  // Struct binär schreiben:
+  typedef struct { char name[50]; int alter; } Person;
+  
+  Person p = {"Max", 17};
+  FILE *f = fopen("personen.bin", "wb");
+  size_t geschrieben = fwrite(&p, sizeof(Person), 1, f);
+  if (geschrieben != 1) { fprintf(stderr, "Schreibfehler!\n"); }
+  fclose(f);
+  
+  // Binär lesen:
+  Person gelesen;
+  FILE *f2 = fopen("personen.bin", "rb");
+  size_t gelesen_n = fread(&gelesen, sizeof(Person), 1, f2);
+  printf("%s, %d\n", gelesen.name, gelesen.alter);
+  fclose(f2);
+
+------------------------------------------------------------------------
+8.4  Positionierung und Dateigröße
+------------------------------------------------------------------------
+
+  fseek(f, 0, SEEK_END);
+  long groesse = ftell(f);
+  rewind(f);
+  
+  // Gesamte Datei in Buffer laden:
+  char *inhalt = malloc(groesse + 1);
+  fread(inhalt, 1, groesse, f);
+  inhalt[groesse] = '\0';
+  fclose(f);
+  // ... benutzen ...
+  free(inhalt);
+
+------------------------------------------------------------------------
+8.5  POSIX-Datei-I/O (low-level, ohne FILE*)
+------------------------------------------------------------------------
+
+  #include <fcntl.h>
+  #include <unistd.h>
+  
+  // open() statt fopen():
+  int fd = open("datei.txt", O_RDONLY);
+  if (fd < 0) { perror("open"); exit(1); }
+  
+  char buf[1024];
+  ssize_t n;
+  while ((n = read(fd, buf, sizeof(buf))) > 0) {
+      write(STDOUT_FILENO, buf, n);   // direkt in stdout schreiben
+  }
+  close(fd);
+  
+  // Schreiben:
+  int fd2 = open("out.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  write(fd2, "Hallo\n", 6);
+  close(fd2);
+  
+  // POSIX I/O Flags:
+  O_RDONLY  O_WRONLY  O_RDWR   // Zugriffsart
+  O_CREAT   O_TRUNC  O_APPEND  // Erstelloptionen
+  O_NONBLOCK O_SYNC           // Spezialoptionen
+
+================================================================================
+TEIL 3 — STRUKTUREN & PRÄPROZESSOR
+================================================================================
+
+================================================================================
+MODUL 9: Präprozessor, Header-Dateien, Makefiles
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Der Präprozessor (vollständig)
+------------------------------------------------------------------------
+
+#define — Makros:
+  #define PI 3.14159265358979
+  #define MAX(a,b) ((a) > (b) ? (a) : (b))   // immer Klammern!
+  #define QUADRAT(x) ((x) * (x))
+  
+  // Stringification:
+  #define ZEIGE_VARIABLE(x) printf(#x " = %d\n", x)
+  int zahl = 42;
+  ZEIGE_VARIABLE(zahl);   // gibt aus: zahl = 42
+  
+  // Token-Pasting:
+  #define ERSTELLE_GETTER(typ, name) \
+      typ get_##name(void) { return name; }
+  
+  static int alter = 17;
+  ERSTELLE_GETTER(int, alter)
+  // Erzeugt: int get_alter(void) { return alter; }
+
+Variadic Makros (C99):
+  #define DPRINT(fmt, ...) fprintf(stderr, "[DEBUG] " fmt "\n", ##__VA_ARGS__)
+  // __VA_ARGS__: die "..." Argumente
+  // ##: Entfernt das Komma wenn keine Argumente folgen (gcc Erweiterung)
+  
+  DPRINT("x = %d, y = %d", x, y);
+  DPRINT("Kein Argument");   // dank ##: OK
+
+MehrZeilen-Makros:
+  #define SWAP(a, b, typ) do { \
+      typ temp = (a);          \
+      (a) = (b);               \
+      (b) = temp;              \
+  } while(0)
+  // do { ... } while(0): Trick damit das Makro als Anweisung benutzt werden kann!
+  
+  SWAP(x, y, int);
+
+Vordefinierte Makros:
+  __FILE__    aktueller Dateiname (String-Literal)
+  __LINE__    aktuelle Zeilennummer (int)
+  __DATE__    Kompilierungsdatum (String: "Jun 13 2026")
+  __TIME__    Kompilierungszeit (String: "12:34:56")
+  __func__    Name der Funktion (C99, kein Makro, aber ähnlich)
+  __STDC__    1 wenn strenger C-Standard
+  __STDC_VERSION__  z.B. 201112L für C11
+
+X-Macro Pattern (sehr mächtig):
+  // Tabelle einmal definieren, mehrfach nutzen:
+  #define FARB_TABELLE \
+      X(ROT,   "Rot",   255, 0, 0)   \
+      X(GRUEN, "Grün",  0, 255, 0)   \
+      X(BLAU,  "Blau",  0, 0, 255)
+  
+  // Enum erzeugen:
+  typedef enum {
+      #define X(name, str, r, g, b) name,
+      FARB_TABELLE
+      #undef X
+  } Farbe;
+  
+  // Name-Array erzeugen:
+  const char *farb_namen[] = {
+      #define X(name, str, r, g, b) str,
+      FARB_TABELLE
+      #undef X
+  };
+  
+  // RGB-Structs erzeugen:
+  typedef struct { int r, g, b; } RGB;
+  RGB farb_rgb[] = {
+      #define X(name, str, r, g, b) {r, g, b},
+      FARB_TABELLE
+      #undef X
+  };
+  
+  // Verwendung:
+  Farbe f = GRUEN;
+  printf("%s: rgb(%d,%d,%d)\n",
+         farb_namen[f], farb_rgb[f].r, farb_rgb[f].g, farb_rgb[f].b);
+
+_Generic (C11) — Typauswahl zur Compilezeit:
+  #define ABS(x) _Generic((x),  \
+      int:    abs(x),           \
+      long:   labs(x),          \
+      float:  fabsf(x),         \
+      double: fabs(x))
+  
+  printf("%d\n",  ABS(-5));     // ruft abs(-5) auf
+  printf("%f\n",  ABS(-3.14));  // ruft fabs(-3.14) auf
+
+static_assert (C11):
+  #include <assert.h>
+  static_assert(sizeof(int) == 4, "int muss 4 Bytes sein!");
+  static_assert(sizeof(long) >= 8, "long muss mindestens 8 Bytes sein!");
+  // Compilerfehler wenn Bedingung false — keine Laufzeitkosten!
+
+Bedingte Kompilierung:
+  #ifdef DEBUG
+      #define LOG(msg) fprintf(stderr, "[LOG] %s\n", msg)
+  #else
+      #define LOG(msg) /* nichts */
+  #endif
+  
+  // Plattform-spezifisch:
+  #ifdef _WIN32
+      // Windows-Code
+  #elif defined(__linux__)
+      // Linux-Code
+  #elif defined(__APPLE__)
+      // macOS-Code
+  #else
+      #error "Nicht unterstützte Plattform!"
+  #endif
+
+------------------------------------------------------------------------
+9.2  Header-Dateien und Projektstruktur
+------------------------------------------------------------------------
+
+Include Guard (immer verwenden!):
+  // mein_modul.h
+  #ifndef MEIN_MODUL_H
+  #define MEIN_MODUL_H
+  
+  // Inhalt...
+  
+  #endif  /* MEIN_MODUL_H */
+
+  // Oder moderner (gcc/clang unterstützt das):
+  #pragma once
+
+Was gehört in Header, was in .c?
+  HEADER (.h):
+    → Typdeklarationen (typedef, struct, enum)
+    → Funktionsprototypen
+    → #define Konstanten und Makros
+    → static inline Funktionen
+    → extern Variablendeklarationen
+  
+  QUELLCODE (.c):
+    → Funktions-Implementierungen
+    → Globale Variablen-Definitionen
+    → static Helper-Funktionen (nur in dieser Datei sichtbar)
+
+------------------------------------------------------------------------
+9.3  Makefiles
+------------------------------------------------------------------------
+
+  # Makefile
+  CC = gcc
+  CFLAGS = -Wall -Wextra -Werror -std=c11 -g
+  LDFLAGS = -lm
+  
+  # Alle Source-Files automatisch finden:
+  SRCS = $(wildcard *.c)
+  OBJS = $(SRCS:.c=.o)
+  TARGET = programm
+  
+  # Hauptziel:
+  $(TARGET): $(OBJS)
+  	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+  
+  # Pattern Rule für .c → .o:
+  %.o: %.c
+  	$(CC) $(CFLAGS) -c $< -o $@
+  
+  # Automatische Abhängigkeitsverfolgung:
+  -include $(OBJS:.o=.d)
+  
+  %.o: %.c
+  	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+  
+  clean:
+  	rm -f $(OBJS) $(TARGET) *.d
+  
+  .PHONY: clean all
+
+================================================================================
+TEIL 4 — ALGORITHMEN & DATENSTRUKTUREN
+================================================================================
+
+================================================================================
+MODUL 10: Suchalgorithmen und Sortieralgorithmen
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Suchalgorithmen
+------------------------------------------------------------------------
+
+LINEARE SUCHE — O(n):
+  int lineare_suche(int arr[], int n, int ziel) {
+      for (int i = 0; i < n; i++)
+          if (arr[i] == ziel) return i;
+      return -1;
+  }
+
+BINÄRE SUCHE — O(log n):
+  int binaere_suche(int arr[], int n, int ziel) {
+      int links = 0, rechts = n - 1;
+      while (links <= rechts) {
+          int mitte = links + (rechts - links) / 2;  // Overflow-sicher!
+          if (arr[mitte] == ziel) return mitte;
+          if (arr[mitte] < ziel)  links  = mitte + 1;
+          else                    rechts = mitte - 1;
+      }
+      return -1;
+  }
+
+INTERPOLATION SUCHE — O(log log n) bei gleichverteilten Daten:
+  int interpolation_suche(int arr[], int n, int ziel) {
+      int links = 0, rechts = n - 1;
+      while (links <= rechts && ziel >= arr[links] && ziel <= arr[rechts]) {
+          if (links == rechts) return (arr[links] == ziel) ? links : -1;
+          int pos = links + ((double)(ziel - arr[links]) /
+                             (arr[rechts] - arr[links])) * (rechts - links);
+          if (arr[pos] == ziel) return pos;
+          if (arr[pos] < ziel)  links = pos + 1;
+          else                  rechts = pos - 1;
+      }
+      return -1;
+  }
+
+------------------------------------------------------------------------
+10.2  Sortieralgorithmen
+------------------------------------------------------------------------
+
+BUBBLE SORT — O(n²), in-place, stabil:
+  void bubble_sort(int arr[], int n) {
+      for (int i = 0; i < n - 1; i++) {
+          int getauscht = 0;
+          for (int j = 0; j < n - 1 - i; j++) {
+              if (arr[j] > arr[j + 1]) {
+                  int t = arr[j]; arr[j] = arr[j+1]; arr[j+1] = t;
+                  getauscht = 1;
+              }
+          }
+          if (!getauscht) break;   // Optimierung: früh abbrechen wenn sortiert
+      }
+  }
+
+INSERTION SORT — O(n²) worst, O(n) best:
+  void insertion_sort(int arr[], int n) {
+      for (int i = 1; i < n; i++) {
+          int schluessel = arr[i];
+          int j = i - 1;
+          while (j >= 0 && arr[j] > schluessel) {
+              arr[j + 1] = arr[j];
+              j--;
+          }
+          arr[j + 1] = schluessel;
+      }
+  }
+  // Gut für fast-sortierte Arrays und kleine n (<20)
+
+MERGE SORT — O(n log n), stabil, braucht O(n) extra Speicher:
+  void merge(int arr[], int l, int m, int r) {
+      int n1 = m - l + 1, n2 = r - m;
+      int *L = malloc(n1 * sizeof(int));
+      int *R = malloc(n2 * sizeof(int));
+      for (int i = 0; i < n1; i++) L[i] = arr[l + i];
+      for (int j = 0; j < n2; j++) R[j] = arr[m + 1 + j];
+      
+      int i = 0, j = 0, k = l;
+      while (i < n1 && j < n2) {
+          if (L[i] <= R[j]) arr[k++] = L[i++];
+          else               arr[k++] = R[j++];
+      }
+      while (i < n1) arr[k++] = L[i++];
+      while (j < n2) arr[k++] = R[j++];
+      free(L); free(R);
+  }
+  
+  void merge_sort(int arr[], int l, int r) {
+      if (l >= r) return;
+      int m = l + (r - l) / 2;
+      merge_sort(arr, l, m);
+      merge_sort(arr, m + 1, r);
+      merge(arr, l, m, r);
+  }
+
+QUICKSORT — O(n log n) avg, O(n²) worst:
+  int partition(int arr[], int low, int high) {
+      // Median-of-three Pivot (verhindert worst case für sortierte Arrays):
+      int mid = low + (high - low) / 2;
+      if (arr[low] > arr[mid]) { int t=arr[low]; arr[low]=arr[mid]; arr[mid]=t; }
+      if (arr[low] > arr[high]){ int t=arr[low]; arr[low]=arr[high]; arr[high]=t; }
+      if (arr[mid] > arr[high]){ int t=arr[mid]; arr[mid]=arr[high]; arr[high]=t; }
+      int pivot = arr[mid];
+      // pivot an high-1 Position:
+      int t=arr[mid]; arr[mid]=arr[high-1]; arr[high-1]=t;
+      
+      int i = low;
+      for (int j = low; j < high; j++) {
+          if (arr[j] <= pivot) {
+              t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+              i++;
+          }
+      }
+      t=arr[i]; arr[i]=arr[high]; arr[high]=t;
+      return i;
+  }
+  
+  void quicksort(int arr[], int low, int high) {
+      if (low < high) {
+          // Hybrid: Insertion Sort für kleine Teilarrays
+          if (high - low < 10) { insertion_sort(arr + low, high - low + 1); return; }
+          int pi = partition(arr, low, high);
+          quicksort(arr, low, pi - 1);
+          quicksort(arr, pi + 1, high);
+      }
+  }
+
+HEAP SORT — O(n log n), in-place, nicht stabil:
+  void heapify(int arr[], int n, int i) {
+      int groesster = i;
+      int links = 2*i + 1, rechts = 2*i + 2;
+      if (links < n && arr[links] > arr[groesster]) groesster = links;
+      if (rechts < n && arr[rechts] > arr[groesster]) groesster = rechts;
+      if (groesster != i) {
+          int t = arr[i]; arr[i] = arr[groesster]; arr[groesster] = t;
+          heapify(arr, n, groesster);
+      }
+  }
+  
+  void heap_sort(int arr[], int n) {
+      for (int i = n/2 - 1; i >= 0; i--) heapify(arr, n, i);
+      for (int i = n-1; i > 0; i--) {
+          int t = arr[0]; arr[0] = arr[i]; arr[i] = t;
+          heapify(arr, i, 0);
+      }
+  }
+
+COUNTING SORT — O(n + k), nicht vergleichsbasiert:
+  void counting_sort(int arr[], int n, int max_wert) {
+      int *zaehler = calloc(max_wert + 1, sizeof(int));
+      for (int i = 0; i < n; i++) zaehler[arr[i]]++;
+      int idx = 0;
+      for (int i = 0; i <= max_wert; i++)
+          while (zaehler[i]-- > 0)
+              arr[idx++] = i;
+      free(zaehler);
+  }
+  // Ideal wenn max_wert klein ist (z.B. Noten 1-5, ASCII-Zeichen)
+
+Komplexitäts-Überblick:
+  Algorithmus      Best       Average    Worst      Speicher  Stabil
+  Bubble Sort      O(n)       O(n²)      O(n²)      O(1)      Ja
+  Insertion Sort   O(n)       O(n²)      O(n²)      O(1)      Ja
+  Selection Sort   O(n²)      O(n²)      O(n²)      O(1)      Nein
+  Merge Sort       O(n logn)  O(n logn)  O(n logn)  O(n)      Ja
+  Quicksort        O(n logn)  O(n logn)  O(n²)      O(logn)   Nein
+  Heap Sort        O(n logn)  O(n logn)  O(n logn)  O(1)      Nein
+  Counting Sort    O(n+k)     O(n+k)     O(n+k)     O(k)      Ja
+
+================================================================================
+MODUL 11: Datenstrukturen in C
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Einfach verkettete Liste
+------------------------------------------------------------------------
+
+  typedef struct Node {
+      int wert;
+      struct Node *naechster;
+  } Node;
+
+  Node* node_neu(int wert) {
+      Node *n = malloc(sizeof(Node));
+      if (!n) exit(1);
+      n->wert = wert;
+      n->naechster = NULL;
+      return n;
+  }
+
+  // Am Anfang einfügen: O(1)
+  Node* prepend(Node *kopf, int wert) {
+      Node *neu = node_neu(wert);
+      neu->naechster = kopf;
+      return neu;
+  }
+
+  // Am Ende einfügen: O(n)
+  Node* append(Node *kopf, int wert) {
+      Node *neu = node_neu(wert);
+      if (!kopf) return neu;
+      Node *curr = kopf;
+      while (curr->naechster) curr = curr->naechster;
+      curr->naechster = neu;
+      return kopf;
+  }
+
+  // Element löschen: O(n)
+  Node* loeschen(Node *kopf, int wert) {
+      if (!kopf) return NULL;
+      if (kopf->wert == wert) {
+          Node *rest = kopf->naechster;
+          free(kopf);
+          return rest;
+      }
+      Node *curr = kopf;
+      while (curr->naechster && curr->naechster->wert != wert)
+          curr = curr->naechster;
+      if (curr->naechster) {
+          Node *zu_loeschen = curr->naechster;
+          curr->naechster = zu_loeschen->naechster;
+          free(zu_loeschen);
+      }
+      return kopf;
+  }
+
+  // Liste umkehren: O(n)
+  Node* umkehren(Node *kopf) {
+      Node *vorher = NULL, *aktuell = kopf, *naechster;
+      while (aktuell) {
+          naechster = aktuell->naechster;
+          aktuell->naechster = vorher;
+          vorher = aktuell;
+          aktuell = naechster;
+      }
+      return vorher;
+  }
+
+  void liste_ausgeben(Node *kopf) {
+      while (kopf) { printf("%d → ", kopf->wert); kopf = kopf->naechster; }
+      printf("NULL\n");
+  }
+
+  void liste_freigeben(Node *kopf) {
+      while (kopf) {
+          Node *n = kopf->naechster;
+          free(kopf);
+          kopf = n;
+      }
+  }
+
+------------------------------------------------------------------------
+11.2  Stack und Queue
+------------------------------------------------------------------------
+
+STACK mit dynamischem Array:
+  typedef struct {
+      int *daten;
+      int top;
+      int kapazitaet;
+  } Stack;
+  
+  Stack* stack_neu(int kapazitaet) {
+      Stack *s = malloc(sizeof(Stack));
+      s->daten = malloc(kapazitaet * sizeof(int));
+      s->top = -1;
+      s->kapazitaet = kapazitaet;
+      return s;
+  }
+  
+  void push(Stack *s, int wert) {
+      if (s->top + 1 >= s->kapazitaet) {
+          s->kapazitaet *= 2;
+          s->daten = realloc(s->daten, s->kapazitaet * sizeof(int));
+      }
+      s->daten[++s->top] = wert;
+  }
+  
+  int pop(Stack *s) {
+      if (s->top < 0) { fprintf(stderr, "Stack leer!\n"); exit(1); }
+      return s->daten[s->top--];
+  }
+  
+  int peek(Stack *s) { return s->daten[s->top]; }
+  int stack_leer(Stack *s) { return s->top < 0; }
+
+QUEUE mit Ring-Buffer:
+  typedef struct {
+      int *daten;
+      int vorne, hinten, groesse, kapazitaet;
+  } Queue;
+  
+  Queue* queue_neu(int kap) {
+      Queue *q = malloc(sizeof(Queue));
+      q->daten = malloc(kap * sizeof(int));
+      q->vorne = q->hinten = q->groesse = 0;
+      q->kapazitaet = kap;
+      return q;
+  }
+  
+  void enqueue(Queue *q, int wert) {
+      if (q->groesse == q->kapazitaet) { fprintf(stderr, "Queue voll!\n"); return; }
+      q->daten[q->hinten] = wert;
+      q->hinten = (q->hinten + 1) % q->kapazitaet;
+      q->groesse++;
+  }
+  
+  int dequeue(Queue *q) {
+      if (q->groesse == 0) { fprintf(stderr, "Queue leer!\n"); exit(1); }
+      int wert = q->daten[q->vorne];
+      q->vorne = (q->vorne + 1) % q->kapazitaet;
+      q->groesse--;
+      return wert;
+  }
+
+------------------------------------------------------------------------
+11.3  Binärer Suchbaum (BST)
+------------------------------------------------------------------------
+
+  typedef struct BSTKnoten {
+      int wert;
+      struct BSTKnoten *links, *rechts;
+  } BSTKnoten;
+  
+  BSTKnoten* bst_einfuegen(BSTKnoten *wurzel, int wert) {
+      if (!wurzel) {
+          BSTKnoten *n = malloc(sizeof(BSTKnoten));
+          n->wert = wert; n->links = n->rechts = NULL;
+          return n;
+      }
+      if (wert < wurzel->wert) wurzel->links  = bst_einfuegen(wurzel->links,  wert);
+      if (wert > wurzel->wert) wurzel->rechts = bst_einfuegen(wurzel->rechts, wert);
+      return wurzel;
+  }
+  
+  int bst_suchen(BSTKnoten *wurzel, int wert) {
+      if (!wurzel) return 0;
+      if (wert == wurzel->wert) return 1;
+      if (wert < wurzel->wert) return bst_suchen(wurzel->links, wert);
+      return bst_suchen(wurzel->rechts, wert);
+  }
+  
+  // Inorder-Traversal (gibt sortierte Folge aus!):
+  void inorder(BSTKnoten *wurzel) {
+      if (!wurzel) return;
+      inorder(wurzel->links);
+      printf("%d ", wurzel->wert);
+      inorder(wurzel->rechts);
+  }
+  
+  // Preorder (Wurzel zuerst):
+  void preorder(BSTKnoten *w) {
+      if (!w) return;
+      printf("%d ", w->wert);
+      preorder(w->links);
+      preorder(w->rechts);
+  }
+  
+  // Postorder (Kinder zuerst, z.B. zum Freigeben):
+  void bst_freigeben(BSTKnoten *w) {
+      if (!w) return;
+      bst_freigeben(w->links);
+      bst_freigeben(w->rechts);
+      free(w);
+  }
+
+------------------------------------------------------------------------
+11.4  Hash-Tabelle (Offene Adressierung)
+------------------------------------------------------------------------
+
+  #define TABELLEN_GROESSE 1024
+  
+  typedef struct {
+      char  schluessel[64];
+      int   wert;
+      int   belegt;
+  } HEintrag;
+  
+  typedef struct {
+      HEintrag *eintraege;
+      int groesse;
+      int anzahl;
+  } HashTabelle;
+  
+  // Einfache Hash-Funktion (djb2):
+  unsigned int hash(const char *str, int groesse) {
+      unsigned long h = 5381;
+      int c;
+      while ((c = *str++)) h = ((h << 5) + h) + c;  // h * 33 + c
+      return h % groesse;
+  }
+  
+  HashTabelle* ht_neu(int groesse) {
+      HashTabelle *ht = malloc(sizeof(HashTabelle));
+      ht->eintraege = calloc(groesse, sizeof(HEintrag));
+      ht->groesse = groesse;
+      ht->anzahl = 0;
+      return ht;
+  }
+  
+  void ht_setzen(HashTabelle *ht, const char *key, int wert) {
+      unsigned int idx = hash(key, ht->groesse);
+      // Linear Probing bei Kollision:
+      while (ht->eintraege[idx].belegt &&
+             strcmp(ht->eintraege[idx].schluessel, key) != 0) {
+          idx = (idx + 1) % ht->groesse;
+      }
+      strncpy(ht->eintraege[idx].schluessel, key, 63);
+      ht->eintraege[idx].wert = wert;
+      ht->eintraege[idx].belegt = 1;
+      ht->anzahl++;
+  }
+  
+  int ht_holen(HashTabelle *ht, const char *key, int *wert) {
+      unsigned int idx = hash(key, ht->groesse);
+      int versuche = 0;
+      while (ht->eintraege[idx].belegt && versuche < ht->groesse) {
+          if (strcmp(ht->eintraege[idx].schluessel, key) == 0) {
+              *wert = ht->eintraege[idx].wert;
+              return 1;
+          }
+          idx = (idx + 1) % ht->groesse;
+          versuche++;
+      }
+      return 0;
+  }
+
+------------------------------------------------------------------------
+11.5  Heap / Prioritäts-Queue
+------------------------------------------------------------------------
+
+  typedef struct {
+      int *daten;
+      int groesse, kapazitaet;
+  } MinHeap;
+  
+  MinHeap* heap_neu(int kap) {
+      MinHeap *h = malloc(sizeof(MinHeap));
+      h->daten = malloc(kap * sizeof(int));
+      h->groesse = 0; h->kapazitaet = kap;
+      return h;
+  }
+  
+  void heap_einfuegen(MinHeap *h, int wert) {
+      h->daten[h->groesse++] = wert;
+      // Sift up:
+      int i = h->groesse - 1;
+      while (i > 0 && h->daten[(i-1)/2] > h->daten[i]) {
+          int t = h->daten[i]; h->daten[i] = h->daten[(i-1)/2]; h->daten[(i-1)/2] = t;
+          i = (i-1)/2;
+      }
+  }
+  
+  int heap_minimum(MinHeap *h) { return h->daten[0]; }
+  
+  int heap_entnehmen(MinHeap *h) {
+      int min = h->daten[0];
+      h->daten[0] = h->daten[--h->groesse];
+      // Sift down:
+      int i = 0;
+      while (1) {
+          int links = 2*i+1, rechts = 2*i+2, kleinster = i;
+          if (links < h->groesse && h->daten[links] < h->daten[kleinster]) kleinster = links;
+          if (rechts < h->groesse && h->daten[rechts] < h->daten[kleinster]) kleinster = rechts;
+          if (kleinster == i) break;
+          int t = h->daten[i]; h->daten[i] = h->daten[kleinster]; h->daten[kleinster] = t;
+          i = kleinster;
+      }
+      return min;
+  }
+
+================================================================================
+MODUL 12: Graph-Algorithmen
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Graphdarstellung
+------------------------------------------------------------------------
+
+ADJACENCY MATRIX (für dichte Graphen):
+  #define MAX_V 100
+  int matrix[MAX_V][MAX_V] = {0};
+  
+  void kante_hinzufuegen(int u, int v, int gewicht) {
+      matrix[u][v] = gewicht;
+      matrix[v][u] = gewicht;   // für ungerichteten Graphen
+  }
+
+ADJACENCY LIST (für sparse Graphen, effizienter!):
+  typedef struct Kante { int ziel, gewicht; struct Kante *naechste; } Kante;
+  typedef struct { Kante *kopf; } Knoten;
+  
+  typedef struct {
+      Knoten *knoten;
+      int anzahl_v;
+  } Graph;
+  
+  Graph* graph_neu(int v) {
+      Graph *g = malloc(sizeof(Graph));
+      g->knoten = calloc(v, sizeof(Knoten));
+      g->anzahl_v = v;
+      return g;
+  }
+  
+  void graph_kante(Graph *g, int u, int v, int w) {
+      Kante *e = malloc(sizeof(Kante));
+      e->ziel = v; e->gewicht = w;
+      e->naechste = g->knoten[u].kopf;
+      g->knoten[u].kopf = e;
+      // Für ungerichteten Graphen auch rückwärts:
+      Kante *e2 = malloc(sizeof(Kante));
+      e2->ziel = u; e2->gewicht = w;
+      e2->naechste = g->knoten[v].kopf;
+      g->knoten[v].kopf = e2;
+  }
+
+------------------------------------------------------------------------
+12.2  BFS und DFS
+------------------------------------------------------------------------
+
+BFS (Breitensuche — kürzester Pfad in ungewichtetem Graphen):
+  void bfs(Graph *g, int start) {
+      int *besucht = calloc(g->anzahl_v, sizeof(int));
+      int *distanz  = malloc(g->anzahl_v * sizeof(int));
+      for (int i = 0; i < g->anzahl_v; i++) distanz[i] = -1;
+      
+      int warteschlange[g->anzahl_v];
+      int vorne = 0, hinten = 0;
+      
+      warteschlange[hinten++] = start;
+      besucht[start] = 1;
+      distanz[start] = 0;
+      
+      while (vorne < hinten) {
+          int v = warteschlange[vorne++];
+          printf("Besuche Knoten %d (Distanz: %d)\n", v, distanz[v]);
+          
+          for (Kante *e = g->knoten[v].kopf; e; e = e->naechste) {
+              if (!besucht[e->ziel]) {
+                  besucht[e->ziel] = 1;
+                  distanz[e->ziel] = distanz[v] + 1;
+                  warteschlange[hinten++] = e->ziel;
+              }
+          }
+      }
+      free(besucht); free(distanz);
+  }
+
+DFS (Tiefensuche):
+  void dfs_helper(Graph *g, int v, int *besucht) {
+      besucht[v] = 1;
+      printf("Besuche %d\n", v);
+      for (Kante *e = g->knoten[v].kopf; e; e = e->naechste)
+          if (!besucht[e->ziel])
+              dfs_helper(g, e->ziel, besucht);
+  }
+  
+  void dfs(Graph *g, int start) {
+      int *besucht = calloc(g->anzahl_v, sizeof(int));
+      dfs_helper(g, start, besucht);
+      free(besucht);
+  }
+
+------------------------------------------------------------------------
+12.3  Dijkstra-Algorithmus (kürzester Pfad, gewichtet)
+------------------------------------------------------------------------
+
+  #define UNENDLICH INT_MAX
+  
+  void dijkstra(Graph *g, int start, int *distanz, int *vorgaenger) {
+      int n = g->anzahl_v;
+      int *besucht = calloc(n, sizeof(int));
+      for (int i = 0; i < n; i++) { distanz[i] = UNENDLICH; vorgaenger[i] = -1; }
+      distanz[start] = 0;
+      
+      for (int i = 0; i < n; i++) {
+          // Nächsten unbesuchten Knoten mit minimaler Distanz finden:
+          int u = -1;
+          for (int v = 0; v < n; v++)
+              if (!besucht[v] && (u == -1 || distanz[v] < distanz[u]))
+                  u = v;
+          if (u == -1 || distanz[u] == UNENDLICH) break;
+          
+          besucht[u] = 1;
+          
+          // Nachbarn aktualisieren:
+          for (Kante *e = g->knoten[u].kopf; e; e = e->naechste) {
+              int v = e->ziel;
+              if (distanz[u] + e->gewicht < distanz[v]) {
+                  distanz[v] = distanz[u] + e->gewicht;
+                  vorgaenger[v] = u;
+              }
+          }
+      }
+      free(besucht);
+  }
+  
+  // Pfad rekonstruieren:
+  void pfad_ausgeben(int *vorgaenger, int ziel) {
+      if (vorgaenger[ziel] == -1) { printf("%d", ziel); return; }
+      pfad_ausgeben(vorgaenger, vorgaenger[ziel]);
+      printf(" → %d", ziel);
+  }
+
+================================================================================
+MODUL 13: Dynamische Programmierung und Algorithmen
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Dynamische Programmierung (DP)
+------------------------------------------------------------------------
+
+DP-Muster: Probleme in Teilprobleme aufteilen, Lösungen cachen.
+
+LONGEST COMMON SUBSEQUENCE (LCS):
+  int lcs(const char *s1, const char *s2) {
+      int m = strlen(s1), n = strlen(s2);
+      int dp[m+1][n+1];
+      memset(dp, 0, sizeof(dp));
+      
+      for (int i = 1; i <= m; i++) {
+          for (int j = 1; j <= n; j++) {
+              if (s1[i-1] == s2[j-1])
+                  dp[i][j] = dp[i-1][j-1] + 1;
+              else
+                  dp[i][j] = (dp[i-1][j] > dp[i][j-1]) ? dp[i-1][j] : dp[i][j-1];
+          }
+      }
+      return dp[m][n];
+  }
+  // lcs("ABCBDAB", "BDCAB") = 4 ("BCAB")
+
+0/1 RUCKSACKPROBLEM:
+  int rucksack(int gewichte[], int werte[], int n, int kapazitaet) {
+      int dp[n+1][kapazitaet+1];
+      memset(dp, 0, sizeof(dp));
+      
+      for (int i = 1; i <= n; i++) {
+          for (int w = 0; w <= kapazitaet; w++) {
+              dp[i][w] = dp[i-1][w];   // Item i nicht nehmen
+              if (gewichte[i-1] <= w) {
+                  int mit = dp[i-1][w - gewichte[i-1]] + werte[i-1];
+                  if (mit > dp[i][w]) dp[i][w] = mit;
+              }
+          }
+      }
+      return dp[n][kapazitaet];
+  }
+
+EDIT DISTANCE (Levenshtein):
+  int edit_distance(const char *s, const char *t) {
+      int m = strlen(s), n = strlen(t);
+      int dp[m+1][n+1];
+      for (int i = 0; i <= m; i++) dp[i][0] = i;
+      for (int j = 0; j <= n; j++) dp[0][j] = j;
+      
+      for (int i = 1; i <= m; i++) {
+          for (int j = 1; j <= n; j++) {
+              if (s[i-1] == t[j-1]) dp[i][j] = dp[i-1][j-1];
+              else {
+                  int min = dp[i-1][j-1];   // Ersetzen
+                  if (dp[i-1][j] < min) min = dp[i-1][j];    // Löschen
+                  if (dp[i][j-1] < min) min = dp[i][j-1];    // Einfügen
+                  dp[i][j] = min + 1;
+              }
+          }
+      }
+      return dp[m][n];
+  }
+  // edit_distance("kitten", "sitting") = 3
+
+
+================================================================================
+TEIL 5 — SYSTEMNAHE PROGRAMMIERUNG
+================================================================================
+
+================================================================================
+MODUL 14: Fehlerbehandlung und errno
+================================================================================
+
+------------------------------------------------------------------------
+14.1  errno und Fehlerbehandlung
+------------------------------------------------------------------------
+
+  #include <errno.h>
+  #include <string.h>
+  
+  // errno wird von Systemfunktionen bei Fehler gesetzt:
+  FILE *f = fopen("nicht_da.txt", "r");
+  if (!f) {
+      printf("Fehler %d: %s\n", errno, strerror(errno));
+      // z.B.: Fehler 2: No such file or directory
+      perror("fopen");   // automatisch mit Prefix
+  }
+  
+  // WICHTIG: errno vor dem nächsten Systemaufruf lesen!
+  // errno wird nicht zurückgesetzt → immer direkt nach dem Fehler prüfen
+  
+  // errno-Konstanten aus <errno.h>:
+  EPERM         1   Keine Berechtigung
+  ENOENT        2   Datei nicht gefunden
+  EINTR         4   Unterbrochen durch Signal
+  EAGAIN       11   Ressource vorübergehend nicht verfügbar
+  ENOMEM       12   Kein Speicher mehr
+  EACCES       13   Zugriff verweigert
+  EEXIST       17   Datei existiert bereits
+  EINVAL       22   Ungültiges Argument
+  ENOSPC       28   Kein Platz mehr auf dem Gerät
+
+Eigenes Error-Handling-System:
+  typedef enum {
+      ERR_OK = 0,
+      ERR_NULL_POINTER,
+      ERR_OUT_OF_BOUNDS,
+      ERR_IO,
+      ERR_NO_MEMORY
+  } FehlerCode;
+  
+  typedef struct {
+      FehlerCode code;
+      char meldung[256];
+      const char *datei;
+      int zeile;
+  } Fehler;
+  
+  // Thread-lokaler letzter Fehler:
+  static _Thread_local Fehler letzter_fehler;
+  
+  void fehler_setzen(FehlerCode code, const char *fmt, const char *datei, int zeile, ...) {
+      letzter_fehler.code = code;
+      letzter_fehler.datei = datei;
+      letzter_fehler.zeile = zeile;
+      va_list args;
+      va_start(args, zeile);
+      vsnprintf(letzter_fehler.meldung, sizeof(letzter_fehler.meldung), fmt, args);
+      va_end(args);
+  }
+  
+  #define FEHLER(code, ...) fehler_setzen(code, __VA_ARGS__, __FILE__, __LINE__)
+
+================================================================================
+MODUL 15: POSIX-Systemprogrammierung
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Prozesse — fork(), exec(), wait()
+------------------------------------------------------------------------
+
+  #include <unistd.h>
+  #include <sys/wait.h>
+  
+  // fork() erstellt einen Kindprozess (exakte Kopie):
+  pid_t pid = fork();
+  
+  if (pid < 0) {
+      perror("fork");
+      exit(1);
+  } else if (pid == 0) {
+      // === KINDPROZESS ===
+      printf("Ich bin das Kind, PID=%d\n", getpid());
+      
+      // exec() ersetzt den Prozess mit einem neuen Programm:
+      execlp("ls", "ls", "-la", NULL);   // Argument-Liste endet mit NULL
+      perror("exec");   // nur wenn exec fehlschlägt
+      exit(1);
+  } else {
+      // === ELTERNPROZESS ===
+      printf("Ich bin der Elter, Kind-PID=%d\n", pid);
+      
+      int status;
+      pid_t beendet = waitpid(pid, &status, 0);   // auf Kind warten
+      
+      if (WIFEXITED(status))
+          printf("Kind beendet mit Code %d\n", WEXITSTATUS(status));
+      else if (WIFSIGNALED(status))
+          printf("Kind durch Signal %d beendet\n", WTERMSIG(status));
+  }
+
+  // Häufige exec-Varianten:
+  execl("/bin/ls", "ls", "-la", NULL);      // absoluter Pfad, Liste
+  execlp("ls", "ls", "-la", NULL);          // Suche in PATH
+  execv("/bin/ls", (char*[]){"/bin/ls", "-la", NULL});  // absoluter Pfad, Array
+  execvp("ls", (char*[]){"ls", "-la", NULL}); // Suche in PATH, Array
+  execve("/bin/ls", argv, envp);             // mit eigenem Environment
+
+------------------------------------------------------------------------
+15.2  Pipes — Kommunikation zwischen Prozessen
+------------------------------------------------------------------------
+
+  #include <unistd.h>
+  
+  // pipe() erstellt ein Paar von File-Deskriptoren:
+  int pipefd[2];   // pipefd[0] = Lesen, pipefd[1] = Schreiben
+  pipe(pipefd);
+  
+  pid_t pid = fork();
+  if (pid == 0) {
+      // Kind: schreibt in Pipe
+      close(pipefd[0]);   // Lese-Ende schließen
+      write(pipefd[1], "Hallo vom Kind!", 15);
+      close(pipefd[1]);
+      exit(0);
+  } else {
+      // Elter: liest aus Pipe
+      close(pipefd[1]);   // Schreib-Ende schließen
+      char buf[100];
+      ssize_t n = read(pipefd[0], buf, sizeof(buf) - 1);
+      buf[n] = '\0';
+      printf("Empfangen: %s\n", buf);
+      close(pipefd[0]);
+      wait(NULL);
+  }
+
+  // popen() — Shell-Befehl ausführen und Output lesen:
+  FILE *fp = popen("ls -la /tmp", "r");
+  if (fp) {
+      char zeile[256];
+      while (fgets(zeile, sizeof(zeile), fp))
+          printf("%s", zeile);
+      pclose(fp);
+  }
+
+------------------------------------------------------------------------
+15.3  Signale
+------------------------------------------------------------------------
+
+  #include <signal.h>
+  
+  // Signal-Handler:
+  volatile sig_atomic_t laeuft = 1;
+  
+  void sigint_handler(int sig) {
+      (void)sig;   // unbenutzte Parameter unterdrücken
+      laeuft = 0;
+      // Nur async-signal-safe Funktionen aufrufen!
+      // KEIN printf, malloc, free etc.!
+      write(STDOUT_FILENO, "\nCtrl+C empfangen.\n", 19);
+  }
+  
+  // Handler registrieren (sigaction ist besser als signal()):
+  struct sigaction sa = {0};
+  sa.sa_handler = sigint_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;   // unterbrochene Systemaufrufe neu starten
+  sigaction(SIGINT, &sa, NULL);
+  
+  while (laeuft) {
+      printf("Läuft... (Ctrl+C zum Beenden)\n");
+      sleep(1);
+  }
+  printf("Sauber beendet.\n");
+
+  // Wichtige Signale:
+  SIGINT    2   Ctrl+C (Interrupt)
+  SIGTERM  15   Normales Beenden (kill)
+  SIGKILL   9   Sofortiges Beenden (kann NICHT abgefangen werden!)
+  SIGSEGV  11   Segmentation Fault
+  SIGFPE    8   Fließkomma-Fehler (Division durch 0, Overflow)
+  SIGCHLD  17   Kindprozess beendet
+  SIGPIPE  13   Schreiben in geschlossene Pipe
+  SIGUSR1  10   Benutzerdefiniert
+  SIGUSR2  12   Benutzerdefiniert
+  SIGALRM  14   Alarm (von alarm())
+
+------------------------------------------------------------------------
+15.4  POSIX Threads (pthreads)
+------------------------------------------------------------------------
+
+  #include <pthread.h>
+  // Kompilieren mit: gcc -o prog prog.c -lpthread
+  
+  // Thread-Funktion muss void* zurückgeben und void* nehmen:
+  void* thread_funktion(void *arg) {
+      int num = *(int*)arg;
+      printf("Thread %d läuft\n", num);
+      int *ergebnis = malloc(sizeof(int));
+      *ergebnis = num * num;
+      return ergebnis;
+  }
+  
+  int main() {
+      pthread_t threads[5];
+      int ids[5];
+      
+      for (int i = 0; i < 5; i++) {
+          ids[i] = i;
+          pthread_create(&threads[i], NULL, thread_funktion, &ids[i]);
+      }
+      
+      for (int i = 0; i < 5; i++) {
+          void *ret;
+          pthread_join(threads[i], &ret);
+          printf("Thread %d: %d²=%d\n", i, i, *(int*)ret);
+          free(ret);
+      }
+      return 0;
+  }
+
+MUTEX — gegenseitiger Ausschluss:
+  pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+  int zaehler = 0;
+  
+  void* zaehle(void *arg) {
+      for (int i = 0; i < 100000; i++) {
+          pthread_mutex_lock(&mutex);
+          zaehler++;    // kritischer Abschnitt
+          pthread_mutex_unlock(&mutex);
+      }
+      return NULL;
+  }
+  // Ohne mutex: zaehler wäre weniger als 200000 (Data Race!)
+
+READ-WRITE LOCK (mehrere Leser, ein Schreiber):
+  pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
+  
+  // Für Lesen (mehrere gleichzeitig erlaubt):
+  pthread_rwlock_rdlock(&rwlock);
+  // ... lesen ...
+  pthread_rwlock_unlock(&rwlock);
+  
+  // Für Schreiben (exklusiv):
+  pthread_rwlock_wrlock(&rwlock);
+  // ... schreiben ...
+  pthread_rwlock_unlock(&rwlock);
+
+CONDITION VARIABLE — Threads koordinieren:
+  pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
+  int bereit = 0;
+  
+  // Produzent:
+  pthread_mutex_lock(&m);
+  bereit = 1;
+  pthread_cond_signal(&cv);   // einen Warter wecken
+  pthread_mutex_unlock(&m);
+  
+  // Konsument:
+  pthread_mutex_lock(&m);
+  while (!bereit)   // IMMER while, nie if! (spurious wakeups)
+      pthread_cond_wait(&cv, &m);   // gibt Mutex frei und wartet
+  // ... verarbeiten ...
+  pthread_mutex_unlock(&m);
+
+Thread-Pool (Producer-Consumer Pattern):
+  #define THREAD_POOL_SIZE 4
+  #define WARTESCHLANGE_GROESSE 64
+  
+  typedef void (*Task)(void*);
+  typedef struct { Task funktion; void *arg; } Aufgabe;
+  
+  typedef struct {
+      pthread_t threads[THREAD_POOL_SIZE];
+      Aufgabe   aufgaben[WARTESCHLANGE_GROESSE];
+      int vorne, hinten, anzahl;
+      pthread_mutex_t mutex;
+      pthread_cond_t nicht_leer, nicht_voll;
+      int laeuft;
+  } ThreadPool;
+  // (vollständige Implementierung würde hier zu lang — siehe separate Datei)
+
+------------------------------------------------------------------------
+15.5  Sockets — Netzwerkprogrammierung
+------------------------------------------------------------------------
+
+TCP-Server:
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  
+  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  
+  // SO_REUSEADDR: Port sofort nach Programmende freigeben:
+  int opt = 1;
+  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+  
+  struct sockaddr_in addr = {0};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = INADDR_ANY;   // alle Interfaces
+  addr.sin_port = htons(8080);          // Port (Network Byte Order!)
+  
+  bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
+  listen(server_fd, 10);   // max 10 wartende Verbindungen
+  
+  while (1) {
+      struct sockaddr_in client_addr;
+      socklen_t client_len = sizeof(client_addr);
+      int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+      
+      char client_ip[INET_ADDRSTRLEN];
+      inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+      printf("Verbindung von %s\n", client_ip);
+      
+      // Daten empfangen:
+      char buf[1024];
+      ssize_t n = recv(client_fd, buf, sizeof(buf) - 1, 0);
+      buf[n] = '\0';
+      
+      // Antwort senden:
+      const char *antwort = "Hallo vom Server!\n";
+      send(client_fd, antwort, strlen(antwort), 0);
+      
+      close(client_fd);
+  }
+  close(server_fd);
+
+TCP-Client:
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  
+  struct sockaddr_in server = {0};
+  server.sin_family = AF_INET;
+  server.sin_port = htons(8080);
+  inet_pton(AF_INET, "127.0.0.1", &server.sin_addr);
+  
+  connect(sock, (struct sockaddr*)&server, sizeof(server));
+  
+  send(sock, "Hallo Server!", 13, 0);
+  
+  char buf[1024];
+  recv(sock, buf, sizeof(buf), 0);
+  printf("%s\n", buf);
+  
+  close(sock);
+
+================================================================================
+TEIL 6 — PROFI-THEMEN
+================================================================================
+
+================================================================================
+MODUL 16: C11/C17/C23 Features
+================================================================================
+
+------------------------------------------------------------------------
+16.1  C11 Features
+------------------------------------------------------------------------
+
+Anonyme Structs und Unions (sehr nützlich!):
+  typedef struct {
+      union {
+          struct { float x, y, z; };   // ohne Name! Direktzugriff:
+          float v[3];
+      };
+  } Vektor3;
+  
+  Vektor3 v;
+  v.x = 1.0f;   // über anonym struct
+  v.v[0] = 1.0f; // über Array-Zugriff — gleicher Speicher!
+
+_Static_assert:
+  _Static_assert(sizeof(int) == 4, "int muss 4 Bytes sein");
+  _Static_assert(sizeof(void*) == 8, "64-Bit System erwartet");
+
+_Thread_local:
+  _Thread_local int thread_id;   // jeder Thread hat seine eigene Kopie
+  // Nützlich für: errno (intern so implementiert!), thread-spezifische Daten
+
+_Atomic und <stdatomic.h>:
+  #include <stdatomic.h>
+  
+  atomic_int zaehler = ATOMIC_VAR_INIT(0);
+  
+  // Atomare Operationen (thread-safe ohne Mutex!):
+  atomic_fetch_add(&zaehler, 1);    // zaehler++
+  atomic_fetch_sub(&zaehler, 1);    // zaehler--
+  int wert = atomic_load(&zaehler); // lesen
+  atomic_store(&zaehler, 0);        // schreiben
+  
+  // Compare-and-Swap (CAS) für Lock-Free-Programmierung:
+  int erwartet = 5;
+  atomic_compare_exchange_strong(&zaehler, &erwartet, 10);
+  // Wenn zaehler == 5: setze auf 10, gib true zurück
+  // Sonst: setze erwartet = aktueller Wert, gib false zurück
+
+aligned_alloc (C11):
+  // Speicher mit bestimmtem Alignment allozieren (für SIMD etc.):
+  void *p = aligned_alloc(64, 1024);  // 1024 Bytes, 64-Byte-aligned
+  free(p);
+
+------------------------------------------------------------------------
+16.2  C23 Features (aktuell)
+------------------------------------------------------------------------
+
+  // nullptr statt NULL (klar als Pointer-Konstante):
+  int *p = nullptr;   // C23
+  
+  // typeof (wie gcc-Erweiterung, jetzt standard):
+  int x = 42;
+  typeof(x) y = x * 2;   // y ist vom gleichen Typ wie x
+  
+  // typeof für generische Makros:
+  #define SWAP(a, b) do { typeof(a) t = (a); (a) = (b); (b) = t; } while(0)
+  
+  // Binärliterale (0b...):
+  int flags = 0b10110101;   // = 181 (war vorher gcc-Erweiterung, jetzt standard)
+  
+  // ' als Trennzeichen in Zahlen:
+  long long gross = 1'000'000'000;   // = 1000000000 (besser lesbar!)
+  int hex = 0xFF'FF'FF;
+  
+  // constexpr (ähnlich wie C++):
+  constexpr int PUFFER_GROESSE = 4096;
+  
+  // auto (Typ-Inferenz, limitiert):
+  auto x = 42;   // int
+
+================================================================================
+MODUL 17: Debugging und Profiling
+================================================================================
+
+------------------------------------------------------------------------
+17.1  GDB — GNU Debugger
+------------------------------------------------------------------------
+
+Grundlegende GDB-Befehle:
+  gcc -g -O0 programm.c -o programm  # Debug-Build
+  gdb ./programm                       # starten
+  
+  GDB-Befehle:
+  run [args]          Programm starten
+  break main          Breakpoint in main setzen
+  break datei.c:42    Breakpoint auf Zeile 42
+  break funktion      Breakpoint am Anfang einer Funktion
+  watch x             Watchpoint: stoppe wenn x sich ändert
+  next (n)            Nächste Zeile (ohne in Funktionen springen)
+  step (s)            Nächste Zeile (tritt in Funktionen ein)
+  continue (c)        Bis nächsten Breakpoint weiterlaufen
+  finish              Bis Ende der aktuellen Funktion
+  print x             Wert von x anzeigen
+  print *ptr          Dereferenzierten Pointer anzeigen
+  print arr[0]@5      5 Elemente des Arrays ab Index 0
+  display x           x bei jedem Stop anzeigen
+  info locals         Alle lokalen Variablen anzeigen
+  info args           Alle Argumente der Funktion anzeigen
+  backtrace (bt)      Aufruf-Stack anzeigen
+  frame n             In Frame n wechseln
+  list                Quellcode anzeigen
+  quit (q)            GDB beenden
+
+  // Core Dump analysieren (wenn Programm gecrasht ist):
+  ulimit -c unlimited      // Core Dumps aktivieren
+  ./programm               // Programm crasht → core Datei erstellt
+  gdb ./programm core      // Post-Mortem-Analyse
+
+------------------------------------------------------------------------
+17.2  Performance-Messung
+------------------------------------------------------------------------
+
+  #include <time.h>
+  
+  // Grobe Zeitmessung:
+  clock_t start = clock();
+  // ... Code ...
+  clock_t ende = clock();
+  double sekunden = (double)(ende - start) / CLOCKS_PER_SEC;
+  printf("Zeit: %.6f Sekunden\n", sekunden);
+  
+  // POSIX high-resolution timer:
+  struct timespec ts_start, ts_ende;
+  clock_gettime(CLOCK_MONOTONIC, &ts_start);
+  // ... Code ...
+  clock_gettime(CLOCK_MONOTONIC, &ts_ende);
+  double ns = (ts_ende.tv_sec - ts_start.tv_sec) * 1e9 +
+              (ts_ende.tv_nsec - ts_start.tv_nsec);
+  printf("Zeit: %.3f ms\n", ns / 1e6);
+
+gprof (Profiler):
+  gcc -pg -O2 programm.c -o programm   // Profiling aktivieren
+  ./programm                             // ausführen → gmon.out erstellt
+  gprof ./programm gmon.out | less       // Auswertung
+  
+  // Zeigt: wie viel Zeit in welcher Funktion verbracht wurde
+
+perf (Linux Performance Tool):
+  perf stat ./programm           // CPU-Statistiken
+  perf record ./programm         // Profiling
+  perf report                    // Auswertung
+
+================================================================================
+MODUL 18: Performance-Optimierung
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Cache-freundlicher Code
+------------------------------------------------------------------------
+
+Cache-Hierarchie (typisch):
+  L1-Cache:  ~32 KB,   ~4 Zyklen
+  L2-Cache:  ~256 KB,  ~12 Zyklen
+  L3-Cache:  ~8 MB,    ~40 Zyklen
+  RAM:       GBs,      ~200 Zyklen
+  SSD:       TBs,      ~100.000 Zyklen
+
+Cache-Line = 64 Bytes (typisch). Beim Zugriff auf ein Byte werden
+immer 64 Bytes geladen!
+
+SCHLECHT (Spalten-Major für C-Array = viele Cache-Misses):
+  for (int j = 0; j < 1000; j++)       // Spalte
+      for (int i = 0; i < 1000; i++)   // Zeile
+          matrix[i][j]++;               // springt 4000 Bytes weiter!
+
+GUT (Zeilen-Major = sequenziell, cache-freundlich):
+  for (int i = 0; i < 1000; i++)       // Zeile
+      for (int j = 0; j < 1000; j++)   // Spalte
+          matrix[i][j]++;               // nur 4 Bytes weiter
+
+Structure of Arrays vs. Array of Structures:
+  // AoS (häufig, aber nicht immer besser):
+  struct Partikel { float x, y, z, masse; } partikel[10000];
+  
+  // SoA (besser wenn z.B. nur x und y in der inneren Schleife):
+  struct { float x[10000], y[10000], z[10000], masse[10000]; } partikel;
+  
+  // Bei SIMD-Berechnungen: SoA oft deutlich schneller
+
+Branch Prediction:
+  // Vorhersehbare Bedingungen → schneller:
+  for (int i = 0; i < n; i++) {
+      if (arr[i] > 0) arr[i] *= 2;   // unvorhersehbar wenn random
+  }
+  
+  // Besser: Branch elimieren mit Branchless Code:
+  for (int i = 0; i < n; i++) {
+      arr[i] *= 1 + (arr[i] > 0);   // kein Branch!
+  }
+  
+  // gcc Hints:
+  if (__builtin_expect(fehler, 0)) {  // fehler wird selten true sein
+      // Fehlerbehandlung
+  }
+
+------------------------------------------------------------------------
+18.2  Compiler-Optimierungen verstehen
+------------------------------------------------------------------------
+
+  // Strength Reduction: Compiler ersetzt teuer durch günstiger
+  x * 8  →  x << 3    (vom Compiler automatisch)
+  x / 4  →  x >> 2    (für unsigned)
+  x % 8  →  x & 7     (für Zweierpotenzen)
+  
+  // Loop Unrolling (manuell wenn nötig):
+  // Statt:
+  for (int i = 0; i < n; i++) a[i] += b[i];
+  
+  // Unrolled:
+  int i;
+  for (i = 0; i <= n-4; i += 4) {
+      a[i+0] += b[i+0];
+      a[i+1] += b[i+1];
+      a[i+2] += b[i+2];
+      a[i+3] += b[i+3];
+  }
+  for (; i < n; i++) a[i] += b[i];   // Rest
+  
+  // Aber: Compiler macht das oft selbst mit -O2!
+  // Messe IMMER vor und nach Optimierungen!
+
+================================================================================
+MODUL 19: Erweiterte Themen und C-Best-Practices
+================================================================================
+
+------------------------------------------------------------------------
+19.1  Defensive Programmierung
+------------------------------------------------------------------------
+
+PRECONDITION-Checks:
+  #include <assert.h>
+  
+  int binaere_suche(const int *arr, int n, int ziel) {
+      assert(arr != NULL);   // Laufzeit-Fehler wenn arr == NULL
+      assert(n >= 0);
+      // Im Release-Build mit -DNDEBUG deaktiviert!
+      // ...
+  }
+  
+  // Für Production: eigene CHECK-Makros:
+  #define CHECK(bedingung) \
+      do { \
+          if (!(bedingung)) { \
+              fprintf(stderr, "CHECK fehlgeschlagen: %s [%s:%d]\n", \
+                      #bedingung, __FILE__, __LINE__); \
+              abort(); \
+          } \
+      } while(0)
+  
+  CHECK(ptr != NULL);
+  CHECK(n > 0 && n < MAX_N);
+
+Bounds-Checking für Arrays:
+  #define SAFE_INDEX(arr, i, n) \
+      (assert((i) >= 0 && (i) < (n)), (arr)[i])
+  
+  int wert = SAFE_INDEX(mein_array, idx, ARRAY_SIZE);
+
+------------------------------------------------------------------------
+19.2  Typisches C-Projekt-Layout
+------------------------------------------------------------------------
+
+  mein_projekt/
+  ├── include/
+  │   ├── modul_a.h
+  │   └── modul_b.h
+  ├── src/
+  │   ├── main.c
+  │   ├── modul_a.c
+  │   └── modul_b.c
+  ├── tests/
+  │   ├── test_modul_a.c
+  │   └── test_modul_b.c
+  ├── lib/          (externe Bibliotheken)
+  ├── docs/
+  ├── Makefile
+  └── README.md
+
+  Header-Konventionen:
+    → extern "C" { } für C++-Kompatibilität:
+    #ifdef __cplusplus
+    extern "C" {
+    #endif
+    // ... C-Deklarationen ...
+    #ifdef __cplusplus
+    }
+    #endif
+
+------------------------------------------------------------------------
+19.3  Wichtige Bibliotheken
+------------------------------------------------------------------------
+
+Standardbibliothek (<...>):
+  stdio.h    I/O: printf, scanf, fopen, fclose, fgets, fprintf
+  stdlib.h   Utilities: malloc, free, atoi, strtol, qsort, bsearch, exit
+  string.h   Strings: strlen, strcpy, strcmp, memcpy, memset
+  math.h     Mathematik: sqrt, pow, sin, cos, floor, ceil, fabs (-lm nötig!)
+  time.h     Zeit: time, clock, difftime, strftime
+  assert.h   Debugging: assert
+  errno.h    Fehlercodes: errno
+  limits.h   Typ-Grenzen: INT_MAX, UINT_MAX etc.
+  stdint.h   Exakte Typen: int32_t, uint64_t etc.
+  stdbool.h  Boolean: bool, true, false
+  stddef.h   Grundtypen: size_t, ptrdiff_t, NULL, offsetof
+  setjmp.h   Nicht-lokales Springen: setjmp, longjmp
+  signal.h   Signale: signal, raise, kill
+  ctype.h    Zeichen-Klassifikation: isdigit, isalpha, tolower, toupper
+
+POSIX-Bibliotheken:
+  unistd.h   fork, exec, pipe, read, write, close, getpid
+  sys/wait.h wait, waitpid
+  fcntl.h    open, O_RDONLY, O_WRONLY
+  sys/socket.h socket, bind, listen, accept, connect
+  pthread.h  Threads (-lpthread)
+
+Externe Bibliotheken (populär):
+  zlib       Komprimierung (deflate/inflate)
+  openssl    Kryptographie (AES, RSA, SHA, TLS)
+  curl       HTTP/FTP/etc. (libcurl)
+  sqlite3    Eingebettete SQL-Datenbank
+  json-c     JSON-Parsing
+  libpq      PostgreSQL-Client
+  ncurses    Terminal-UI
+  SDL2       Grafik, Sound, Input
+
+================================================================================
+SCHNELLREFERENZ — REINES C
+================================================================================
+
+TYPEN UND GRÖSSEN:
+  char(1B) short(2B) int(4B) long(8B auf 64-Bit) long long(8B)
+  float(4B,7 Stellen) double(8B,15 Stellen)
+  IMMER: uint32_t, int64_t etc. aus <stdint.h> für portablen Code!
+  size_t für Größen, ptrdiff_t für Pointer-Differenzen
+
+POINTER:
+  int *p = &x;    *p (Dereferenzierung)    &x (Adresse)
+  NULL immer prüfen!   p++ springt sizeof(Typ) Bytes
+  int *arr[10] = Array von Pointern
+  int (*p_arr)[10] = Pointer auf Array
+  int (*fp)(int) = Funktionspointer
+
+SPEICHER:
+  malloc(n)         uninitalisiert
+  calloc(n, sz)     auf 0 gesetzt
+  realloc(p, n)     Größe ändern (IMMER Rückgabe prüfen!)
+  free(p); p=NULL;  freigeben (immer auf NULL setzen danach)
+
+STRINGS:
+  char arr[] = "Hallo";  // Stack-Kopie (änderbar)
+  char *s = "Hallo";     // String-Literal (READONLY!)
+  NIEMALS gets(), IMMER fgets() oder snprintf()
+  strncat/strncpy sind sicherer als strcat/strcpy
+  Länge: strlen(s) → ohne \0   sizeof(arr) → mit \0
+
+SORTIEREN:
+  O(n²): Bubble, Selection, Insertion (kleine Arrays, fast-sortiert)
+  O(n log n): Merge (stabil), Quick (avg), Heap (in-place)
+  Nicht-vergleichsbasiert: Counting Sort O(n+k)
+  qsort(arr, n, sizeof(elem), comparator) aus stdlib.h
+
+DATEIOPERATIONEN:
+  fopen/fclose immer paarig
+  fgets > scanf für Strings
+  fwrite/fread für Binärdaten
+  snprintf statt sprintf
+  perror() für Fehlermeldungen
+
+PARALLELITÄT:
+  pthread_create/join für Threads
+  pthread_mutex_lock/unlock für Synchronisation
+  volatile sig_atomic_t für Signal-Handler-Variablen
+  _Atomic / <stdatomic.h> für Lock-Free
+
+DEBUGGING-TOOLS:
+  gcc -fsanitize=address,undefined -g    (bestes Debugging)
+  valgrind --leak-check=full             (Speicherlecks)
+  gdb ./prog                             (Debugger)
+  perf stat ./prog                       (Performance)
+  objdump -d ./prog                      (Disassemblierung)
+
+ÜBUNGEN FÜR DEN PROFI:
+  1. Implementiere einen vollständigen JSON-Parser in C
+  2. Schreibe einen einfachen HTTP/1.0-Webserver mit Sockets + fork()
+  3. Implementiere einen Garbage-Collector (Mark-and-Sweep)
+  4. Schreibe einen einfachen Interpreter für eine Mini-Sprache
+  5. Implementiere Red-Black-Tree und Skip-List
+  6. Schreibe eine Thread-sichere Hash-Map
+  7. Implementiere DEFLATE (Zip-Komprimierung)
+  8. Schreibe ein Build-System (ähnlich make) in C
+
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+Alle Rechte vorbehalten.
+================================================================================
+
+================================================================================
+TEIL 5 — SYSTEMNAHE PROGRAMMIERUNG
+================================================================================
+
+================================================================================
+MODUL 14: POSIX — Prozesse, Signale, Threads
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Prozesse (fork, exec, wait)
+------------------------------------------------------------------------
+
+  #include <unistd.h>
+  #include <sys/types.h>
+  #include <sys/wait.h>
+
+FORK — Prozess klonen:
+  pid_t pid = fork();
+  
+  if (pid < 0) {
+      perror("fork");
+      exit(1);
+  } else if (pid == 0) {
+      // KINDPROZESS (fork gibt 0 zurück)
+      printf("Kind: PID=%d, Eltern-PID=%d\n", getpid(), getppid());
+      exit(0);
+  } else {
+      // ELTERNPROZESS (fork gibt PID des Kindes zurück)
+      printf("Eltern: Kind-PID=%d\n", pid);
+      
+      int status;
+      waitpid(pid, &status, 0);   // auf Kind warten
+      
+      if (WIFEXITED(status))
+          printf("Kind beendet mit Code: %d\n", WEXITSTATUS(status));
+  }
+
+  // Wichtig: Nach fork() laufen beide Prozesse UNABHÄNGIG weiter!
+  // Jeder hat seine EIGENE Kopie der Variablen (Copy-on-Write)
+
+EXEC — Prozess ersetzen:
+  #include <unistd.h>
+  
+  // Gibt aktuellen Prozess-Image komplett auf und lädt neues Programm:
+  execl("/bin/ls", "ls", "-la", "/tmp", NULL);  // letzte Arg MUSS NULL sein!
+  
+  // Wenn exec erfolgreich war, wird nichts danach ausgeführt!
+  perror("exec");  // nur erreicht wenn exec fehlgeschlagen
+  exit(1);
+
+  // exec-Familie:
+  execl(pfad, arg0, arg1, ..., NULL)     // direkte Argumente
+  execv(pfad, argv[])                     // Array von Argumenten
+  execlp(datei, arg0, arg1, ..., NULL)   // sucht in PATH
+  execvp(datei, argv[])                   // sucht in PATH, Array
+  execle(pfad, arg0, ..., NULL, envp[])  // mit Umgebungsvariablen
+  execve(pfad, argv[], envp[])            // alles manuell
+
+Shell-Befehl ausführen (einfachste Methode):
+  int status = system("ls -la");  // Gibt Befehl an Shell weiter
+  // system() wartet auf Abschluss
+  // SICHERHEITSRISIKO wenn Eingabe vom User kommt! (Shell injection)
+
+Pipe zwischen Prozessen:
+  int fds[2];
+  pipe(fds);  // fds[0]=Lesende, fds[1]=Schreibende
+  
+  pid_t pid = fork();
+  if (pid == 0) {
+      // Kind: schreibt in Pipe
+      close(fds[0]);              // Lesende schließen (nicht gebraucht)
+      write(fds[1], "Hallo!", 6);
+      close(fds[1]);
+      exit(0);
+  } else {
+      // Eltern: liest aus Pipe
+      close(fds[1]);              // Schreibende schließen
+      char buf[100];
+      ssize_t n = read(fds[0], buf, sizeof(buf));
+      buf[n] = '\0';
+      printf("Empfangen: %s\n", buf);
+      close(fds[0]);
+      wait(NULL);
+  }
+
+------------------------------------------------------------------------
+14.2  Signale
+------------------------------------------------------------------------
+
+  #include <signal.h>
+
+Signal-Handler installieren:
+  void sigint_handler(int sig) {
+      printf("\nSIGINT empfangen (Strg+C). Aufräumen...\n");
+      // ACHTUNG: In Signal-Handlern nur "async-signal-safe" Funktionen!
+      // printf ist NOT async-signal-safe! Nur für Demozwecke hier.
+      // Besser: Flag setzen, in main() prüfen
+      exit(0);
+  }
+  
+  signal(SIGINT, sigint_handler);   // Strg+C abfangen
+  
+  // Moderne Alternative (bevorzugt):
+  struct sigaction sa;
+  sa.sa_handler = sigint_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;  // Syscalls nach Signal fortsetzen
+  sigaction(SIGINT, &sa, NULL);
+
+Wichtige Signale:
+  SIGINT   2    Strg+C — Terminal-Interrupt
+  SIGTERM  15   Normales Beendigungssignal (kill PID)
+  SIGKILL  9    Kann NICHT abgefangen werden (kill -9)
+  SIGSEGV  11   Segmentation Fault
+  SIGFPE   8    Floating Point Exception (Division durch 0)
+  SIGALRM  14   Alarm (von alarm() gesetzt)
+  SIGHUP   1    Terminal geschlossen
+  SIGUSR1  10   Benutzer-definiertes Signal
+  SIGUSR2  12   Benutzer-definiertes Signal
+  SIGCHLD  17   Kindprozess beendet
+
+Signal-sicheres Flag-Pattern:
+  #include <signal.h>
+  #include <stdatomic.h>
+  
+  volatile sig_atomic_t running = 1;   // sig_atomic_t: sicher in Handlern
+  
+  void beenden_handler(int sig) {
+      running = 0;   // nur atomare Zuweisung, kein printf!
+  }
+  signal(SIGTERM, beenden_handler);
+  signal(SIGINT,  beenden_handler);
+  
+  while (running) {
+      // Hauptschleife
+      sleep(1);
+  }
+  printf("Sauber beendet.\n");
+
+------------------------------------------------------------------------
+14.3  POSIX Threads (pthreads)
+------------------------------------------------------------------------
+
+  #include <pthread.h>
+  // Kompilieren: gcc ... -lpthread
+
+Thread erstellen:
+  void *thread_funktion(void *arg) {
+      int *n = (int*)arg;
+      printf("Thread läuft mit Argument: %d\n", *n);
+      int *ergebnis = malloc(sizeof(int));
+      *ergebnis = (*n) * 2;
+      return ergebnis;  // Rückgabewert via void*
+  }
+  
+  pthread_t tid;
+  int argument = 42;
+  
+  pthread_create(&tid, NULL, thread_funktion, &argument);
+  
+  void *ret;
+  pthread_join(tid, &ret);  // warten und Rückgabewert holen
+  printf("Ergebnis: %d\n", *(int*)ret);
+  free(ret);
+
+Mutex (Mutual Exclusion):
+  pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+  int zaehler = 0;
+  
+  void *inkrement(void *arg) {
+      for (int i = 0; i < 100000; i++) {
+          pthread_mutex_lock(&mutex);    // Kritischer Abschnitt beginnt
+          zaehler++;                      // nur EIN Thread gleichzeitig!
+          pthread_mutex_unlock(&mutex);  // Kritischer Abschnitt endet
+      }
+      return NULL;
+  }
+  
+  // 4 Threads starten:
+  pthread_t threads[4];
+  for (int i = 0; i < 4; i++)
+      pthread_create(&threads[i], NULL, inkrement, NULL);
+  for (int i = 0; i < 4; i++)
+      pthread_join(threads[i], NULL);
+  
+  printf("Zaehler: %d\n", zaehler);  // immer 400000!
+
+Condition Variable (Thread-Kommunikation):
+  pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t  cond = PTHREAD_COND_INITIALIZER;
+  int bereit = 0;
+  
+  void *produzent(void *arg) {
+      sleep(1);                         // etwas Arbeit
+      pthread_mutex_lock(&mtx);
+      bereit = 1;
+      pthread_cond_signal(&cond);       // Konsument aufwecken
+      pthread_mutex_unlock(&mtx);
+      return NULL;
+  }
+  
+  void *konsument(void *arg) {
+      pthread_mutex_lock(&mtx);
+      while (!bereit)                   // Spurious-Wakeup-Schutz!
+          pthread_cond_wait(&cond, &mtx);  // wartet und gibt Mutex frei
+      printf("Daten sind bereit!\n");
+      pthread_mutex_unlock(&mtx);
+      return NULL;
+  }
+
+Semaphore:
+  #include <semaphore.h>
+  
+  sem_t sem;
+  sem_init(&sem, 0, 1);   // initial value=1 (wie Mutex)
+  
+  sem_wait(&sem);    // P-Operation: dekrementiert, blockiert wenn 0
+  // kritischer Abschnitt
+  sem_post(&sem);    // V-Operation: inkrementiert
+  
+  sem_destroy(&sem);
+
+Thread-lokaler Speicher:
+  // Thread-lokale Variable: jeder Thread hat seine eigene Kopie!
+  _Thread_local int thread_id;   // C11
+  // oder POSIX:
+  pthread_key_t key;
+  pthread_key_create(&key, free);           // Destruktor = free
+  pthread_setspecific(key, malloc(100));    // setzen
+  void *wert = pthread_getspecific(key);    // holen
+
+================================================================================
+MODUL 15: Netzwerkprogrammierung (Sockets)
+================================================================================
+
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+
+------------------------------------------------------------------------
+15.1  TCP-Server
+------------------------------------------------------------------------
+
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) { perror("socket"); exit(1); }
+  
+  // SO_REUSEADDR: Port sofort nach Programmende wieder benutzen:
+  int opt = 1;
+  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+  
+  struct sockaddr_in adresse = {
+      .sin_family = AF_INET,
+      .sin_addr.s_addr = INADDR_ANY,   // alle Interfaces
+      .sin_port = htons(8080)           // Port (in Network Byte Order!)
+  };
+  
+  bind(sockfd, (struct sockaddr*)&adresse, sizeof(adresse));
+  listen(sockfd, 10);   // max 10 wartende Verbindungen
+  
+  printf("Server wartet auf Port 8080...\n");
+  
+  while (1) {
+      struct sockaddr_in client_addr;
+      socklen_t client_len = sizeof(client_addr);
+      int clientfd = accept(sockfd, (struct sockaddr*)&client_addr, &client_len);
+      
+      char client_ip[INET_ADDRSTRLEN];
+      inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+      printf("Verbindung von: %s:%d\n", client_ip, ntohs(client_addr.sin_port));
+      
+      // In der Praxis: fork() oder Thread für jeden Client!
+      char buf[1024];
+      ssize_t n = recv(clientfd, buf, sizeof(buf)-1, 0);
+      if (n > 0) {
+          buf[n] = '\0';
+          printf("Empfangen: %s\n", buf);
+          send(clientfd, "HTTP/1.0 200 OK\r\n\r\nHallo!\r\n", 27, 0);
+      }
+      close(clientfd);
+  }
+  close(sockfd);
+
+------------------------------------------------------------------------
+15.2  TCP-Client
+------------------------------------------------------------------------
+
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  
+  struct sockaddr_in server = {
+      .sin_family = AF_INET,
+      .sin_port = htons(8080)
+  };
+  inet_pton(AF_INET, "127.0.0.1", &server.sin_addr);  // IP-String → Binär
+  
+  if (connect(sockfd, (struct sockaddr*)&server, sizeof(server)) < 0) {
+      perror("connect");
+      exit(1);
+  }
+  
+  send(sockfd, "GET / HTTP/1.0\r\n\r\n", 18, 0);
+  
+  char buf[4096];
+  ssize_t n;
+  while ((n = recv(sockfd, buf, sizeof(buf)-1, 0)) > 0) {
+      buf[n] = '\0';
+      printf("%s", buf);
+  }
+  close(sockfd);
+
+------------------------------------------------------------------------
+15.3  UDP (verbindungslos)
+------------------------------------------------------------------------
+
+  // UDP-Server:
+  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  struct sockaddr_in addr = { .sin_family=AF_INET, .sin_port=htons(9999),
+                              .sin_addr.s_addr=INADDR_ANY };
+  bind(sockfd, (struct sockaddr*)&addr, sizeof(addr));
+  
+  char buf[1024];
+  struct sockaddr_in client;
+  socklen_t client_len = sizeof(client);
+  
+  ssize_t n = recvfrom(sockfd, buf, sizeof(buf)-1, 0,
+                        (struct sockaddr*)&client, &client_len);
+  buf[n] = '\0';
+  printf("UDP: %s\n", buf);
+  sendto(sockfd, "Antwort", 7, 0, (struct sockaddr*)&client, client_len);
+  close(sockfd);
+
+------------------------------------------------------------------------
+15.4  select() — Multiple Verbindungen überwachen
+------------------------------------------------------------------------
+
+  fd_set read_fds;
+  FD_ZERO(&read_fds);
+  FD_SET(STDIN_FILENO, &read_fds);   // stdin überwachen
+  FD_SET(sockfd, &read_fds);          // Socket überwachen
+  int maxfd = sockfd;
+  
+  struct timeval timeout = { .tv_sec = 5, .tv_usec = 0 };  // 5 Sekunden
+  
+  int bereit = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
+  if (bereit < 0)  perror("select");
+  else if (bereit == 0) printf("Timeout!\n");
+  else {
+      if (FD_ISSET(STDIN_FILENO, &read_fds)) printf("Eingabe verfügbar\n");
+      if (FD_ISSET(sockfd, &read_fds))       printf("Socket-Daten da\n");
+  }
+
+================================================================================
+TEIL 6 — PROFI-THEMEN
+================================================================================
+
+================================================================================
+MODUL 16: C11/C17/C23 Features und Modernes C
+================================================================================
+
+------------------------------------------------------------------------
+16.1  C99-Features
+------------------------------------------------------------------------
+
+Mischung von Deklarationen und Code (in C89 mussten Deklarationen oben stehen):
+  // C89:
+  int i;
+  /* ... */
+  i = 0;
+  
+  // C99 (erlaubt):
+  for (int i = 0; i < 10; i++) { }   // i direkt in for
+
+Variable Length Arrays (VLA, C99, optional in C11):
+  int n = eingabe();
+  int arr[n];   // Größe erst zur Laufzeit bekannt (auf Stack!)
+  // ACHTUNG: Kein sizeof() zuverlässig, Stack-Overflow möglich
+
+Designated Initializers (C99):
+  struct Punkt p = { .x = 3.0, .y = 4.0 };
+  int arr[5] = { [2] = 10, [4] = 20 };  // arr={0,0,10,0,20}
+  
+  // Sehr nützlich für Structs mit vielen Feldern:
+  struct Config cfg = {
+      .server = "localhost",
+      .port = 8080,
+      .timeout_ms = 5000,
+      .max_verbindungen = 100
+  };
+
+Compound Literals (C99):
+  // Temporäre Werte ohne Namen:
+  punkt_addieren((Punkt){1.0, 2.0}, (Punkt){3.0, 4.0});
+  
+  // Arrays:
+  int summe(int arr[], int n);
+  summe((int[]){1, 2, 3, 4, 5}, 5);
+
+Flexible Array Members (C99):
+  typedef struct {
+      size_t laenge;
+      char daten[];   // flexibles Array am Ende
+  } String;
+  
+  String *s = malloc(sizeof(String) + 100);
+  s->laenge = strlen("Hallo");
+  strcpy(s->daten, "Hallo");
+
+------------------------------------------------------------------------
+16.2  C11-Features
+------------------------------------------------------------------------
+
+_Generic — typgenerische Makros:
+  #include <tgmath.h>   // benutzt _Generic intern!
+  
+  // sqrt() automatisch: sqrtf für float, sqrt für double, sqrtl für long double
+  float  f = sqrt(4.0f);   // sqrtf durch _Generic
+  double d = sqrt(4.0);    // sqrt
+  
+  // Eigenes Beispiel:
+  #define DRUCKE(x) _Generic((x),    \
+      int:    printf("%d\n", (x)),    \
+      double: printf("%f\n", (x)),    \
+      char*:  printf("%s\n", (x)),    \
+      default: printf("?\n"))
+  
+  DRUCKE(42);       // %d
+  DRUCKE(3.14);     // %f
+  DRUCKE("Hallo");  // %s
+
+_Static_assert:
+  _Static_assert(sizeof(int) == 4, "int muss 4 Bytes sein");
+  // Compilerfehler wenn falsch — keine Laufzeitkosten!
+
+_Thread_local:
+  _Thread_local int thread_zaehler = 0;
+  // Jeder Thread hat seine eigene Kopie!
+
+_Atomic (C11):
+  #include <stdatomic.h>
+  
+  _Atomic int globaler_zaehler = 0;
+  
+  // Atomare Operationen (keine Mutex nötig für einfache Ops):
+  atomic_fetch_add(&globaler_zaehler, 1);
+  atomic_fetch_sub(&globaler_zaehler, 1);
+  int wert = atomic_load(&globaler_zaehler);
+  atomic_store(&globaler_zaehler, 42);
+  
+  // Compare-and-Swap (CAS):
+  int erwartet = 0;
+  if (atomic_compare_exchange_strong(&globaler_zaehler, &erwartet, 1)) {
+      printf("War 0, ist jetzt 1\n");
+  } else {
+      printf("War nicht 0, war: %d\n", erwartet);
+  }
+
+Anonyme Structs/Unions (C11):
+  typedef struct {
+      union {          // ANONYM: kein Name!
+          int i;
+          float f;
+      };               // Mitglieder direkt zugänglich:
+  } Wert;
+  
+  Wert v;
+  v.i = 42;     // direkt, nicht v.union_name.i!
+  v.f = 3.14f;  // direkt
+
+------------------------------------------------------------------------
+16.3  C23-Features (aktuell, 2023)
+------------------------------------------------------------------------
+
+Binary Literals:
+  int maske = 0b11001010;   // endlich standardisiert! (war gcc-Erweiterung)
+
+nullptr (wie in C++):
+  int *p = nullptr;   // expliziter Null-Pointer (klar != 0)
+
+typeof / auto:
+  int x = 42;
+  typeof(x) y = 100;    // y ist int (gleicher Typ wie x)
+  auto z = 3.14;         // z wird double (Type Inference)
+
+#embed (Datei einbetten):
+  const unsigned char font_data[] = {
+      #embed "font.bin"   // Binärdatei direkt einbetten!
+  };
+
+[[maybe_unused]] und andere Attribute:
+  [[maybe_unused]] int debug_var = 42;  // unterdrückt "unused variable" Warnung
+  [[deprecated("Nutze neue_funktion() statt alte()")]] void alte(void);
+  [[noreturn]] void beende(void) { exit(0); }
+
+================================================================================
+MODUL 17: Debugging & Profiling
+================================================================================
+
+------------------------------------------------------------------------
+17.1  GDB (GNU Debugger)
+------------------------------------------------------------------------
+
+Kompilieren mit Debug-Infos:
+  gcc -g -O0 programm.c -o programm
+
+GDB-Befehle:
+  gdb ./programm              → GDB starten
+  (gdb) run                   → Programm starten
+  (gdb) run arg1 arg2         → mit Argumenten
+  (gdb) break main            → Breakpoint bei main()
+  (gdb) break datei.c:42      → Breakpoint bei Zeile 42
+  (gdb) break funktion        → Breakpoint bei Funktion
+  (gdb) continue (oder c)     → Weiterführen bis nächster Breakpoint
+  (gdb) next (oder n)         → Nächste Zeile (nicht in Funktionen)
+  (gdb) step (oder s)         → Nächste Zeile (in Funktionen!)
+  (gdb) finish                → Aktuelle Funktion zu Ende ausführen
+  (gdb) print x               → Variable x anzeigen
+  (gdb) print *ptr            → Wert an Pointer-Adresse
+  (gdb) print arr[0]@5        → 5 Array-Elemente ab Index 0
+  (gdb) display x             → x bei jedem Schritt anzeigen
+  (gdb) info locals           → alle lokalen Variablen
+  (gdb) info args             → Funktionsargumente
+  (gdb) backtrace (oder bt)   → Call Stack anzeigen
+  (gdb) frame 2               → zu Stack-Frame 2 wechseln
+  (gdb) list                  → Quellcode anzeigen
+  (gdb) watch x               → Watchpoint: hält bei Änderung von x
+  (gdb) info breakpoints      → alle Breakpoints
+  (gdb) delete 1              → Breakpoint 1 löschen
+  (gdb) quit                  → GDB beenden
+
+Core Dump analysieren:
+  ulimit -c unlimited          // Core Dumps erlauben
+  ./programm                   // Programm crasht → core-Datei
+  gdb ./programm core          // Core-Datei laden
+  (gdb) backtrace              // sehen wo es gecrasht hat
+
+------------------------------------------------------------------------
+17.2  Performance-Profiling
+------------------------------------------------------------------------
+
+GPROF (GNU Profiler):
+  gcc -pg -O2 programm.c -o programm
+  ./programm                          // erzeugt gmon.out
+  gprof ./programm gmon.out > profil.txt
+  // Zeigt: welche Funktionen wie oft aufgerufen wurden, wie lang
+
+PERF (Linux Kernel Profiler):
+  perf stat ./programm                // CPU-Events, Cache-Misses
+  perf record ./programm              // Sampling
+  perf report                         // Ergebnisse anzeigen
+  
+  // Interesting events:
+  perf stat -e cache-misses,cache-references,instructions,cycles ./programm
+
+Timing im Code selbst:
+  #include <time.h>
+  
+  // Einfach (Sekunden):
+  clock_t start = clock();
+  // ... Code ...
+  clock_t end = clock();
+  double sekunden = (double)(end - start) / CLOCKS_PER_SEC;
+  printf("Dauer: %.3f Sekunden\n", sekunden);
+  
+  // Hochauflösend (Nanosekunden):
+  struct timespec ts_start, ts_end;
+  clock_gettime(CLOCK_MONOTONIC, &ts_start);
+  // ... Code ...
+  clock_gettime(CLOCK_MONOTONIC, &ts_end);
+  long ns = (ts_end.tv_sec - ts_start.tv_sec) * 1000000000L
+           + (ts_end.tv_nsec - ts_start.tv_nsec);
+  printf("Dauer: %ld ns (%.3f ms)\n", ns, ns / 1e6);
+
+================================================================================
+MODUL 18: Performance-Optimierung
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Cache-freundlicher Code
+------------------------------------------------------------------------
+
+CPU-Cache-Hierarchie:
+  L1-Cache: ~4ns,  ~32KB  (sehr schnell, sehr klein)
+  L2-Cache: ~12ns, ~256KB
+  L3-Cache: ~40ns, ~8MB   (langsamer, größer)
+  RAM:      ~100ns, GB    (sehr langsam im Vergleich!)
+
+Cache-Miss ist TEUER. Schreibe Cache-freundlichen Code:
+
+SCHLECHT (Column-Major Access auf Row-Major Array):
+  for (int j = 0; j < N; j++)     // äußere Schleife Spalten
+      for (int i = 0; i < N; i++) // innere Schleife Zeilen
+          summe += matrix[i][j];  // springt N*4 Bytes pro Iteration!
+
+GUT (Row-Major Access):
+  for (int i = 0; i < N; i++)     // äußere Schleife Zeilen
+      for (int j = 0; j < N; j++) // innere Schleife Spalten
+          summe += matrix[i][j];  // sequentiell, Cache-freundlich!
+
+Structure of Arrays (SoA) vs Array of Structures (AoS):
+  // AoS: Daten gemischt — schlecht wenn nur x,y benutzt
+  typedef struct { float x, y, z, masse, ladung; } Partikel;
+  Partikel partikel[1000];
+  
+  // SoA: bessere Cache-Nutzung wenn nur Position verarbeitet wird:
+  typedef struct {
+      float x[1000], y[1000], z[1000];
+      float masse[1000], ladung[1000];
+  } PartikelsystemSoA;
+  
+  // Physik-Loop: x,y,z zusammen im Cache!
+
+------------------------------------------------------------------------
+18.2  Branch Prediction und Compiler-Hints
+------------------------------------------------------------------------
+
+  // Compiler-Hints für Branch Prediction:
+  if (__builtin_expect(fehler != NULL, 0)) {  // unwahrscheinlich
+      behandle_fehler(fehler);
+  }
+  
+  if (__builtin_expect(x > 0, 1)) {           // sehr wahrscheinlich
+      // schneller Pfad
+  }
+
+  // Ab C++20 / C23:
+  if (fehler != NULL) [[unlikely]] {
+      behandle_fehler(fehler);
+  }
+
+Branchless Programmierung:
+  // MIT Branch (langsamer bei unpredictablem Input):
+  int max = (a > b) ? a : b;
+  
+  // OHNE Branch (manchmal schneller):
+  int mask = -(a > b);   // 0xFFFFFFFF wenn a>b, sonst 0
+  int max = (a & mask) | (b & ~mask);
+  
+  // Oder einfacher:
+  int max = b + ((a - b) & ((a - b) >> 31));  // Bit-Trick
+
+------------------------------------------------------------------------
+18.3  SIMD und Compiler-Intrinsics (Einführung)
+------------------------------------------------------------------------
+
+SSE/AVX erlauben parallele Operationen auf mehreren Werten:
+  #include <immintrin.h>
+  
+  // 8 floats gleichzeitig addieren mit AVX:
+  __m256 a = _mm256_loadu_ps(arr1);      // 8 floats laden
+  __m256 b = _mm256_loadu_ps(arr2);      // 8 floats laden
+  __m256 c = _mm256_add_ps(a, b);        // 8 Additionen parallel!
+  _mm256_storeu_ps(ergebnis, c);         // 8 floats speichern
+  
+  // In Praxis: Auto-Vectorization nutzen:
+  // gcc -O2 -march=native -fopt-info-vec   (zeigt vektorisierte Schleifen)
+  
+  // Hilf dem Compiler mit restrict:
+  void addiere_arrays(float * restrict a,
+                      float * restrict b,
+                      float * restrict c, int n) {
+      for (int i = 0; i < n; i++) c[i] = a[i] + b[i];
+      // → Compiler kann vektorisieren, da a,b,c nicht überlappen!
+  }
+
+================================================================================
+MODUL 19: Fortgeschrittener Präprozessor & Error Handling
+================================================================================
+
+------------------------------------------------------------------------
+19.1  Professionelles Error Handling
+------------------------------------------------------------------------
+
+errno und perror:
+  #include <errno.h>
+  
+  FILE *f = fopen("datei.txt", "r");
+  if (f == NULL) {
+      fprintf(stderr, "Fehler beim Öffnen von datei.txt: %s (errno=%d)\n",
+              strerror(errno), errno);
+      // ODER:
+      perror("fopen");   // automatisch: "fopen: No such file or directory"
+      return -1;
+  }
+
+Eigene Fehlercodes:
+  typedef enum {
+      E_OK = 0,
+      E_NULL_PTR,
+      E_OUT_OF_MEMORY,
+      E_INVALID_ARG,
+      E_DATEI_FEHLER,
+      E_NETZWERK_FEHLER
+  } FehlerCode;
+  
+  const char *fehler_text(FehlerCode code) {
+      static const char *texte[] = {
+          "Kein Fehler",
+          "Null-Pointer",
+          "Kein Speicher",
+          "Ungültiges Argument",
+          "Dateifehler",
+          "Netzwerkfehler"
+      };
+      if (code < 0 || code >= sizeof(texte)/sizeof(texte[0]))
+          return "Unbekannter Fehler";
+      return texte[code];
+  }
+  
+  FehlerCode verarbeite(const char *pfad, int *ergebnis) {
+      if (!pfad || !ergebnis) return E_NULL_PTR;
+      FILE *f = fopen(pfad, "r");
+      if (!f) return E_DATEI_FEHLER;
+      // ...
+      fclose(f);
+      return E_OK;
+  }
+  
+  int ergebnis;
+  FehlerCode err = verarbeite("datei.txt", &ergebnis);
+  if (err != E_OK) {
+      fprintf(stderr, "Fehler: %s\n", fehler_text(err));
+  }
+
+setjmp/longjmp (C Exception-Simulation):
+  #include <setjmp.h>
+  
+  jmp_buf ausnahme;
+  
+  void riskante_funktion(void) {
+      printf("Führe riskante Operation durch...\n");
+      longjmp(ausnahme, 1);   // "throw" − springt zu setjmp zurück!
+  }
+  
+  int main(void) {
+      if (setjmp(ausnahme) == 0) {
+          // Normaler Ausführungspfad:
+          riskante_funktion();
+          printf("Hier kommen wir nie an\n");
+      } else {
+          // Exception-Handler (longjmp springt hierhin):
+          printf("Ausnahme abgefangen!\n");
+      }
+      return 0;
+  }
+  // ACHTUNG: Kein Stack-Unwinding! Destruktoren werden nicht aufgerufen.
+  // Lokale Variablen nach setjmp können undefiniert sein!
+
+------------------------------------------------------------------------
+19.2  Defensive Programmierung
+------------------------------------------------------------------------
+
+ASSERT für Debug-Überprüfungen:
+  #include <assert.h>
+  
+  void divide(int a, int b) {
+      assert(b != 0);   // Absturz mit Fehlermeldung wenn b==0 (nur DEBUG!)
+      return a / b;
+  }
+  // Mit -DNDEBUG kompilieren: assert() wird entfernt → keine Kosten in Release
+
+Robuste Funktionen schreiben:
+  // ALLES validieren was von außen kommt:
+  int sicheres_kopieren(char *ziel, size_t ziel_groesse,
+                        const char *quelle) {
+      if (!ziel || !quelle) return -1;          // Null-Pointer check
+      if (ziel_groesse == 0) return -1;          // Größe check
+      
+      size_t quelle_len = strlen(quelle);
+      if (quelle_len >= ziel_groesse) {
+          // Trunkierung mit Terminierung:
+          memcpy(ziel, quelle, ziel_groesse - 1);
+          ziel[ziel_groesse - 1] = '\0';
+          return 1;   // Trunkiert
+      }
+      memcpy(ziel, quelle, quelle_len + 1);
+      return 0;
+  }
+
+================================================================================
+MODUL 20: Fortgeschrittene Themen — Inline ASM, IPC, Shared Memory
+================================================================================
+
+------------------------------------------------------------------------
+20.1  Inline Assembly
+------------------------------------------------------------------------
+
+  // gcc Inline-Assembly (AT&T Syntax):
+  int ergebnis;
+  int a = 10, b = 20;
+  
+  asm("addl %1, %0"
+      : "=r"(ergebnis)    // Output: ergebnis in Register
+      : "r"(a), "0"(b)    // Input: a und b in Register, b auch in ergebnis
+      :                   // Clobbered: keine
+  );
+  printf("Ergebnis: %d\n", ergebnis);  // 30
+  
+  // Praktisches Beispiel: Atomarer Wert lesen:
+  static inline int atomarer_add(volatile int *zeiger, int delta) {
+      int result;
+      asm volatile("lock; xaddl %0, %1"
+                   : "=r"(result), "+m"(*zeiger)
+                   : "0"(delta)
+                   : "memory");
+      return result;
+  }
+
+------------------------------------------------------------------------
+20.2  Shared Memory (IPC zwischen Prozessen)
+------------------------------------------------------------------------
+
+  #include <sys/mman.h>
+  #include <sys/stat.h>
+  #include <fcntl.h>
+  
+  // Shared Memory erstellen (POSIX):
+  int shm_fd = shm_open("/mein_shared_mem", O_CREAT | O_RDWR, 0600);
+  ftruncate(shm_fd, 4096);    // Größe setzen
+  
+  void *shm = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                   MAP_SHARED, shm_fd, 0);
+  
+  // Daten schreiben:
+  *(int*)shm = 42;
+  
+  // Shared Memory in anderem Prozess öffnen:
+  int shm_fd2 = shm_open("/mein_shared_mem", O_RDONLY, 0);
+  void *shm2 = mmap(NULL, 4096, PROT_READ, MAP_SHARED, shm_fd2, 0);
+  printf("Shared: %d\n", *(int*)shm2);   // 42
+  
+  // Aufräumen:
+  munmap(shm, 4096);
+  shm_unlink("/mein_shared_mem");
+
+  // mmap für Dateien (sehr effizient!):
+  int fd = open("grosse_datei.bin", O_RDONLY);
+  struct stat sb;
+  fstat(fd, &sb);
+  void *map = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  // Datei ist jetzt wie ein Array zugänglich!
+  // OS lädt nur Seiten die tatsächlich benötigt werden (Demand Paging)
+  munmap(map, sb.st_size);
+  close(fd);
+
+================================================================================
+SCHNELLREFERENZ C — ProfiKurs v2
+================================================================================
+
+KOMPILIEREN:
+  gcc -Wall -Wextra -Werror -std=c11 -g datei.c -o prog
+  gcc -O2 -DNDEBUG datei.c -o prog         ← Release
+  gcc -fsanitize=address -g datei.c -o prog ← Speicherfehler finden
+  gcc -fsanitize=undefined -g datei.c -o prog ← UB finden
+
+TYPEN:
+  char(1) short(2) int(4) long(8) long long(8) auf 64-Bit
+  float(4) double(8) long double(10/16)
+  stdint.h: int8_t..int64_t, uint8_t..uint64_t — PORTABEL!
+  size_t (groß genug für Array-Größen), ptrdiff_t (Pointer-Differenz)
+
+POINTER:
+  int *p = &x;     // p enthält Adresse von x
+  *p = 42;          // Wert an Adresse setzen (Dereferenzierung)
+  p++;              // springt sizeof(int) = 4 Bytes weiter
+  p = NULL;         // immer initialisieren / nach free setzen
+  void *vp;         // generischer Pointer, kein Dereferenzieren ohne Cast
+
+SPEICHER:
+  malloc(n)            → n Bytes, UNDEFINIERTER Inhalt
+  calloc(n, size)      → n*size Bytes, auf 0 initialisiert
+  realloc(ptr, n)      → Größe ändern, NEUEN Pointer benutzen!
+  free(ptr)            → Speicher freigeben, dann ptr=NULL!
+  Regel: jedes malloc braucht genau ein free!
+
+STRINGS:
+  char s[] = "Hallo";  // Kopie auf Stack, modifizierbar
+  char *s = "Hallo";   // Literal im .rodata, NICHT modifizierbar!
+  strlen(s)    strcpy/strncpy    strcat/strncat    strcmp/strncmp
+  snprintf(buf, sizeof(buf), fmt, ...)  ← IMMER snprintf statt sprintf!
+  fgets(buf, sizeof(buf), stdin)         ← IMMER fgets statt gets!
+
+BIT-TRICKS:
+  x |= (1<<n)    Bit n setzen
+  x &= ~(1<<n)   Bit n löschen
+  x ^= (1<<n)    Bit n umschalten
+  x & (1<<n)     Bit n testen
+  x & (x-1)      niedrigstes gesetztes Bit löschen
+  x & (-x)       nur niedrigstes gesetztes Bit behalten
+
+FUNKTIONSPOINTER:
+  int (*fp)(int, int)         Pointer auf Funktion
+  typedef int (*Op)(int,int)  Lesbarerer Typ mit typedef
+  qsort(arr, n, sizeof(T), vergleich_funktion)
+
+DATENSTRUKTUREN KOMPLEXITÄT:
+  Array:          Zugriff O(1), Suche O(n), Einfügen O(n)
+  Linked List:    Zugriff O(n), Einfügen O(1) vorne
+  BST (balanced): Alle Ops O(log n)
+  Hash-Tabelle:   Alle Ops O(1) average
+  Heap:           Min/Max O(1), Einfügen/Entnehmen O(log n)
+
+ALGORITHMEN:
+  Lineare Suche  O(n)       — immer
+  Binäre Suche   O(log n)   — nur auf sortiert
+  Bubble/Insertion Sort  O(n²)   — kleine Arrays
+  Merge Sort     O(n log n) — stabil, braucht O(n) Speicher
+  Quicksort      O(n log n) avg, O(n²) worst — in-place
+  Heap Sort      O(n log n) — in-place, nicht stabil
+
+POSIX ESSENTIALS:
+  fork()                     Prozess klonen
+  exec*(pfad, args...)       Prozess ersetzen
+  wait()/waitpid()           Auf Kind-Prozess warten
+  pipe(fds)                  Kommunikations-Rohr
+  pthread_create/join        Thread erstellen/warten
+  pthread_mutex_lock/unlock  Mutual Exclusion
+  signal()/sigaction()       Signale abfangen
+
+DEBUGGING:
+  gcc -g -O0                 Debug-Build
+  gdb ./programm             Debugger starten
+  valgrind --leak-check=full Speicherfehler + Leaks
+  -fsanitize=address         AddressSanitizer (schneller als valgrind)
+  -fsanitize=undefined       Undefined Behavior Sanitizer
+
+================================================================================
+LITERATUR & RESSOURCEN
+================================================================================
+  K&R: "The C Programming Language" (Kernighan & Ritchie) — DAS C-Buch
+  "Modern C" von Jens Gustedt (free online) — für C11/C17
+  https://beej.us/guide/bgc/    — freier C-Kurs
+  https://beej.us/guide/bgnet/  — Netzwerkprogrammierung in C
+  https://www.cppreference.com  — Referenz (C und C++)
+  https://godbolt.org           — Code → Assembler online
+  https://cdecl.org             — Komplexe Deklarationen entschlüsseln
+  https://visualgo.net          — Algorithmen visualisiert
+
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+================================================================================

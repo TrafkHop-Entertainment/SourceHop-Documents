@@ -1,0 +1,1311 @@
+================================================================================
+GODOT SHADER KOMPLETTKURS — GODOT 4 EDITION (Teil 1 von 4)
+================================================================================
+
+
+VORWORT — Was dich erwartet
+================================================================================
+
+Dieser Kurs bringt dir Godot-Shader von Null auf Profi-Level. Du lernst nicht
+nur die Syntax der Shader Language — du lernst, wie du damit echte visuelle
+Effekte baust: Wasseroberflächen, Pixelate-Filter, Glüh-Effekte, prozedurale
+Texturen, Post-Processing-Pipelines, und vieles mehr.
+
+Ein Shader ist ein kleines Programm, das auf der GPU läuft — parallel für
+jeden Pixel (oder jeden Vertex) gleichzeitig. Das macht Shader extrem schnell
+und für visuelle Effekte unverzichtbar. Was in GDScript eine for-Schleife
+über tausende Pixel wäre (und das Spiel zum Stillstand bringen würde), erledigt
+ein Shader in einem einzigen GPU-Frame, unsichtbar schnell.
+
+Godots Shader Language ist bewusst einfach gehalten: Sie lehnt sich stark an
+GLSL ES 3.0 an (OpenGL ES Shading Language), hat aber Godot-spezifische
+Vereinfachungen und Kurzformen. Wenn du jemals GLSL oder HLSL gelernt hast,
+wirst du dich sofort zurechtfinden. Hast du das nicht — kein Problem, dieser
+Kurs erklärt alles von Grund auf.
+
+WARUM SHADER UND NICHT NUR GDSCIPT?
+  GDScript läuft auf der CPU — sequenziell, ein Befehl nach dem anderen.
+  Shader laufen auf der GPU — massiv parallel, tausende von Operationen
+  gleichzeitig. Für alles was pro-Pixel oder pro-Vertex berechnet werden muss,
+  ist ein Shader 100x bis 10000x schneller. Kein GDScript-Code kann einen
+  Wassereffekt in Echtzeit berechnen. Ein Shader tut es ohne Schweißtropfen.
+
+WAS DIESE KURSSERIE ABDECKT:
+
+  TEIL 1 — SHADER GRUNDLAGEN                           (Module 1–5)
+    1  Was ist ein Shader — GPU, Pipeline, Godot-Integration
+    2  Die Shader Language — Typen, Variablen, Funktionen
+    3  Dein erster CanvasItem-Shader — 2D-Effekte
+    4  Uniforms und Varyings — Daten übergeben
+    5  Texturen in Shadern — Sampling und Manipulation
+
+  TEIL 2 — 2D-SHADER MEISTERN                         (Module 6–10)
+    6  Farbmanipulation — HSV, Paletten, Color Grading
+    7  Formen und SDFs — Signed Distance Functions
+    8  Prozedurale Muster — Noise, Wellen, Gitter
+    9  Animierte 2D-Shader — Zeit und Bewegung
+   10  Post-Processing — Vollbild-Effekte in 2D
+
+  TEIL 3 — 3D-SHADER                                  (Module 11–16)
+   11  Spatial Shader — der 3D-Shader in Godot
+   12  Beleuchtung und PBR — Physically Based Rendering
+   13  Normal Maps, Roughness, Metallic — die PBR-Parameter
+   14  Vertex Shader — Geometrie manipulieren
+   15  Wasser, Gras, Laub — Umwelt-Shader
+   16  Fortgeschrittene 3D-Effekte — Dissolve, Outline, Hologram
+
+  TEIL 4 — PROFI-LEVEL                                (Module 17–22)
+   17  Compute Shader — GPU-Berechnungen ohne Rendering
+   18  Shader + GDScript — Kommunikation und Steuerung
+   19  Performance-Optimierung für Shader
+   20  Prozedurale Textur-Generierung
+   21  Post-Processing-Pipeline — SubViewport und Screen-Effekte
+   22  Abschlussprojekte: Wasseroberfläche, SciFi-HUD, Cel-Shading
+
+Wie du den Kurs benutzt: Jedes Modul endet mit einer ÜBUNG. Lege dir einen
+Ordner "shader-kurs" an und für jede Übung ein eigenes Godot-Projekt. Shader
+sind visuell — du siehst sofort, ob dein Code funktioniert. Spiel mit den
+Parametern, verändere Werte, brich Dinge absichtlich — so lernst du am schnellsten.
+
+
+################################################################################
+TEIL 1 — SHADER GRUNDLAGEN
+################################################################################
+
+
+================================================================================
+MODUL 1: Was ist ein Shader — GPU, Pipeline, Godot-Integration
+================================================================================
+
+Bevor wir in Syntax einsteigen: Was passiert eigentlich, wenn Godot einen Frame
+rendert? Wo kommt der Shader ins Spiel — und warum macht er das, was er tut?
+
+------------------------------------------------------------------------
+1.1  Die Rendering-Pipeline — von Szene zu Pixel
+------------------------------------------------------------------------
+
+Wenn Godot einen Frame rendert, passiert (vereinfacht) folgendes:
+
+  1. GEOMETRIE          Die Engine sammelt alle Meshes/Sprites im Sichtfeld.
+  2. VERTEX SHADER      Für jeden Eckpunkt (Vertex) der Geometrie wird ein
+                        kleines Programm ausgeführt: der Vertex Shader.
+                        Er transformiert 3D-Koordinaten in Bildschirmkoordinaten.
+  3. RASTERISIERUNG     Die GPU füllt die Dreiecke zwischen den transformierten
+                        Vertices mit Pixeln (Fragmenten).
+  4. FRAGMENT SHADER    Für jeden einzelnen Pixel wird ein weiteres Programm
+                        ausgeführt: der Fragment Shader.
+                        Er entscheidet die FARBE jedes Pixels.
+  5. AUSGABE            Die berechneten Farben landen im Framebuffer — das
+                        ist das, was du auf dem Bildschirm siehst.
+
+Du als Shader-Programmierer schreibst Schritt 2 und/oder Schritt 4.
+Der Rest wird von Godot (und der Grafik-API darunter) erledigt.
+
+  Vertex Shader  → arbeitet mit Koordinaten, Transformationen, Normals
+  Fragment Shader → arbeitet mit Farben, Texturen, Licht
+
+Das Entscheidende: Diese Programme laufen GLEICHZEITIG für alle Vertices
+und alle Pixel. Die GPU hat tausende von kleinen "Prozessoren" (Shader-Kerne)
+die alle parallel dasselbe Programm ausführen — nur mit unterschiedlichen
+Eingabe-Daten. Ein Fragment Shader läuft also EINMAL PRO PIXEL, zur
+gleichen Zeit wie alle anderen Pixel.
+
+Konsequenz: Ein Shader darf NICHT auf andere Pixel zugreifen (außer über
+Texturen), KEINE Schleifen mit variablen Längen haben (limitiert), und KEINEN
+eigenen Zustand zwischen Frames speichern. Dafür ist er brutschnell.
+
+------------------------------------------------------------------------
+1.2  Godots Shader-Typen
+------------------------------------------------------------------------
+
+Godot unterscheidet drei Haupt-Shader-Typen:
+
+  shader_type canvas_item;
+    → Für 2D: Sprites, UI-Elemente, TileMap, CanvasLayer.
+      Hat Zugriff auf UV-Koordinaten, die Textur des Sprites, Bildschirm-
+      koordinaten.
+
+  shader_type spatial;
+    → Für 3D: MeshInstance, CSG, Terrain.
+      Hat Zugriff auf die volle PBR-Pipeline: Albedo, Normal, Roughness,
+      Metallic, Emission, AO, etc.
+
+  shader_type particles;
+    → Für GPU-Partikel. Steuert Spawn-Position, Bewegung, Farbe von
+      tausenden Partikeln auf der GPU.
+      (Compute-basiert in Godot 4.)
+
+  shader_type sky;
+    → Für Himmel-Shader (Procedural Sky).
+
+  shader_type fog;
+    → Für volumetrischen Nebel (Godot 4.1+).
+
+In diesem Kurs decken wir canvas_item (Teil 1+2) und spatial (Teil 3)
+vollständig ab. particles (Teil 4, Modul 17) und sky (Modul 20) kommen danach.
+
+------------------------------------------------------------------------
+1.3  Shader in Godot anlegen
+------------------------------------------------------------------------
+
+Es gibt drei Wege, einen Shader zu erstellen:
+
+WEG 1: Im Inspector (einfachster Weg)
+  - Wähle einen Node (Sprite2D, MeshInstance3D, etc.)
+  - Im Inspector: "CanvasItem > Material" → "[Neues ShaderMaterial]"
+  - Im ShaderMaterial: "Shader" → "[Neuer Shader]"
+  - Klick auf den Shader → Editor öffnet sich unten
+
+WEG 2: Als Datei (.gdshader)
+  - Im FileSystem-Panel: Rechtsklick → "Neue Ressource" → "Shader"
+  - Dateiname: "mein_effekt.gdshader"
+  - Diese Datei kannst du mehreren Materials zuweisen
+
+WEG 3: Über Code (Shader zur Laufzeit zuweisen)
+  var shader := Shader.new()
+  shader.code = """
+  shader_type canvas_item;
+  void fragment() {
+      COLOR = vec4(1.0, 0.0, 0.0, 1.0);
+  }
+  """
+  var mat := ShaderMaterial.new()
+  mat.shader = shader
+  $Sprite2D.material = mat
+
+WEG 3 ist nützlich wenn du Shader dynamisch generieren oder aus Dateien
+laden willst. Für die Entwicklung ist Weg 1 oder 2 praktischer.
+
+------------------------------------------------------------------------
+1.4  Die Shader-Datei — grundlegender Aufbau
+------------------------------------------------------------------------
+
+Jede Shader-Datei hat diese Grundstruktur:
+
+  shader_type canvas_item;  // Oder: spatial, particles, sky, fog
+
+  // Optionale: Render-Modus
+  render_mode unshaded;  // Oder: blend_add, blend_mix, etc.
+
+  // Uniforms (Parameter die du von außen setzen kannst)
+  uniform vec4 tint_color : source_color = vec4(1.0);
+
+  // Varyings (Werte die vom Vertex- zum Fragment-Shader übergeben werden)
+  varying vec2 world_pos;
+
+  // Vertex Shader (optional — hat Standardimplementierung)
+  void vertex() {
+      // Vertex-Koordinaten manipulieren
+  }
+
+  // Fragment Shader (meistens das, was du schreibst)
+  void fragment() {
+      // Farbe berechnen — in COLOR speichern
+      COLOR = vec4(1.0, 0.0, 0.0, 1.0);  // Alles rot
+  }
+
+  // Light Shader (optional — für custom Beleuchtung)
+  void light() {
+      // Beleuchtunsberechnung
+  }
+
+Bei canvas_item ist der wichtigste Part die fragment()-Funktion.
+Bei spatial gibt es stattdessen keine fragment()-Funktion — Godot
+nutzt ein anders System (dazu in Modul 11).
+
+------------------------------------------------------------------------
+1.5  Godots Built-in Variablen — was du im Shader siehst
+------------------------------------------------------------------------
+
+Im Fragment Shader (canvas_item) stehen dir automatisch zur Verfügung:
+
+  COLOR         vec4    Die aktuelle Farbe. Schreiben → setzt Ausgabe-Farbe.
+                        Lesen → gibt die Farbe des vorherigen Draw-Passes
+                        oder die Textur-Farbe zurück (wenn texture() benutzt).
+  UV            vec2    Textur-Koordinaten (0.0 bis 1.0, normalisiert).
+                        (0,0) = oben links, (1,1) = unten rechts.
+  TEXTURE       sampler2D Die Textur des Sprites/CanvasItems.
+  TEXTURE_PIXEL_SIZE vec2  Größe eines Pixels in UV-Koordinaten. (1/Breite, 1/Höhe)
+  FRAGCOORD     vec4    Pixel-Position auf dem Bildschirm (x, y in Pixeln).
+  TIME          float   Zeit seit Spielstart in Sekunden. Ideal für Animationen.
+  SCREEN_UV     vec2    UV-Koordinaten des Bildschirms. (0,0)=oben links, (1,1)=unten rechts.
+
+Im Vertex Shader (canvas_item):
+
+  VERTEX        vec2    Position des Vertex (lokal). Manipulieren = verbiegen!
+  UV            vec2    Textur-Koordinaten dieses Vertex.
+  COLOR         vec4    Vertex-Farbe.
+  POINT_SIZE    float   Größe von Punkten (für Partikel-Sprites).
+
+Das sind die Grundlagen. Alle weiteren Built-ins lernst du in den Modulen,
+wo sie relevant werden.
+
+------------------------------------------------------------------------
+1.6  ShaderMaterial vs. BaseMaterial3D
+------------------------------------------------------------------------
+
+Godot hat zwei Material-Typen:
+
+  BaseMaterial3D (auch: StandardMaterial3D)
+    → Das "fertige" Material mit Checkboxen und Dropdowns im Inspector.
+      Kein Shader-Code nötig — Godot generiert den Shader intern.
+      Gut für Standard-PBR-Materialien ohne spezielle Effekte.
+
+  ShaderMaterial
+    → Du schreibst den Shader selbst. Volle Kontrolle.
+      Nötig für jeden nicht-standard-Effekt.
+
+Du kannst BaseMaterial3D jederzeit in ShaderMaterial konvertieren:
+Inspector → Material → Rechtsklick → "Als ShaderMaterial konvertieren".
+Das generiert den kompletten Godot-PBR-Shader als editierbaren Code —
+perfekt als Ausgangspunkt für eigene Modifikationen!
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+1. Erstelle ein neues Godot 4 Projekt ("shader_kurs_uebung_01").
+2. Füge der Hauptszene einen Sprite2D-Node hinzu. Lade irgendein Bild
+   als Textur (oder benutze das Godot-Icon).
+3. Erstelle ein ShaderMaterial mit einem neuen Shader.
+4. Schreibe diesen Shader:
+     shader_type canvas_item;
+     void fragment() {
+         COLOR = vec4(1.0, 0.0, 0.0, 1.0);  // Komplett rot
+     }
+   → Der Sprite sollte jetzt vollständig rot sein.
+5. Verändere die Zahlen:
+     - vec4(0.0, 1.0, 0.0, 1.0) → grün
+     - vec4(0.0, 0.0, 1.0, 1.0) → blau
+     - vec4(1.0, 1.0, 0.0, 0.5) → halbdurchsichtiges Gelb
+6. Bonus: Benutze die Built-in-Variable UV in der COLOR:
+     COLOR = vec4(UV.x, UV.y, 0.0, 1.0);
+   → Was siehst du? Erkläre warum.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Die Shader Language — Typen, Variablen, Funktionen
+================================================================================
+
+Godots Shader Language ist eng an GLSL ES 3.0 angelehnt. Wenn du GDScript
+kannst, wirst du viele Konzepte wiedererkennen — aber es gibt wichtige
+Unterschiede.
+
+------------------------------------------------------------------------
+2.1  Skalare Typen
+------------------------------------------------------------------------
+
+  bool    Wahrheitswert: true / false
+  int     Ganzzahl (32-Bit)
+  uint    Vorzeichenlose Ganzzahl (32-Bit)
+  float   Kommazahl (32-Bit, Single Precision)
+
+  float pi = 3.14159;
+  int schritte = 10;
+  bool aktiv = true;
+
+WICHTIG — Typen sind STRENG in Shadern:
+  float x = 1;      // FEHLER! 1 ist int, x ist float
+  float x = 1.0;    // KORREKT
+  float x = float(1); // KORREKT (explizite Konvertierung)
+
+  int i = 2;
+  float f = float(i);  // int → float: explizit konvertieren
+  int j = int(3.7);    // float → int: Nachkomma ABSCHNEIDEN (nicht runden!)
+                       // int(3.7) = 3, NICHT 4
+
+Du wirst häufig 1.0 statt 1 und 0.0 statt 0 schreiben müssen. Gewöhn dich dran.
+
+------------------------------------------------------------------------
+2.2  Vektor-Typen — der Kern der Shader Language
+------------------------------------------------------------------------
+
+Shader-Programmierung dreht sich um Vektoren. Fast alles — Farben, Positionen,
+Richtungen, UV-Koordinaten — ist ein Vektor.
+
+  vec2   2D-Vektor: (x, y)   — für UV-Koordinaten, 2D-Positionen
+  vec3   3D-Vektor: (x, y, z) — für 3D-Positionen, RGB-Farben
+  vec4   4D-Vektor: (x, y, z, w) — für RGBA-Farben, homogene Koordinaten
+
+  ivec2 / ivec3 / ivec4  — Integer-Vektoren
+  uvec2 / uvec3 / uvec4  — Unsigned-Integer-Vektoren
+  bvec2 / bvec3 / bvec4  — Bool-Vektoren
+
+Konstruktoren:
+  vec2 uv = vec2(0.5, 0.3);
+  vec3 farbe = vec3(1.0, 0.0, 0.0);   // Rot
+  vec4 rgba = vec4(0.0, 1.0, 0.0, 1.0); // Grün, voller Alpha
+
+  // vec4 aus vec3 + float:
+  vec4 rgba = vec4(farbe, 1.0);   // Farbe + Alpha
+
+  // Alle Komponenten gleich:
+  vec4 weiss = vec4(1.0);         // = vec4(1.0, 1.0, 1.0, 1.0)
+  vec3 grau  = vec3(0.5);         // = vec3(0.5, 0.5, 0.5)
+
+SWIZZLING — das ist mächtig und einzigartig:
+  vec4 farbe = vec4(0.2, 0.4, 0.6, 1.0);
+
+  farbe.r   → 0.2  (= farbe.x)
+  farbe.g   → 0.4  (= farbe.y)
+  farbe.b   → 0.6  (= farbe.z)
+  farbe.a   → 1.0  (= farbe.w)
+
+  // Swizzle kombinieren:
+  farbe.rgb   → vec3(0.2, 0.4, 0.6)  // Die ersten drei Komponenten
+  farbe.rg    → vec2(0.2, 0.4)       // Nur rot und grün
+  farbe.bgr   → vec3(0.6, 0.4, 0.2) // Umgekehrte Reihenfolge!
+  farbe.rrr   → vec3(0.2, 0.2, 0.2) // Rot dreimal
+
+  // Swizzle zum Schreiben:
+  farbe.rg = vec2(1.0, 0.0);  // Rot=1, Grün=0 (Blau und Alpha bleiben)
+  farbe.a = 0.5;               // Nur Alpha ändern
+
+  // Alias: .xyzw = .rgba = .stpq (für UVs)
+  uv.st  → gleich wie uv.xy
+
+Swizzling ist der Hauptgrund warum Shader-Code so kompakt ist. Lerne es gut.
+
+Arithmetik auf Vektoren (component-wise):
+  vec3 a = vec3(1.0, 2.0, 3.0);
+  vec3 b = vec3(4.0, 5.0, 6.0);
+
+  a + b   → vec3(5.0, 7.0, 9.0)      // Jede Komponente addiert
+  a * b   → vec3(4.0, 10.0, 18.0)    // Jede Komponente multipliziert
+  a * 2.0 → vec3(2.0, 4.0, 6.0)      // Skalar-Multiplikation (jeden Wert mal 2)
+  a / 2.0 → vec3(0.5, 1.0, 1.5)
+
+  ACHTUNG: Das ist KEINE Dot-/Kreuzprodukt-Multiplikation! Für die gibt es
+  dot() und cross() (dazu unten).
+
+------------------------------------------------------------------------
+2.3  Matrix-Typen
+------------------------------------------------------------------------
+
+  mat2   2×2 Matrix
+  mat3   3×3 Matrix
+  mat4   4×4 Matrix  ← für Transformationen in 3D
+
+  mat4 m = mat4(1.0);  // Einheitsmatrix (Diagonale = 1, Rest = 0)
+
+  // Matrix × Vektor:
+  vec4 transformiert = m * vec4(position, 1.0);
+
+  // Wichtige Built-in Matrizen (in canvas_item):
+  TRANSFORM_MATRIX  mat4  Transformation des Canvas-Items
+  PROJECTION_MATRIX mat4  Projektion (camera_item: 2D-to-screen)
+  // In spatial: MODEL_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, etc.
+
+Für 2D-Shader brauchst du Matrizen selten. In 3D (Modul 11+) werden sie
+zentral — insbesondere für UV-Transformationen und Custom-Transformationen.
+
+------------------------------------------------------------------------
+2.4  Sampler — Texturen im Shader
+------------------------------------------------------------------------
+
+  sampler2D   → Normale 2D-Textur
+  sampler2DArray → Array von 2D-Texturen
+  samplerCube → Cubemap (für Reflektionen, Himmel)
+
+  uniform sampler2D meine_textur;
+
+  // Textur lesen (= "sampling"):
+  vec4 texel = texture(meine_textur, UV);
+
+  // texture() gibt IMMER einen vec4 zurück (RGBA).
+  // UV ist ein vec2 (0.0–1.0 normalisiert).
+
+  // Nur die RGB-Komponente nehmen:
+  vec3 rgb = texture(meine_textur, UV).rgb;
+
+  // Verschiedene Sampling-Methoden:
+  texture(tex, uv)           // Standard (billinear gefiltert)
+  textureLod(tex, uv, lod)   // Expliziter MIP-Level (0.0 = schärfste)
+
+WICHTIG: Du kannst nur über UV samplen — nicht über absolute Pixel-
+Koordinaten. Um Pixel-Koordinaten in UVs umzuwandeln:
+  vec2 pixel_uv = vec2(pixel_x, pixel_y) * TEXTURE_PIXEL_SIZE;
+
+------------------------------------------------------------------------
+2.5  Variablen und Scoping
+------------------------------------------------------------------------
+
+Shader-Variablen haben vier "Zonen":
+
+  1. UNIFORM  — Von außen (GDScript oder Inspector) gesetzt. Alle Pixel
+                teilen denselben Wert. Read-only im Shader.
+     uniform float intensitaet = 1.0;
+     uniform vec4 tint : source_color = vec4(1.0);
+
+  2. VARYING  — Vom Vertex-Shader zum Fragment-Shader übergeben.
+                Wird zwischen Vertices interpoliert (!) — d.h. ein Wert
+                von 0.0 am linken Vertex und 1.0 am rechten wird in der
+                Mitte als 0.5 ankommen.
+     varying vec2 custom_uv;  // In vertex() setzen, in fragment() lesen
+
+  3. LOKAL    — Normale lokale Variablen innerhalb einer Funktion.
+     void fragment() {
+         float helligkeit = 0.5;
+         vec3 farbe = vec3(helligkeit);
+     }
+
+  4. GLOBAL CONSTANTS / BUILT-INS — Automatisch verfügbar (TIME, UV, etc.)
+
+------------------------------------------------------------------------
+2.6  Kontrollfluss in Shadern
+------------------------------------------------------------------------
+
+if / else:
+  void fragment() {
+      float wert = UV.x;
+      if (wert > 0.5) {
+          COLOR = vec4(1.0, 0.0, 0.0, 1.0);  // Rechts: rot
+      } else {
+          COLOR = vec4(0.0, 0.0, 1.0, 1.0);  // Links: blau
+      }
+  }
+
+WARNUNG: if/else in Shadern kann langsam sein! Die GPU führt beide Zweige
+aus und wählt dann — bei echtem Branching (wo verschiedene Pixel verschiedene
+Zweige nehmen) kostet das Performance. Wo möglich: Mathematik statt if.
+
+  // Statt if:
+  float rot = step(0.5, UV.x);  // 0.0 wenn UV.x < 0.5, sonst 1.0
+  COLOR = vec4(rot, 0.0, 1.0 - rot, 1.0);
+
+for-Schleifen:
+  void fragment() {
+      vec3 summe = vec3(0.0);
+      for (int i = 0; i < 5; i++) {
+          summe += textur_sample(UV + float(i) * offset);
+      }
+  }
+
+WICHTIG: Schleifenzähler MÜSSEN zur Compile-Zeit bekannt sein oder
+als konstante Uniforms übergeben werden. Kein "for(int i = 0; i < zufaelliger_wert; i++)"!
+
+Ternärer Operator:
+  float alpha = (UV.x > 0.5) ? 1.0 : 0.0;
+
+------------------------------------------------------------------------
+2.7  Eingebaute Funktionen — das Schweizer Taschenmesser
+------------------------------------------------------------------------
+
+MATHEMATIK:
+  abs(x)           Absolutwert
+  ceil(x)          Aufrunden
+  floor(x)         Abrunden
+  round(x)         Runden
+  fract(x)         Nachkommateil: fract(3.7) → 0.7
+  mod(x, y)        Modulo: mod(3.7, 1.0) → 0.7 (wie fract für mod 1)
+  min(x, y)        Minimum
+  max(x, y)        Maximum
+  clamp(x, min, max) Begrenzen: clamp(1.5, 0.0, 1.0) → 1.0
+  sign(x)          Vorzeichen: -1.0, 0.0, oder 1.0
+  sqrt(x)          Wurzel
+  pow(x, y)        Potenz: pow(2.0, 10.0) → 1024.0
+  exp(x)           e^x
+  log(x)           natürlicher Logarithmus
+  exp2(x)          2^x
+  log2(x)          log zur Basis 2
+
+INTERPOLATION (sehr häufig!):
+  mix(a, b, t)     Lineare Interpolation: mix(0.0, 1.0, 0.3) → 0.3
+                   Funktioniert für float, vec2, vec3, vec4!
+  step(edge, x)    0.0 wenn x < edge, sonst 1.0 (harte Kante)
+  smoothstep(a, b, x) Sanfte S-Kurve zwischen a und b
+                   smoothstep(0.0, 1.0, 0.5) → 0.5
+                   smoothstep(0.0, 1.0, 0.1) → 0.028 (fast 0)
+                   smoothstep(0.0, 1.0, 0.9) → 0.972 (fast 1)
+
+TRIGONOMETRIE:
+  sin(x)   cos(x)   tan(x)    (x in Radiant!)
+  asin(x)  acos(x)  atan(x)   (Umkehrfunktionen)
+  atan(y, x)        (atan2 — Winkel eines 2D-Vektors)
+  radians(grad)     Grad → Radiant
+  degrees(rad)      Radiant → Grad
+
+VEKTOR-FUNKTIONEN:
+  length(v)         Länge des Vektors: length(vec2(3.0,4.0)) → 5.0
+  normalize(v)      Normalisiert (Länge = 1): normalize(vec2(3.0,4.0)) → vec2(0.6, 0.8)
+  dot(a, b)         Skalarprodukt: dot(a,b) = |a|*|b|*cos(winkel)
+  cross(a, b)       Kreuzprodukt (nur vec3): ergibt senkrechten Vektor
+  distance(a, b)    Abstand: distance(a,b) = length(b-a)
+  reflect(i, n)     Reflexion von Vektor i an Normal n
+  refract(i, n, eta) Brechung
+  faceforward(n, i, ref) Normal in Richtung von ref wenden
+
+TEXTUREN:
+  texture(sampler, uv)        Textur samplen
+  textureSize(sampler, lod)   Textur-Größe in Pixel
+
+NÜTZLICHE ABKÜRZUNGEN:
+  // vec4 COLOR setzen und Alpha beibehalten:
+  COLOR.rgb = meine_farbe.rgb;     // Nur RGB, Alpha unverändert
+
+  // Helligkeit aus RGB berechnen (luminance):
+  float luminance = dot(farbe.rgb, vec3(0.299, 0.587, 0.114));
+
+  // Farbe invertieren:
+  vec3 invertiert = 1.0 - farbe.rgb;
+
+------------------------------------------------------------------------
+2.8  Eigene Funktionen definieren
+------------------------------------------------------------------------
+
+Du kannst eigene Funktionen definieren — AUSSERHALB von fragment/vertex:
+
+  // Hilfsfunktion: Helligkeit normieren
+  float luminance(vec3 farbe) {
+      return dot(farbe, vec3(0.299, 0.587, 0.114));
+  }
+
+  // Hilfsfunktion: Farbton-Rotation (in HSV-Raum)
+  vec3 tint_hue(vec3 farbe, float grad) {
+      // ... Implementierung folgt in Modul 6
+  }
+
+  shader_type canvas_item;
+
+  float meine_funktion(float x) {
+      return sin(x) * cos(x);
+  }
+
+  void fragment() {
+      float wert = meine_funktion(UV.x * 6.28318);
+      COLOR = vec4(wert, wert, wert, 1.0);
+  }
+
+Reihenfolge der Definitionen: Funktionen müssen VOR ihrer ersten Verwendung
+definiert werden — oder du nutzt Forward-Declarations:
+
+  float teure_berechnung(float x);  // Forward Declaration
+
+  void fragment() {
+      COLOR = vec4(teure_berechnung(UV.x));
+  }
+
+  float teure_berechnung(float x) {
+      return pow(sin(x * 6.28318), 2.0);
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+1. Schreibe einen Shader der einen Verlauf von Links nach Rechts zeigt:
+     - Links: vec3(1.0, 0.0, 0.0)  (Rot)
+     - Rechts: vec3(0.0, 0.0, 1.0) (Blau)
+     - Benutze: mix(rot, blau, UV.x)
+2. Erweitere den Shader auf einen zweidimensionalen Verlauf:
+     - Links-oben: Rot, Rechts-oben: Blau, Mitte-unten: Grün
+     - Tipp: Nutze UV.x und UV.y mit mix() und kombiniere die Ergebnisse.
+3. Schreibe eine eigene Funktion float zeichne_kreis(vec2 uv, vec2 mitte, float radius):
+     - Gibt 1.0 zurück wenn uv innerhalb des Kreises liegt, sonst 0.0
+     - Tipp: distance(uv, mitte) < radius → 1.0, sonst 0.0
+     - Benutze step() statt if!
+4. Nutze die Kreis-Funktion um 3 verschiedenfarbige Kreise auf dem Sprite anzuzeigen.
+5. Bonus: Mache die Kreise mit smoothstep() weich (ohne harte Kante).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Dein erster CanvasItem-Shader — 2D-Effekte
+================================================================================
+
+Jetzt wird es praktisch. Der canvas_item-Shader ist der meistbenutzte Typ
+für 2D-Spiele. Wir bauen Schritt für Schritt echte, spielbare Effekte.
+
+------------------------------------------------------------------------
+3.1  Die Textur behalten — Grundmuster
+------------------------------------------------------------------------
+
+Das häufigste Muster: Textur lesen, modifizieren, ausgeben.
+
+  shader_type canvas_item;
+
+  void fragment() {
+      // Textur lesen:
+      vec4 textur_farbe = texture(TEXTURE, UV);
+
+      // Modifizieren:
+      textur_farbe.rgb *= vec3(1.0, 0.5, 0.5);  // Rote Tönung
+
+      // Ausgeben:
+      COLOR = textur_farbe;
+  }
+
+DAS ist die Basis. Fast jeder 2D-Shader folgt diesem Muster:
+  1. texture(TEXTURE, UV) lesen
+  2. Irgendetwas damit machen
+  3. In COLOR schreiben
+
+TEXTURE ist die Textur des Sprites — automatisch verfügbar, kein uniform nötig.
+UV sind die normierten Koordinaten (0–1) des aktuellen Pixels auf der Textur.
+
+------------------------------------------------------------------------
+3.2  Alpha-Handling — Transparenz erhalten
+------------------------------------------------------------------------
+
+Beim Tonen von Texturen ist Alpha-Handling entscheidend:
+
+  shader_type canvas_item;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+
+      // FALSCH: Alpha wird verändert
+      tex.rgb = vec3(1.0, 0.0, 0.0);
+      COLOR = tex;  // Transparente Bereiche werden ROT (nicht transparent!)
+
+      // RICHTIG: Alpha von Textur behalten
+      COLOR.rgb = vec3(1.0, 0.0, 0.0);
+      COLOR.a = tex.a;  // Original-Alpha
+
+      // NOCH BESSER: In einem Schritt:
+      COLOR = vec4(vec3(1.0, 0.0, 0.0) * tex.a, tex.a);
+      // → Überall wo die Textur transparent ist, bleibt es transparent
+  }
+
+  // Häufiges Muster für getönte Textur:
+  shader_type canvas_item;
+  uniform vec4 tint_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      COLOR = tex * tint_color;  // Multiplikation erhält relative Transparenz!
+  }
+
+------------------------------------------------------------------------
+3.3  Render Modes — Blending und mehr
+------------------------------------------------------------------------
+
+Nach shader_type kannst du render_mode angeben, um das Blending zu steuern:
+
+  shader_type canvas_item;
+  render_mode blend_mix;      // Standard: Alpha-Blending (normales Transparenz)
+  render_mode blend_add;      // Additiv (helle Effekte: Feuer, Glühen)
+  render_mode blend_sub;      // Subtraktiv (Schatten-Effekte)
+  render_mode blend_mul;      // Multiplikativ (Schatten, Tinting)
+  render_mode blend_premul_alpha; // Premultiplied Alpha
+  render_mode unshaded;       // Keine Beleuchtung (nur Farbe zählt)
+  render_mode skip_vertex_transform; // Vertex nicht automatisch transformieren
+
+Mehrere können kombiniert werden:
+  render_mode unshaded, blend_add;
+
+Praxisbeispiel — Glow-Effekt mit blend_add:
+  shader_type canvas_item;
+  render_mode blend_add;
+
+  uniform float staerke = 1.0;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      COLOR = tex * staerke;  // Additiv aufgehellt — strahlt!
+  }
+
+------------------------------------------------------------------------
+3.4  Graustufen-Shader
+------------------------------------------------------------------------
+
+Ein klassischer Effekt — und perfekt um luminance() zu üben:
+
+  shader_type canvas_item;
+
+  uniform float intensitaet : hint_range(0.0, 1.0) = 1.0;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+
+      // Luminanz berechnen (menschliche Wahrnehmung — nicht einfach average!)
+      float grau = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+
+      // Zwischen Original und Graustufen mischen:
+      vec3 ergebnis = mix(tex.rgb, vec3(grau), intensitaet);
+
+      COLOR = vec4(ergebnis, tex.a);
+  }
+
+Die Gewichtung (0.299, 0.587, 0.114) ist die ITU-R BT.601-Norm für
+Luminanz — das Auge ist am empfindlichsten für Grün, weniger für Rot,
+am wenigsten für Blau. Einfaches Averaging (0.333, 0.333, 0.333) sieht
+"falsch" aus weil helles Grün und dunkles Blau dann gleich hell wirken.
+
+------------------------------------------------------------------------
+3.5  Outline/Silhouetten-Shader
+------------------------------------------------------------------------
+
+Ein Effekt der oft in Spielen vorkommt — Figuren hervorheben:
+
+  shader_type canvas_item;
+
+  uniform vec4 outline_farbe : source_color = vec4(1.0, 1.0, 0.0, 1.0);
+  uniform float outline_dicke = 1.0;
+
+  void fragment() {
+      // Aktuelle Textur-Farbe:
+      vec4 tex = texture(TEXTURE, UV);
+
+      // Prüfe ob Nachbar-Pixel transparent ist:
+      vec2 offset = outline_dicke * TEXTURE_PIXEL_SIZE;
+
+      float alpha_oben    = texture(TEXTURE, UV + vec2(0.0, -offset.y)).a;
+      float alpha_unten   = texture(TEXTURE, UV + vec2(0.0, offset.y)).a;
+      float alpha_links   = texture(TEXTURE, UV + vec2(-offset.x, 0.0)).a;
+      float alpha_rechts  = texture(TEXTURE, UV + vec2(offset.x, 0.0)).a;
+
+      // Outline: Pixel ist am Rand wenn er (oder ein Nachbar) transparent ist
+      float ist_rand = max(
+          max(alpha_oben, alpha_unten),
+          max(alpha_links, alpha_rechts)
+      ) - tex.a;
+
+      // Outline-Farbe oder Original ausgeben:
+      COLOR = mix(tex, outline_farbe, clamp(ist_rand, 0.0, 1.0));
+      // Alpha: Original ODER Outline
+      COLOR.a = max(tex.a, clamp(ist_rand, 0.0, 1.0) * outline_farbe.a);
+  }
+
+TEXTURE_PIXEL_SIZE ist entscheidend: Es ist (1.0 / textureBreite, 1.0 / textureHöhe).
+Damit kannst du Nachbar-Pixel über UV-Offset samplen. Das ist der Trick hinter
+vielen Blur-, Outline- und Schärfe-Effekten.
+
+------------------------------------------------------------------------
+3.6  Pixelate-Shader
+------------------------------------------------------------------------
+
+Einen Retro-Pixel-Effekt bauen:
+
+  shader_type canvas_item;
+
+  uniform float pixel_groesse : hint_range(1.0, 100.0) = 8.0;
+
+  void fragment() {
+      // UV auf Pixel-Größe "quantisieren":
+      vec2 pixel_uv = floor(UV / pixel_groesse * textureSize(TEXTURE, 0)) /
+                      textureSize(TEXTURE, 0) * pixel_groesse;
+
+      // Oder einfacher — mit TEXTURE_PIXEL_SIZE:
+      vec2 groesse = pixel_groesse * TEXTURE_PIXEL_SIZE;
+      vec2 pixel_uv_einfach = floor(UV / groesse) * groesse;
+
+      COLOR = texture(TEXTURE, pixel_uv_einfach);
+  }
+
+Erklärt: floor(UV / groesse) * groesse setzt alle UV-Koordinaten
+innerhalb eines "Pixel-Blocks" auf den gleichen Wert — den Anfang des Blocks.
+Damit samplen alle Pixel eines Blocks die GLEICHE Textur-Stelle → Pixel-Art-Optik.
+
+------------------------------------------------------------------------
+3.7  Dissolve-Shader (Auflösen)
+------------------------------------------------------------------------
+
+Ein klassischer Übergangseffekt — Objekte lösen sich auf:
+
+  shader_type canvas_item;
+
+  uniform sampler2D noise_textur;
+  uniform float dissolve_wert : hint_range(0.0, 1.0) = 0.5;
+  uniform vec4 rand_farbe : source_color = vec4(1.0, 0.5, 0.0, 1.0);
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      float noise = texture(noise_textur, UV).r;
+
+      // Pixel "unsichtbar" wenn noise < dissolve_wert:
+      if (noise < dissolve_wert) {
+          discard;  // Pixel komplett verwerfen (transparent)
+      }
+
+      // Rand-Glühen:
+      float rand_breite = 0.05;
+      float ist_rand = smoothstep(dissolve_wert, dissolve_wert + rand_breite, noise);
+
+      COLOR = mix(rand_farbe, tex, ist_rand);
+      COLOR.a = tex.a;
+  }
+
+Das discard-Keyword ist special: Es verwirft den Pixel komplett — kein
+Zeichnen, kein Blending, als würde der Pixel nicht existieren. Nützlich für
+Transparenz-Effekte die über den Alpha-Kanal hinausgehen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+1. Baue einen "Beschädigungs-Shader": Wenn eine @export uniform float
+   schaden (0.0-1.0) einen Wert hat, werden die Rottöne des Sprites verstärkt
+   und die Sättigung leicht reduziert. Bei schaden=1.0 ist das Sprite komplett rot.
+2. Baue einen Graustufen-Shader MIT Grenze: Die linke Hälfte des Sprites ist
+   farbig, die rechte Hälfte grau. Die Grenze soll per uniform verschoben werden.
+3. Implementiere einen "Screen Burn"-Effekt: Alle Pixel die sehr hell sind
+   (luminanz > 0.9) werden zu einem Dunkelorange "verbrannt".
+4. Kombiniere Pixelate und Graustufen: Durch einen uniform bool toggle kannst
+   du zwischen den Effekten umschalten.
+   TIPP: Shader booleans mit step() umsetzen (vermeide if für Performance).
+5. Bonus: Baue einen Outline-Shader der NUR bei hovered Sprites (uniform bool
+   ist_ausgewaehlt) aktiv ist. Nutze TEXTURE_PIXEL_SIZE für Pixel-genaue Outline.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Uniforms und Varyings — Daten übergeben
+================================================================================
+
+Shader sind isoliert — sie können keine externen Variablen direkt lesen.
+Die Brücke zwischen GDScript/Inspector und dem Shader sind Uniforms und Varyings.
+
+------------------------------------------------------------------------
+4.1  Uniforms — der Datentransfer von außen
+------------------------------------------------------------------------
+
+Uniforms sind globale Shader-Variablen die von außen gesetzt werden:
+  - Einmal pro Draw-Call gesetzt (nicht pro Pixel)
+  - Alle Pixel teilen denselben Uniform-Wert
+  - Read-only innerhalb des Shaders
+
+SYNTAX:
+  uniform DATENTYP name : hint = standardwert;
+
+Die wichtigsten Hints (steuern die Inspector-Darstellung):
+
+  uniform float staerke : hint_range(0.0, 1.0) = 0.5;
+  // → Slider von 0 bis 1 im Inspector
+
+  uniform float wert : hint_range(0.0, 100.0, 0.1) = 50.0;
+  // → Slider mit Schrittweite 0.1
+
+  uniform vec4 farbe : source_color = vec4(1.0);
+  // → Farbpicker im Inspector (WICHTIG: source_color für Farben!)
+
+  uniform sampler2D textur : hint_default_white;
+  // → Textur-Slot im Inspector, Standard: weiße Textur
+
+  uniform sampler2D normal_map : hint_normal;
+  // → Textur-Slot mit Normal-Map-Behandlung (sRGB-Korrektur)
+
+  uniform sampler2D rough_map : hint_roughness_r;
+  // → Roughness-Map (Kanal R)
+
+Alle hint_default_... Optionen:
+  hint_default_white    Weiße Textur (vec4(1.0))
+  hint_default_black    Schwarze Textur (vec4(0.0))
+  hint_default_transparent Transparente Textur (vec4(0.0,0.0,0.0,0.0))
+
+------------------------------------------------------------------------
+4.2  Uniforms aus GDScript setzen
+------------------------------------------------------------------------
+
+Von GDScript aus setzt du Uniforms über das ShaderMaterial:
+
+  # Material holen:
+  var mat: ShaderMaterial = $Sprite2D.material
+
+  # Uniform setzen:
+  mat.set_shader_parameter("staerke", 0.8)
+  mat.set_shader_parameter("farbe", Color(1.0, 0.0, 0.0))
+  mat.set_shader_parameter("textur", preload("res://noise.png"))
+
+  # Uniform lesen:
+  var wert: float = mat.get_shader_parameter("staerke")
+
+WICHTIG: Der Name in set_shader_parameter() muss EXAKT mit dem Uniform-Namen
+im Shader übereinstimmen — Groß/Kleinschreibung zählt!
+
+Praxisbeispiel — Pulsierender Glow-Effekt:
+
+  # GDScript (am Node):
+  @onready var mat: ShaderMaterial = $Sprite2D.material
+
+  func _process(delta: float) -> void:
+      var puls := (sin(Time.get_ticks_msec() / 500.0) + 1.0) / 2.0
+      mat.set_shader_parameter("glow_intensitaet", puls)
+
+  # Shader:
+  shader_type canvas_item;
+  render_mode blend_add;
+
+  uniform float glow_intensitaet = 1.0;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      COLOR = tex * glow_intensitaet;
+  }
+
+Tipp: Statt set_shader_parameter() jedes Frame aufzurufen, nutze TIME in
+Shadern für Animationen — das ist effizienter und braucht kein GDScript.
+
+------------------------------------------------------------------------
+4.3  Die TIME-Variable — Animationen ohne GDScript
+------------------------------------------------------------------------
+
+TIME ist die in Sekunden gemessene Zeit seit Spielstart. Verfügbar in
+beiden shader types canvas_item und spatial.
+
+  // Sinuswelle (schwingt zwischen -1 und 1):
+  float schwingt = sin(TIME);
+
+  // Normiert auf 0 bis 1:
+  float puls = (sin(TIME) + 1.0) / 2.0;
+
+  // Schnellere Frequenz (doppelt so schnell):
+  float schnell = sin(TIME * 2.0);
+
+  // UV animieren (Scrolling):
+  vec2 scroll_uv = UV + vec2(TIME * 0.1, 0.0);  // Horizontal scrollen
+  vec4 tex = texture(TEXTURE, scroll_uv);
+
+  // Welliges Bild:
+  float wellenstaerke = 0.05;
+  float wellenfrequenz = 10.0;
+  float wellengeschwindigkeit = 2.0;
+  vec2 wellen_uv = UV;
+  wellen_uv.x += sin(UV.y * wellenfrequenz + TIME * wellengeschwindigkeit) * wellenstaerke;
+  COLOR = texture(TEXTURE, wellen_uv);
+
+TIME ist die beste Methode für Animation — kein GDScript-Frame-Update, läuft
+direkt auf der GPU, perfekt synchronisiert. Benutze set_shader_parameter() nur
+für Werte die auf Spielereignisse reagieren (Schaden, Item-Aufnahme, etc.).
+
+------------------------------------------------------------------------
+4.4  Varyings — Daten vom Vertex zum Fragment Shader
+------------------------------------------------------------------------
+
+Varyings übergeben Werte vom vertex()-Shader zum fragment()-Shader.
+Wichtig: Die GPU interpoliert (mischt) den Wert zwischen Vertices!
+
+  shader_type canvas_item;
+
+  varying vec2 welt_position;   // Deklaration außerhalb beider Funktionen
+
+  void vertex() {
+      welt_position = VERTEX;   // Im vertex() setzen
+      // VERTEX ist die lokale 2D-Position des Vertex
+  }
+
+  void fragment() {
+      // In fragment() lesen:
+      float distanz_zur_mitte = length(welt_position);
+      COLOR = vec4(vec3(distanz_zur_mitte / 100.0), 1.0);
+  }
+
+WARUM Varyings? Manchmal ist eine Berechnung im Vertex-Shader günstiger
+(läuft nur pro Vertex, nicht pro Pixel) und das Ergebnis kann interpoliert
+zum Fragment-Shader übergeben werden.
+
+Nützliches Beispiel — Weltkoordinaten für Effekte:
+
+  varying vec2 screen_pos;
+
+  void vertex() {
+      screen_pos = (CANVAS_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+  }
+
+  void fragment() {
+      // Effekt basierend auf Bildschirmposition statt UV:
+      float muster = sin(screen_pos.x * 0.1) * cos(screen_pos.y * 0.1);
+      COLOR = vec4(vec3(muster * 0.5 + 0.5), 1.0);
+  }
+
+------------------------------------------------------------------------
+4.5  Shader-Parameter im Inspector benennen
+------------------------------------------------------------------------
+
+Per Kommentar können Uniforms im Inspector beschriftet werden:
+
+  uniform float schaden : hint_range(0.0, 1.0) = 0.0;
+  // Inspector zeigt "Schaden" als Label
+
+  // Gruppe im Inspector:
+  uniform float a = 0.0;  // group_uniforms Farbe;
+  uniform float b = 0.0;  // group_uniforms;  ← Gruppe beenden
+
+In Godot 4.1+ kann man Gruppen per Syntax definieren:
+  group_uniforms Farb_Einstellungen;
+  uniform vec4 haupt_farbe : source_color = vec4(1.0);
+  uniform float sattigung = 1.0;
+  group_uniforms;  // Gruppe beenden
+
+Das hilft bei komplexen Shadern mit vielen Parametern — alles bleibt
+übersichtlich im Inspector.
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+1. Baue einen "Treffer-Flash"-Shader:
+     - Uniform float flash (0.0-1.0)
+     - Bei flash=0: Textur normal
+     - Bei flash=1: Textur komplett weiß
+     - Benutze mix() und tex.a erhalten
+     - Steuere flash per GDScript: Wenn Leertaste gedrückt, flash auf 1.0,
+       dann über 0.5 Sekunden zurück auf 0.0 (lerp in _process)
+2. Baue einen "UV-Scroll"-Shader für ein Fließgewässer/Förderbandoptik:
+     - Horizontales UV-Scrollen mit uniform float geschwindigkeit
+     - TIME zum Animieren benutzen
+3. Implementiere einen Farbton-Wechsel:
+     - Uniform float farbton (0.0-1.0, also 0°-360°)
+     - Verschiebe den Farbton des Sprites um den angegebenen Wert
+     - Tipp: RGB → HSV konvertieren (Hilfsfunktion schreiben), H addieren, zurück → RGB
+4. Schreibe einen "Radar"-Shader: Ein kreisförmiger Scanstrahl dreht sich über
+   den Sprite. Benutze TIME, atan() und UV für den Winkel.
+5. Bonus: Kombiniere Scroll + Glow: Ein scrollendes Textur-Overlay leuchtet additiv.
+   Stärke des Glows abhängig von uniform float energie.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Texturen in Shadern — Sampling und Manipulation
+================================================================================
+
+Texturen sind das Herzstück von Shader-Effekten. In diesem Modul lernst du
+wie du Texturen richtig liest, manipulierst und kombinierst.
+
+------------------------------------------------------------------------
+5.1  texture() — die wichtigste Funktion
+------------------------------------------------------------------------
+
+  vec4 farbe = texture(TEXTURE, UV);
+
+Was passiert hier genau?
+  1. Die GPU schaut nach welchem Pixel der Textur UV entspricht.
+  2. Weil UVs oft zwischen Pixel-Grenzen liegen, wird interpoliert
+     (bilinear filtering — der Standard).
+  3. Das Ergebnis ist ein vec4 (RGBA, Werte 0.0–1.0).
+
+  // Die eigene Textur:
+  vec4 tex = texture(TEXTURE, UV);
+
+  // Eine extra Textur (als Uniform definiert):
+  uniform sampler2D extra_tex : hint_default_white;
+  vec4 extra = texture(extra_tex, UV);
+
+  // Textur mit modifizierten UVs:
+  vec4 verschoben = texture(TEXTURE, UV + vec2(0.1, 0.0));
+  vec4 skaliert   = texture(TEXTURE, UV * 2.0);
+  vec4 gespiegelt = texture(TEXTURE, vec2(1.0 - UV.x, UV.y));
+
+------------------------------------------------------------------------
+5.2  UV-Manipulation — die Basis für viele Effekte
+------------------------------------------------------------------------
+
+Durch Manipulation der UVs kannst du ohne neue Textur viele Effekte erzeugen:
+
+KACHELN (Tiling):
+  vec2 tiled_uv = fract(UV * 4.0);  // 4x4 Kacheln
+  COLOR = texture(TEXTURE, tiled_uv);
+  // fract() gibt den Nachkommateil zurück:
+  // fract(0.0) = 0.0, fract(0.5) = 0.5, fract(1.3) = 0.3, fract(2.7) = 0.7
+
+VERSATZ (Offset):
+  vec2 versatz = vec2(0.25, 0.0);
+  COLOR = texture(TEXTURE, fract(UV + versatz));  // fract = Wrap-around
+
+ROTATION um UV-Mitte:
+  float winkel = TIME * 0.5;  // dreht sich
+  vec2 mitte = vec2(0.5);
+  vec2 rotiert_uv = UV - mitte;
+  rotiert_uv = vec2(
+      cos(winkel) * rotiert_uv.x - sin(winkel) * rotiert_uv.y,
+      sin(winkel) * rotiert_uv.x + cos(winkel) * rotiert_uv.y
+  );
+  rotiert_uv += mitte;
+  COLOR = texture(TEXTURE, rotiert_uv);
+
+VERZERREN mit einer Noise-Textur:
+  uniform sampler2D noise : hint_default_white;
+  uniform float staerke = 0.05;
+
+  void fragment() {
+      vec2 distortion = texture(noise, UV).rg * 2.0 - 1.0;
+      // Noise war 0-1, jetzt -1 bis +1
+      vec2 verzerrte_uv = UV + distortion * staerke;
+      COLOR = texture(TEXTURE, verzerrte_uv);
+  }
+
+------------------------------------------------------------------------
+5.3  Mehrere Texturen kombinieren
+------------------------------------------------------------------------
+
+ÜBERBLENDEN (Mix/Lerp):
+  uniform sampler2D textur_a;
+  uniform sampler2D textur_b : hint_default_white;
+  uniform float blend_factor : hint_range(0.0, 1.0) = 0.5;
+
+  void fragment() {
+      vec4 a = texture(textur_a, UV);
+      vec4 b = texture(textur_b, UV);
+      COLOR = mix(a, b, blend_factor);
+  }
+
+MASKING — eine Textur steuert die andere:
+  uniform sampler2D haupt_tex;
+  uniform sampler2D maske;  // Schwarzweiß-Bild
+
+  void fragment() {
+      vec4 tex = texture(haupt_tex, UV);
+      float mask_wert = texture(maske, UV).r;  // Rot-Kanal als Maske
+      COLOR = vec4(tex.rgb, tex.a * mask_wert);
+  }
+  // Weiße Bereiche der Maske: sichtbar
+  // Schwarze Bereiche der Maske: transparent
+
+ADDITIVE ÜBERLAGERUNG:
+  void fragment() {
+      vec4 basis = texture(TEXTURE, UV);
+      vec4 glow = texture(glow_textur, UV);
+      COLOR = basis + glow;  // Additiv — Farben addieren sich
+      COLOR.a = basis.a;     // Alpha von der Basis
+  }
+
+MULTIPLY:
+  void fragment() {
+      vec4 basis = texture(TEXTURE, UV);
+      vec4 detail = texture(detail_textur, UV);
+      COLOR = basis * detail;  // Multiplizieren — dunkelt ab
+  }
+
+------------------------------------------------------------------------
+5.4  Kanal-Extraktion — Texturen als Datenbehälter
+------------------------------------------------------------------------
+
+Texturen haben vier Kanäle (R, G, B, A). In Shadern nutzt man oft alle vier
+für verschiedene Daten — das spart Speicher und Sampling-Aufrufe:
+
+  // Eine Textur für vier verschiedene Datensätze:
+  vec4 daten = texture(daten_textur, UV);
+  float roughness = daten.r;  // Rot-Kanal = Rauheit
+  float metallic  = daten.g;  // Grün-Kanal = Metallgrad
+  float ao        = daten.b;  // Blau-Kanal = Ambient Occlusion
+  float emission  = daten.a;  // Alpha-Kanal = Emissionsmaske
+
+Das nennt sich "Channel Packing" — weit verbreitet in AAA-Spielen.
+In Godot's StandardMaterial3D heißt die kombinierte Textur "ORM-Texture"
+(Occlusion, Roughness, Metallic — in R, G, B Kanal).
+
+------------------------------------------------------------------------
+5.5  Normal Maps — Shader sehen "Oberflächen-Detail"
+------------------------------------------------------------------------
+
+Eine Normal Map ist eine Textur die Oberflächen-Normalen speichert:
+  - R-Kanal = X-Richtung der Normal
+  - G-Kanal = Y-Richtung der Normal
+  - B-Kanal = Z-Richtung (zeigt immer "aus dem Bildschirm" in 2D)
+  - Neutral (flach) = (0.5, 0.5, 1.0) → das typische Blau in Normal Maps
+
+Für 2D-Normal Maps in canvas_item:
+
+  uniform sampler2D normal_map_tex : hint_normal;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      vec3 normal = texture(normal_map_tex, UV).rgb * 2.0 - 1.0;
+      // normal ist jetzt in Richtungsraum (-1 bis +1)
+
+      // Beispiel: Richtungslicht berechnen
+      vec3 licht_richtung = normalize(vec3(1.0, -1.0, 0.5));
+      float beleuchtung = max(0.0, dot(normal, licht_richtung));
+
+      COLOR = vec4(tex.rgb * beleuchtung, tex.a);
+  }
+
+WICHTIG: hint_normal weist Godot an, die Textur als Normal Map zu behandeln
+(nicht als sRGB-Farbe). Ohne diesen Hint werden Farben falsch konvertiert!
+
+In Godot's Light2D-System werden Normal Maps für canvas_item-Objekte
+automatisch durch NORMAL_MAP unterstützt — du musst nicht selbst rechnen:
+
+  // Für automatisches Godot-Lichtsystem:
+  NORMAL_MAP = texture(normal_map_tex, UV).rgb;
+  // Dann funktioniert Light2D automatisch mit deinem Sprite
+
+------------------------------------------------------------------------
+5.6  Screen Texture — das aktuelle Bild samplen
+------------------------------------------------------------------------
+
+In Godot 4 kannst du die aktuelle Bildschirm-Textur in Shadern lesen —
+das ermöglicht Refraktion, Glas-Effekte, und mehr:
+
+  shader_type canvas_item;
+
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+
+  void fragment() {
+      // Verzerrtes Lesen der Bildschirm-Textur:
+      vec2 verzerrung = (texture(TEXTURE, UV).rg * 2.0 - 1.0) * 0.05;
+      vec4 bildschirm = texture(SCREEN_TEXTURE, SCREEN_UV + verzerrung);
+
+      // Glaseffekt: Leicht verzerrter Hintergrund durch-sehen
+      COLOR = mix(bildschirm, vec4(0.8, 0.9, 1.0, 1.0), 0.3);
+  }
+
+WICHTIG: Das Objekt mit dem SCREEN_TEXTURE-Shader muss HINTER anderen
+Objekten gerendert werden (niedrigerer z_index) damit der Bildschirm
+die richtigen Inhalte enthält.
+
+hint_screen_texture ist zwingend — es teilt Godot mit dass dieser Uniform
+die Bildschirm-Textur bekommt (kein normales Textur-Slot).
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+1. Baue einen "Wasserfall"-Shader:
+     - UV vertikal scrollen (mit TIME)
+     - Eine zweite Textur-Ebene schneller scrollen und additiv überlagern
+     - Leichte horizontale Wellung mit sin(UV.y * 20.0 + TIME * 3.0)
+2. Implementiere einen "Glas/Lens"-Effekt für einen Panel-Node:
+     - SCREEN_TEXTURE lesen
+     - Leichte Verzerrung mit der TEXTURE des Panels als Verzerrungskarte
+     - Blaue Tönung mit mix()
+3. Baue einen Textur-Übergangs-Shader:
+     - Zwei Texturen via Uniforms
+     - Eine dritte Graustufentextur als Übergangsmaske
+     - uniform float uebergang (0.0-1.0): Wo die Maske > uebergang ist,
+       Textur A anzeigen, sonst Textur B. (Mit smoothstep für weiche Kante)
+4. Kanal-Extraktion: Erstelle einen Shader der einen einzigen Kanal (R, G, B
+   oder A) einer Textur als Graustufe anzeigt. Steuere den Kanal per
+   uniform int kanal (0=R, 1=G, 2=B, 3=A).
+   TIPP: Benutze ein vec4 und .r / .g / .b / .a mit if (oder step()).
+5. Bonus: Normal-Map-Beleuchtung: Lade eine Diffuse- und Normal-Map-Textur.
+   Berechne Beleuchtung basierend auf einer Lichtposition die per uniform
+   vec2 licht_position gesetzt wird. Bewege die Lichtposition mit der Maus
+   per GDScript.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 1
+################################################################################
+
+SHADER-GRUNDSTRUKTUR (canvas_item):
+  shader_type canvas_item;
+  render_mode blend_mix;          // optional
+  uniform float param : hint_range(0.0,1.0) = 0.5;
+  uniform vec4 farbe : source_color = vec4(1.0);
+  uniform sampler2D tex : hint_default_white;
+
+  void vertex() { VERTEX = ...; }    // optional
+  void fragment() { COLOR = ...; }   // der Kern
+  void light() { LIGHT = ...; }      // optional
+
+BUILT-INS (canvas_item fragment):
+  COLOR     vec4    Ausgabe-Farbe (schreiben!)
+  UV        vec2    Textur-UVs (0-1)
+  TEXTURE   sampler2D  Sprite-Textur
+  TEXTURE_PIXEL_SIZE vec2  Pixel-Größe in UV-Raum
+  FRAGCOORD vec4    Pixel-Position (Bildschirm)
+  TIME      float   Zeit in Sekunden
+  SCREEN_UV vec2    UV auf dem Bildschirm
+
+VEKTOR-TYPEN + SWIZZLING:
+  vec2/3/4   ivec2/3/4   bvec2/3/4
+  v.rgb  v.xy  v.ba  v.rrgg  (swizzle: lesen+schreiben)
+  vec4(vec3, 1.0)  vec4(0.5)  (Konstruktoren)
+
+WICHTIGE FUNKTIONEN:
+  texture(sampler, uv)     fract(x)     mix(a,b,t)
+  step(edge, x)            smoothstep(a,b,x)
+  sin/cos/atan(y,x)        length(v)    normalize(v)
+  dot(a,b)  cross(a,b)     clamp(x,0,1) abs/floor/ceil
+  mod(x,y)                 discard      (verwirft Pixel)
+
+VON GDSCRIPT AUS:
+  mat.set_shader_parameter("name", wert)
+  mat.get_shader_parameter("name")
+
+================================================================================
+ENDE TEIL 1 — Weiter mit Teil 2: 2D-Shader meistern
+================================================================================

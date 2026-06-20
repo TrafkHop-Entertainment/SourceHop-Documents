@@ -1,0 +1,2051 @@
+================================================================================
+EIGENE KI — KOMPLETTKURS
+Lokale, multimodale, zensurfreie KI mit eigenem Chat-Interface
+================================================================================
+
+Dieser Kurs erklärt alles was nötig ist, um eine eigene KI-Infrastruktur
+aufzubauen: lokal, selbst gehostet, zensurfrei, multimodal, mit eigenem
+Web-Interface, Benutzeraccounts, Dateianhängen und einem Gedächtnis das
+monatelange Gespräche nicht vergisst.
+
+Voraussetzung laut Aufgabe: HTML, CSS, Bash. Alles andere wird erklärt.
+Grafikkarte ist vorhanden und leistungsfähig genug — das ist Grundlage
+für alle Modellentscheidungen in diesem Kurs.
+
+Dieser Kurs ist als Zukunftsprojekt gedacht. Lies ihn jetzt, lerne
+schrittweise, und wenn du anfängst zu bauen, ist alles verständlich.
+
+================================================================================
+INHALTSÜBERSICHT
+================================================================================
+
+  MODUL 1  — Die Systemarchitektur (Docker-basiert)
+  MODUL 2  — Docker & docker-compose verstehen und lernen
+  MODUL 3  — Das Modell: Auswahl, Format und Integration
+  MODUL 4  — Ollama: Der Inference-Server
+  MODUL 5  — Python-Backend: HTTP-Server, Logik, Sicherheit
+  MODUL 6  — Datenbankdesign mit PostgreSQL
+  MODUL 7  — Das unendliche Gedächtnis: RAG, Vektoren, Embeddings
+  MODUL 8  — Frontend: Chat-Interface in Vanilla JS/HTML/CSS
+  MODUL 9  — Nginx: Webserver & Reverse Proxy
+  MODUL 10 — Sicherheit: Authentifizierung, Hashing, Sessions
+  MODUL 11 — Multimodalität: Bilder, Dokumente, Audio
+  MODUL 12 — Rate-Limiting und Zugangsbeschränkung
+  MODUL 13 — Streaming: Die Echtzeit-Antworten
+  MODUL 14 — Zusammenspiel: Wie alles kommuniziert
+  MODUL 15 — Deployment und Betrieb
+
+
+================================================================================
+MODUL 1: Die Systemarchitektur
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Das Gesamtbild
+------------------------------------------------------------------------
+
+Das System besteht aus vier Containern. Kein Container spricht direkt
+nach außen, außer dem Nginx-Webserver. Alles kommuniziert intern über
+ein virtuelles Docker-Netzwerk.
+
+So sieht die Kommunikationskette aus:
+
+  Browser → Nginx → Backend → Ollama
+                 ↘ PostgreSQL
+
+Der Browser kennt nur Nginx. Nginx kennt nur das Backend.
+Das Backend kennt Ollama und die Datenbank. Ollama kennt niemanden außer
+das Modell auf der Festplatte.
+
+------------------------------------------------------------------------
+1.2  Die vier Container
+------------------------------------------------------------------------
+
+  Container A — Ollama
+    Aufgabe:   Das LLM betreiben. Tokens generieren. Nichts sonst.
+    Basis:     Offizielles Ollama-Image mit CUDA-Support (für Nvidia-GPU).
+    Kommunikation: Nur intern. Port 11434 ist nur im Docker-Netz erreichbar.
+    Volumes:   /root/.ollama → Modell-Gewichte liegen hier dauerhaft.
+
+  Container B — Backend (Python)
+    Aufgabe:   Alle Logik. HTTP-Anfragen verarbeiten, Authentifizierung
+               prüfen, Rate-Limiting durchsetzen, Nachrichten formatieren,
+               Gedächtnis verwalten, Ollama anfragen, Antworten zurückgeben.
+    Basis:     Python 3.12 (offizielles Image, kein Framework nötig).
+    Kommunikation: Empfängt von Nginx. Sendet an Ollama und Datenbank.
+
+  Container C — PostgreSQL
+    Aufgabe:   Daten persistieren. Nutzer, Chats, Nachrichten, Embeddings.
+    Basis:     Offizielles PostgreSQL 16-Image.
+    Volumes:   /var/lib/postgresql/data → Daten bleiben nach Neustart.
+
+  Container D — Nginx
+    Aufgabe:   Statische Dateien ausliefern (HTML, CSS, JS).
+               API-Anfragen ans Backend weiterleiten (Reverse Proxy).
+               TLS-Terminierung (HTTPS, wenn gewünscht).
+    Basis:     Offizielles Nginx-Image.
+    Port:      80 (oder 443) — der einzige nach außen geöffnete Port.
+
+------------------------------------------------------------------------
+1.3  Was man in Modul 1 lernen muss
+------------------------------------------------------------------------
+
+Noch nichts coden. Das ist reine Konzeptarbeit. Verstehe diese Punkte:
+- Was ist ein Container, was ist ein Image, was ist ein Volume?
+- Warum isoliert man die Komponenten voneinander?
+- Was bedeutet "nach außen geschlossen" in einem Docker-Netz?
+- Was ist ein Reverse Proxy und warum braucht man ihn?
+
+Diese Konzepte werden in Modul 2 technisch erklärt.
+
+
+================================================================================
+MODUL 2: Docker & docker-compose
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Was Docker ist und warum es hier verwendet wird
+------------------------------------------------------------------------
+
+Docker packt eine Anwendung mit allem was sie braucht (Libraries,
+Laufzeitumgebung, Konfiguration) in ein Image. Aus dem Image entstehen
+Container — laufende Instanzen davon.
+
+Der Vorteil: Auf jedem System, auf dem Docker läuft, verhält sich der
+Container identisch. Kein "bei mir läuft es aber". Kein Versionschaos
+zwischen Python 3.9 und 3.12. Kein Konflikt zwischen Library-Versionen.
+
+Docker selbst lernt man aus der offiziellen Dokumentation:
+  https://docs.docker.com/get-started/
+
+------------------------------------------------------------------------
+2.2  Die Dockerfile-Syntax
+------------------------------------------------------------------------
+
+Ein Dockerfile beschreibt wie ein Image gebaut wird.
+Hier ein Beispiel für das Backend:
+
+  FROM python:3.12-slim
+
+  WORKDIR /app
+
+  COPY requirements.txt .
+  RUN pip install --no-cache-dir -r requirements.txt
+
+  COPY . .
+
+  CMD ["python", "server.py"]
+
+Zeile für Zeile:
+  FROM        → Basis-Image. python:3.12-slim ist klein, hat Python 3.12.
+  WORKDIR     → Arbeitsverzeichnis im Container. Alle folgenden Befehle
+                laufen von /app aus.
+  COPY        → Dateien vom Host in den Container kopieren.
+  RUN         → Befehl beim Bauen ausführen. Installiert Python-Pakete.
+  CMD         → Standardbefehl beim Start des Containers.
+
+Was man lernen muss:
+  - Reihenfolge der Layer und warum sie caching-relevant ist.
+  - Unterschied zwischen RUN (Buildzeit) und CMD (Laufzeit).
+  - ENTRYPOINT vs CMD.
+  - Multi-stage Builds (erst bauen, dann schlankes Image exportieren).
+  - .dockerignore — was nicht ins Image soll (node_modules, .git usw.)
+
+Lernressource: https://docs.docker.com/build/
+
+------------------------------------------------------------------------
+2.3  docker-compose.yml — Alle Container zusammen
+------------------------------------------------------------------------
+
+docker-compose orchestriert mehrere Container gleichzeitig. Eine einzige
+Datei beschreibt das gesamte System. Ein einziger Befehl startet alles:
+
+  docker compose up -d
+
+Grundstruktur der docker-compose.yml für dieses Projekt:
+
+  services:
+
+    ollama:
+      image: ollama/ollama:latest
+      runtime: nvidia            # GPU-Zugriff
+      volumes:
+        - ollama_data:/root/.ollama
+      networks:
+        - internal
+
+    backend:
+      build: ./backend           # Dockerfile im Ordner ./backend
+      environment:
+        - POSTGRES_DSN=postgresql://user:pass@db:5432/ki_db
+        - OLLAMA_URL=http://ollama:11434
+        - SECRET_KEY=mein_geheimer_schluessel
+      depends_on:
+        - ollama
+        - db
+      networks:
+        - internal
+
+    db:
+      image: postgres:16
+      environment:
+        - POSTGRES_USER=user
+        - POSTGRES_PASSWORD=pass
+        - POSTGRES_DB=ki_db
+      volumes:
+        - pg_data:/var/lib/postgresql/data
+      networks:
+        - internal
+
+    nginx:
+      image: nginx:alpine
+      ports:
+        - "80:80"                # Einziger nach außen geöffneter Port
+      volumes:
+        - ./frontend:/usr/share/nginx/html:ro   # Statische Dateien
+        - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      depends_on:
+        - backend
+      networks:
+        - internal
+
+  networks:
+    internal:
+      driver: bridge
+
+  volumes:
+    ollama_data:
+    pg_data:
+
+Wichtige Konzepte darin:
+  services     → jeder Eintrag ist ein Container
+  networks     → das interne Netz verbindet alle Container
+  volumes      → persistente Datenspeicherung außerhalb der Container
+  depends_on   → Startreihenfolge (nicht Bereitschaftscheck!)
+  environment  → Umgebungsvariablen im Container (Konfiguration)
+  build        → eigenes Dockerfile statt fertigem Image nutzen
+
+Was man lernen muss:
+  - docker-compose Befehle:
+    docker compose up -d        → starten (detached, im Hintergrund)
+    docker compose down         → stoppen und entfernen
+    docker compose logs -f      → Logs verfolgen
+    docker compose ps           → Status aller Container
+    docker compose exec backend bash   → Shell im laufenden Container
+    docker compose build        → Images neu bauen
+  - Was "bridge network" ist und wie Container-Namen als Hostnamen fungieren.
+    Innerhalb des Netzes ist "ollama" der Hostname des Ollama-Containers.
+    Das Backend schreibt einfach http://ollama:11434 — Docker löst das auf.
+  - Was Volumes sind und warum Daten im Container selbst verloren gehen.
+  - Environment-Variablen als Konfigurationsmuster.
+
+Lernressource: https://docs.docker.com/compose/
+
+
+================================================================================
+MODUL 3: Das Modell
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Welches Modell
+------------------------------------------------------------------------
+
+Stand Mitte 2026 gibt es für lokale, multimodale, zensurfreie Modelle
+eine klare Antwort: Llama 4 Scout (17B, Mixture-of-Experts) oder
+Qwen 3 (32B).
+
+Llama 4 Scout:
+  - Nativ multimodal: versteht Text und Bilder im gleichen Prompt.
+  - Mixture-of-Experts: viele Parameter total, aber nur ein Bruchteil
+    ist pro Token aktiv. Schnell trotz theoretisch großem Modell.
+  - Kontext: bis zu 10 Millionen Token im Originalmodell (in Ollama
+    begrenzt, aber immer noch riesig — mehr dazu in Modul 7).
+  - Sprachverständnis: deutlich besser als Gemini Flash.
+
+Qwen 3 (32B):
+  - Chinesisches Open-Weight Modell von Alibaba.
+  - Extrem stark bei Reasoning und Coding.
+  - Multimodal mit separatem Vision-Modell (nicht nativ im selben Gewicht).
+  - Hat einen "Thinking Mode" (langsames, tiefes Nachdenken) und einen
+    schnellen Modus — per Systemanweisung steuerbar.
+
+Für dieses Projekt: Llama 4 Scout. Weil nativ multimodal (Bilder und
+Text ohne Extra-Modell), riesiger Kontext, und stark genug.
+
+------------------------------------------------------------------------
+3.2  Das GGUF-Format
+------------------------------------------------------------------------
+
+Ollama lädt Modelle in GGUF-Format (GPT-Generated Unified Format).
+Das ist das Standardformat für lokale Inferenz. Es unterstützt
+Quantisierung — das Runterskalen der Modellgewichte auf 4-Bit oder 8-Bit
+statt 16-Bit-Fließkomma. Das macht Modelle kleiner und schneller,
+auf Kosten minimaler Qualitätsverluste.
+
+Quantisierungsstufen (von schlechter zu besser):
+  Q4_K_M   → 4-Bit, gute Balance. Für die meisten Fälle ausreichend.
+  Q5_K_M   → 5-Bit, besser als Q4, noch auf gängigen GPUs handhabbar.
+  Q6_K     → 6-Bit, sehr gute Qualität, braucht mehr VRAM.
+  Q8_0     → 8-Bit, fast wie das originale Modell. Braucht viel VRAM.
+
+Ollama lädt GGUF-Dateien automatisch wenn man ein Modelfile erstellt.
+
+------------------------------------------------------------------------
+3.3  Zensurfreiheit — "Abliterated" Modelle
+------------------------------------------------------------------------
+
+Normale Modelle sind mit RLHF (Reinforcement Learning from Human Feedback)
+trainiert. Dabei wurden Ablehnungsmuster eintrainiert: das Modell
+lernt bei bestimmten Anfragen "das darf ich nicht".
+
+Abliteration ist eine Post-Processing-Technik: die Richtungsvektoren im
+Modell, die für Ablehnung zuständig sind, werden identifiziert und
+neutralisiert. Das Modell verliert dadurch seine Verweigerungsreflexe,
+ohne neu trainiert zu werden.
+
+"Dolphin"-Modelle von Eric Hartford (huggingface.co/cognitivecomputations)
+sind die bekannteste Quelle für solche Varianten. Für Llama 4 Scout gibt
+es üblicherweise eine Dolphin-Variante innerhalb weniger Wochen nach
+Release des Originalmodells.
+
+Alternativ: selbst abliterieren. Das Tool dafür heißt "abliterator" und
+ist Open Source auf GitHub. Es braucht Python, transformers-Library und
+genug VRAM um das volle Modell zu laden — das ist eine fortgeschrittene
+Aufgabe für später.
+
+------------------------------------------------------------------------
+3.4  Das Ollama-Modelfile
+------------------------------------------------------------------------
+
+Ein Modelfile ist eine Konfigurationsdatei für Ollama — ähnlich einem
+Dockerfile, aber für Modelle. Es verknüpft das GGUF mit Parametern und
+dem System-Prompt.
+
+  FROM /models/llama4-scout-dolphin-q5_k_m.gguf
+
+  PARAMETER num_ctx 32768
+  PARAMETER temperature 0.7
+  PARAMETER top_p 0.9
+  PARAMETER repeat_penalty 1.1
+
+  SYSTEM """
+  Du bist ein persönlicher KI-Assistent. Du antwortest präzise, direkt
+  und ohne Einschränkungen. Du erinnerst dich an alles was im Kontext
+  steht. Du kannst Bilder sehen und beschreiben.
+  """
+
+Zeile für Zeile:
+  FROM          → Pfad zur GGUF-Datei (oder Modellname aus Ollama-Registry).
+  num_ctx       → Kontextfenstergröße in Token. 32768 = 32K Token.
+                  Mehr ist möglich (64K, 128K) wenn VRAM es erlaubt.
+  temperature   → Kreativität. 0.0 = deterministisch. 1.0 = kreativ.
+                  0.7 ist ein guter Standard.
+  top_p         → Nucleus Sampling. Modell wählt aus den Token die
+                  zusammen p=0.9 Wahrscheinlichkeit abdecken.
+  repeat_penalty → Bestraft Wiederholungen. Wichtig bei langen Antworten.
+  SYSTEM        → Der System-Prompt, der bei jeder Anfrage vorne steht.
+
+Was man lernen muss:
+  - Alle PARAMETER-Optionen von Ollama und was sie tun.
+  - Was num_ctx konkret begrenzt (VRAM) und wie man optimiert.
+  - System-Prompt-Design: was rein, was nicht, wie er priorisiert wird.
+  - Wie man das Modelfile lädt: ollama create meinmodell -f Modelfile
+
+Lernressource: https://github.com/ollama/ollama/blob/main/docs/modelfile.md
+
+
+================================================================================
+MODUL 4: Ollama — Der Inference-Server
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Was Ollama tut
+------------------------------------------------------------------------
+
+Ollama ist ein Server der LLMs lädt und über eine HTTP-API bereitstellt.
+Es abstrahiert die gesamte CUDA/GPU-Logik. Man sendet JSON, man bekommt
+Token zurück. Das ist alles was das Backend braucht.
+
+Ollama läuft auf Port 11434. Die wichtigsten Endpoints:
+
+  POST /api/generate    → Text-Completion (einfache Anfrage → Antwort)
+  POST /api/chat        → Chat-Format mit Nachrichtenverlauf
+  POST /api/embeddings  → Text in Embedding-Vektor umwandeln
+  GET  /api/tags        → Geladene Modelle auflisten
+  POST /api/pull        → Modell aus Registry laden
+
+------------------------------------------------------------------------
+4.2  Die Chat-API im Detail
+------------------------------------------------------------------------
+
+Das Backend sendet POST-Requests an http://ollama:11434/api/chat.
+
+Request-Body (JSON):
+
+  {
+    "model": "meinmodell",
+    "stream": true,
+    "messages": [
+      {"role": "system",  "content": "Du bist..."},
+      {"role": "user",    "content": "Hallo, wer bist du?"},
+      {"role": "assistant","content": "Ich bin dein..."},
+      {"role": "user",    "content": "Und was kannst du?",
+       "images": ["BASE64_STRING_DES_BILDES"]}
+    ],
+    "options": {
+      "temperature": 0.7,
+      "num_ctx": 32768
+    }
+  }
+
+Das "messages"-Array ist der gesamte Gesprächsverlauf. Ollama hat kein
+Gedächtnis zwischen Anfragen — man schickt immer den vollen Verlauf.
+Genau das macht das Gedächtnissystem in Modul 7 nötig.
+
+"stream": true bedeutet, Ollama sendet Tokens als Stream zurück
+(Server-Sent Events, Chunk by Chunk). Das ist der Schreibmaschinen-Effekt
+im Browser. Dazu mehr in Modul 13.
+
+"images" ist ein Array mit Base64-codierten Bildern. Nur bei multimodalen
+Modellen (Llama 4 Scout kann das). Pro Nachricht können mehrere Bilder
+angehängt werden.
+
+------------------------------------------------------------------------
+4.3  Was man über Ollama lernen muss
+------------------------------------------------------------------------
+
+  - Ollama-CLI-Befehle:
+    ollama run meinmodell               → interaktiver Chat im Terminal
+    ollama list                         → alle geladenen Modelle
+    ollama pull llama4:scout            → Modell aus Registry laden
+    ollama create meinmodell -f Modelfile → eigenes Modelfile laden
+    ollama rm meinmodell                → Modell löschen
+    ollama show meinmodell --modelfile  → Modelfile anzeigen
+
+  - VRAM-Planung: Faustformel für GGUF:
+    Modellgröße auf Platte ≈ VRAM-Bedarf bei Inferenz.
+    Dazu kommen noch ca. 1-2 GB für den KV-Cache (wächst mit num_ctx).
+    Beispiel: 7B Q5_K_M ≈ 5 GB + KV-Cache.
+    Reicht der VRAM nicht → Modell lädt auf CPU → 10x langsamer.
+
+  - Nvidia-Container-Toolkit: Damit der Docker-Container auf die GPU
+    zugreifen kann, braucht man das nvidia-container-toolkit installiert
+    auf dem Host. Dann reicht runtime: nvidia im docker-compose.yml.
+    Installation: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+Lernressource: https://github.com/ollama/ollama/tree/main/docs
+
+
+================================================================================
+MODUL 5: Das Python-Backend
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Warum reines Python ohne Framework
+------------------------------------------------------------------------
+
+Frameworks wie FastAPI oder Flask sind nicht verboten — sie machen das
+Projekt einfacher. Aber wer von Grund auf lernen will was passiert, baut
+den HTTP-Server selbst. Das ist lehrreich und das Ergebnis ist schlank.
+
+Wer schneller vorankommen will: FastAPI. Es bietet automatische
+Dokumentation, Typen-Validierung und Async-Support out of the box.
+Die Entscheidung hängt davon ab, wie tief man Python lernen will.
+
+Dieser Kurs zeigt den reinen Weg — mit Hinweisen wo FastAPI einfacher wäre.
+
+------------------------------------------------------------------------
+5.2  HTTP-Grundlagen die man verstehen muss
+------------------------------------------------------------------------
+
+HTTP ist Text-basiert. Ein Request sieht so aus:
+
+  POST /api/chat HTTP/1.1
+  Host: meinserver.de
+  Content-Type: application/json
+  Authorization: Bearer mein_token
+  Content-Length: 123
+
+  {"message": "Hallo KI", "chat_id": 42}
+
+Der Server antwortet:
+
+  HTTP/1.1 200 OK
+  Content-Type: application/json
+  Transfer-Encoding: chunked
+
+  {"response": "Hallo! Ich bin..."}
+
+Was man kennen muss:
+  - HTTP-Methoden: GET (Daten holen), POST (Daten senden/erstellen),
+    PUT (komplett ersetzen), PATCH (teilweise ändern), DELETE (löschen).
+  - HTTP-Statuscodes: 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized,
+    403 Forbidden, 404 Not Found, 429 Too Many Requests, 500 Server Error.
+  - HTTP-Header: Content-Type, Authorization, Cookie, Set-Cookie.
+  - JSON: Format für Daten in API-Kommunikation.
+
+Lernressource: https://developer.mozilla.org/en-US/docs/Web/HTTP
+
+------------------------------------------------------------------------
+5.3  Python-HTTP-Server ohne Framework
+------------------------------------------------------------------------
+
+Pythons Standardbibliothek enthält http.server. Man erbt von
+BaseHTTPRequestHandler und überschreibt do_GET, do_POST usw.
+
+  import json
+  from http.server import HTTPServer, BaseHTTPRequestHandler
+
+  class Handler(BaseHTTPRequestHandler):
+
+      def do_POST(self):
+          length = int(self.headers['Content-Length'])
+          body   = self.rfile.read(length)
+          data   = json.loads(body)
+
+          # Routing: welcher Endpoint wurde angefragt?
+          if self.path == '/api/chat':
+              self.handle_chat(data)
+          elif self.path == '/api/login':
+              self.handle_login(data)
+          else:
+              self.send_error(404)
+
+      def handle_chat(self, data):
+          # ... Logik ...
+          response = json.dumps({"status": "ok"}).encode()
+          self.send_response(200)
+          self.send_header('Content-Type', 'application/json')
+          self.end_headers()
+          self.wfile.write(response)
+
+  if __name__ == '__main__':
+      server = HTTPServer(('0.0.0.0', 8000), Handler)
+      server.serve_forever()
+
+Was hier passiert:
+  - rfile.read(length) liest den Request-Body als Bytes.
+  - json.loads() parst JSON zu einem Python-Dict.
+  - self.path enthält den URL-Pfad (z.B. "/api/chat").
+  - send_response, send_header, end_headers, wfile.write() bauen die Antwort.
+
+Was man lernen muss:
+  - Pythons Datentypen: dict, list, str, bytes, int, float, bool, None.
+  - json.loads() (JSON → Python), json.dumps() (Python → JSON).
+  - Klassen und Vererbung (das BaseHTTPRequestHandler-Muster).
+  - Exception Handling: try/except für Fehler die auftreten können.
+  - Mit Dateien arbeiten: open(), read(), write(), with-Statement.
+  - Das requests-Paket: HTTP-Anfragen an andere Server senden (zu Ollama).
+
+------------------------------------------------------------------------
+5.4  Routing — Anfragen aufteilen
+------------------------------------------------------------------------
+
+Ein Request kommt rein. Das Backend muss entscheiden was zu tun ist.
+Die Lösung ist eine Routing-Tabelle:
+
+  ROUTES = {
+      ('POST', '/api/chat'):       handle_chat,
+      ('POST', '/api/login'):      handle_login,
+      ('POST', '/api/register'):   handle_register,
+      ('GET',  '/api/chats'):      handle_get_chats,
+      ('GET',  '/api/chat/{id}'):  handle_get_chat,
+      ('DELETE', '/api/chat/{id}'): handle_delete_chat,
+  }
+
+  def dispatch(self):
+      for (method, pattern), handler in ROUTES.items():
+          if self.command == method and matches(self.path, pattern):
+              handler(self, extract_params(self.path, pattern))
+              return
+      self.send_error(404)
+
+Oder mit FastAPI (deutlich einfacher):
+
+  from fastapi import FastAPI
+  app = FastAPI()
+
+  @app.post("/api/chat")
+  async def chat(request: ChatRequest):
+      ...
+
+Was man lernen muss:
+  - URL-Parsing: wie man Parameter aus URLs extrahiert (/chat/42 → id=42).
+  - Path-Matching mit regulären Ausdrücken (re-Modul).
+  - Warum FastAPI hier das Leben leichter macht (aber nicht nötig ist).
+
+------------------------------------------------------------------------
+5.5  Anfragen an Ollama senden
+------------------------------------------------------------------------
+
+Das Backend sendet HTTP-Anfragen an Ollama. Das geht mit dem
+requests-Paket:
+
+  import requests
+
+  def ask_ollama(messages: list, model: str = "meinmodell") -> str:
+      response = requests.post(
+          "http://ollama:11434/api/chat",
+          json={
+              "model":    model,
+              "stream":   False,     # False = warte auf komplette Antwort
+              "messages": messages,
+          },
+          timeout=120               # 2 Minuten Timeout
+      )
+      response.raise_for_status()   # Fehler wenn HTTP-Status ≥ 400
+      return response.json()["message"]["content"]
+
+Für Streaming (Token by Token) ist es etwas komplexer — das kommt in
+Modul 13.
+
+Was man lernen muss:
+  - Das requests-Paket: get(), post(), raise_for_status(), json(), timeout.
+  - Was ein Timeout ist und warum er nötig ist (hängende Verbindungen).
+  - Error-Handling: was passiert wenn Ollama nicht antwortet?
+
+------------------------------------------------------------------------
+5.6  Was man an Python lernen muss (Lernpfad)
+------------------------------------------------------------------------
+
+Wer HTML/CSS/Bash kann, braucht Python von Grund auf. Das ist
+realistisch in 2-4 Monaten intensivem Lernen.
+
+Stufe 1 — Grundlagen (2-4 Wochen):
+  Variablen, Datentypen, Bedingungen, Schleifen, Funktionen.
+  Das Python-Tutorial: https://docs.python.org/3/tutorial/
+
+Stufe 2 — Datenstrukturen (1-2 Wochen):
+  Listen, Dicts, Sets, Tuples. Listcomprehensions.
+  Wann welche Datenstruktur.
+
+Stufe 3 — Klassen und Module (1-2 Wochen):
+  Klassen, Vererbung, __init__, self.
+  Module importieren, eigene Module schreiben.
+
+Stufe 4 — Fehlerbehandlung und I/O (1 Woche):
+  try/except/finally. Mit Dateien arbeiten.
+  json-Modul, pathlib, os.
+
+Stufe 5 — HTTP und APIs (1-2 Wochen):
+  requests-Paket nutzen.
+  http.server oder FastAPI.
+  JSON-APIs bauen und konsumieren.
+
+Stufe 6 — Nebenläufigkeit (1-2 Wochen):
+  threading-Modul. Locks und Semaphoren.
+  asyncio (wenn FastAPI verwendet wird).
+
+
+================================================================================
+MODUL 6: Datenbankdesign mit PostgreSQL
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Warum PostgreSQL
+------------------------------------------------------------------------
+
+PostgreSQL ist die robusteste freie relationale Datenbank. Sie unterstützt
+JSON-Spalten nativ, hat einen vollständigen ACID-Transaktionssupport und
+skaliert von kleinen Projekten bis zu riesigen Systemen ohne
+Änderungen am Code.
+
+SQLite wäre einfacher (eine Datei, kein Server), aber es unterstützt
+keine echten simultanen Schreibvorgänge. Bei einem Webserver mit mehreren
+gleichzeitigen Anfragen gibt es Locking-Probleme. PostgreSQL hat das nicht.
+
+------------------------------------------------------------------------
+6.2  Das Datenbankschema
+------------------------------------------------------------------------
+
+Fünf Tabellen reichen für dieses System:
+
+  -- Benutzer
+  CREATE TABLE users (
+      id            SERIAL PRIMARY KEY,
+      username      VARCHAR(50) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      created_at    TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Sessions (eingeloggte Nutzer)
+  CREATE TABLE sessions (
+      token      VARCHAR(64) PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Chats (eine Unterhaltung)
+  CREATE TABLE chats (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title      VARCHAR(200),
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Nachrichten
+  CREATE TABLE messages (
+      id         SERIAL PRIMARY KEY,
+      chat_id    INTEGER REFERENCES chats(id) ON DELETE CASCADE,
+      role       VARCHAR(20) NOT NULL,   -- 'user' oder 'assistant'
+      content    TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Zusammenfassungen (für das Langzeitgedächtnis)
+  CREATE TABLE summaries (
+      id         SERIAL PRIMARY KEY,
+      chat_id    INTEGER REFERENCES chats(id) ON DELETE CASCADE,
+      content    TEXT NOT NULL,
+      covers_up_to_message_id INTEGER,
+      created_at TIMESTAMP DEFAULT NOW()
+  );
+
+  -- Vektoren (für semantische Suche) — als JSON-Array oder pgvector
+  CREATE TABLE embeddings (
+      id          SERIAL PRIMARY KEY,
+      message_id  INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      vector      FLOAT[] NOT NULL      -- oder pgvector-Typ
+  );
+
+------------------------------------------------------------------------
+6.3  PostgreSQL aus Python ansprechen
+------------------------------------------------------------------------
+
+Das Paket psycopg3 (psycopg, dritte Version) ist der Standard:
+
+  import psycopg
+
+  # Verbindung aufbauen
+  conn = psycopg.connect(
+      "postgresql://user:pass@db:5432/ki_db"
+  )
+
+  # Abfrage ausführen
+  with conn.cursor() as cur:
+      cur.execute(
+          "INSERT INTO messages (chat_id, role, content) VALUES (%s, %s, %s)",
+          (chat_id, "user", "Hallo KI")
+      )
+      conn.commit()
+
+  # Daten holen
+  with conn.cursor() as cur:
+      cur.execute(
+          "SELECT id, role, content FROM messages WHERE chat_id = %s ORDER BY id",
+          (chat_id,)
+      )
+      rows = cur.fetchall()
+      # rows = [(1, 'user', 'Hallo'), (2, 'assistant', 'Guten Tag'), ...]
+
+Wichtig: NIEMALS String-Interpolation in SQL:
+  cur.execute(f"SELECT * FROM users WHERE username = '{name}'")  ← FALSCH
+  cur.execute("SELECT * FROM users WHERE username = %s", (name,)) ← RICHTIG
+
+Der erste Weg ermöglicht SQL-Injection — ein Angriff der die Datenbank
+kompromittiert. Immer Parameterized Queries (der %s-Weg) nutzen.
+
+------------------------------------------------------------------------
+6.4  Was man lernen muss
+------------------------------------------------------------------------
+
+SQL-Grundlagen (unvermeidlich):
+  - SELECT, INSERT, UPDATE, DELETE.
+  - WHERE, ORDER BY, LIMIT.
+  - JOINs: INNER JOIN (beide Seiten müssen existieren), LEFT JOIN
+    (linke Seite immer, rechte wenn vorhanden).
+  - Aggregatfunktionen: COUNT, SUM, AVG, MAX, MIN.
+  - Subqueries.
+  - Indizes: warum, wann, welche Spalten.
+
+PostgreSQL-spezifisch:
+  - SERIAL und BIGSERIAL für automatisch inkrementierende IDs.
+  - ON DELETE CASCADE: wenn der Parent gelöscht wird, weg damit.
+  - Timestamps: NOW(), CURRENT_TIMESTAMP.
+  - JSON/JSONB-Spalten (optional, aber nützlich für flexible Strukturen).
+
+psycopg3:
+  - Connection-Pooling: statt bei jeder Anfrage eine neue Verbindung,
+    einen Pool von 5-10 Verbindungen halten und wiederverwenden.
+    Paket: psycopg-pool.
+  - Cursor-Management mit with-Statement.
+  - Transaktionen: commit() und rollback().
+
+Lernressource SQL: https://www.postgresqltutorial.com
+Lernressource psycopg: https://www.psycopg.org/psycopg3/docs/
+
+
+================================================================================
+MODUL 7: Das unendliche Gedächtnis
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Das Problem: endliches Kontextfenster
+------------------------------------------------------------------------
+
+Ollama lädt bei jeder Anfrage den gesamten Nachrichtenverlauf in den
+Speicher (VRAM). Das Kontextfenster ist begrenzt — sagen wir 32768 Token
+(etwa 25.000 Wörter). Eine Konversation von mehreren Monaten hat
+problemlos mehr als das.
+
+Lösung: ein dreistufiges Gedächtnissystem.
+
+  Stufe 1 — Kurzzeitgedächtnis: die letzten N Nachrichten im vollen Wortlaut.
+  Stufe 2 — Zusammenfassung: verdichtetes Wissen aus älteren Nachrichten.
+  Stufe 3 — Langzeitgedächtnis: semantische Suche über alle alten Nachrichten.
+
+------------------------------------------------------------------------
+7.2  Stufe 1 — Kurzzeitgedächtnis
+------------------------------------------------------------------------
+
+Das Backend lädt die letzten 20 Nachrichten aus der Datenbank und schickt
+sie direkt an Ollama. Das ist das Fenster in dem die KI vollständig und
+präzise arbeitet.
+
+  def load_recent_messages(chat_id: int, limit: int = 20) -> list:
+      with conn.cursor() as cur:
+          cur.execute("""
+              SELECT role, content
+              FROM messages
+              WHERE chat_id = %s
+              ORDER BY id DESC
+              LIMIT %s
+          """, (chat_id, limit))
+          rows = cur.fetchall()
+      # Umkehren: älteste zuerst (Ollama erwartet chronologische Reihenfolge)
+      return [{"role": r, "content": c} for r, c in reversed(rows)]
+
+------------------------------------------------------------------------
+7.3  Stufe 2 — Automatische Zusammenfassung
+------------------------------------------------------------------------
+
+Wenn ein Chat mehr als N Nachrichten hat (sagen wir 40), verdichtet das
+Backend die ältesten 20 Nachrichten zu einer Zusammenfassung.
+
+Wie:
+  Das Backend schickt einen versteckten Prompt an Ollama:
+  "Fasse die folgenden Nachrichten in maximal 300 Wörtern zusammen.
+   Behalte alle wichtigen Fakten, Entscheidungen und Präferenzen."
+  Dann gibt es die alten 20 Nachrichten mit.
+
+  Ollama antwortet mit der Zusammenfassung. Das Backend speichert sie in
+  der summaries-Tabelle und markiert welche Nachrichten sie abdeckt.
+
+Bei zukünftigen Anfragen:
+  Das Backend holt die Zusammenfassung(en) und hängt sie vorne als
+  System-Kontext an:
+
+    messages = [
+        {"role": "system", "content": "Du bist..."},
+        {"role": "system", "content": "Zusammenfassung bisheriger Gespräche:\n" + summary},
+        # danach die letzten 20 Nachrichten im vollen Wortlaut
+    ]
+
+Das Modell kennt so den Kontext aus Monaten, ohne dass alles im VRAM
+geladen werden muss.
+
+------------------------------------------------------------------------
+7.4  Stufe 3 — Semantische Suche mit Embeddings
+------------------------------------------------------------------------
+
+Zusammenfassungen sind komprimiert — Details gehen verloren. Aber die
+Originalnachrichten sind noch in der Datenbank. Wenn der Nutzer nach
+etwas sucht das schon lange zurückliegt (z.B. "Erinnerst du dich was ich
+dir über meine Arbeit erzählt habe?"), kann das Backend gezielt suchen.
+
+Was sind Embeddings:
+  Ein Text-Embedding ist ein Zahlenvektor (z.B. 768 Zahlen) der die
+  semantische Bedeutung eines Textes als Position im Bedeutungsraum
+  darstellt. Texte mit ähnlicher Bedeutung haben ähnliche Vektoren.
+
+  "Ich arbeite als Softwareentwickler" und "Ich bin Programmierer" →
+  sehr ähnliche Vektoren. "Ich mag Katzen" → völlig anderer Vektor.
+
+Wie Ollama Embeddings generiert:
+  Ollama hat einen separaten Endpoint dafür. Man schickt Text, man
+  bekommt einen Zahlenvektor zurück.
+
+    response = requests.post(
+        "http://ollama:11434/api/embeddings",
+        json={"model": "nomic-embed-text", "prompt": "Ich arbeite als..."}
+    )
+    vector = response.json()["embedding"]  # Liste von z.B. 768 Zahlen
+
+  nomic-embed-text ist ein kleines, spezialisiertes Embedding-Modell.
+  Es macht nichts außer Texte in Vektoren umwandeln — sehr schnell.
+
+Cosinus-Ähnlichkeit — wie man Vektoren vergleicht:
+
+  import numpy as np
+
+  def cosine_similarity(a: list, b: list) -> float:
+      a = np.array(a)
+      b = np.array(b)
+      return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+      # Ergebnis: 1.0 = identisch, 0.0 = keine Ähnlichkeit, -1.0 = entgegengesetzt
+
+Beim Workflow:
+  1. Wenn eine neue Nachricht gespeichert wird, berechnet das Backend
+     deren Embedding und speichert es in der embeddings-Tabelle.
+  2. Wenn eine neue Anfrage kommt, berechnet das Backend das Embedding
+     der neuen Frage.
+  3. Das Backend vergleicht die neue Frage per Cosinus-Ähnlichkeit mit
+     allen gespeicherten Embeddings.
+  4. Die Top-5 ähnlichsten alten Nachrichten werden als "Erinnerungen"
+     unsichtbar oben im Prompt angehängt.
+
+  messages = [
+      {"role": "system", "content": "Du bist..."},
+      {"role": "system", "content": "Relevante Erinnerungen:\n" + gefundene_nachrichten},
+      {"role": "system", "content": "Zusammenfassung: " + summary},
+      # + letzte 20 Nachrichten
+  ]
+
+------------------------------------------------------------------------
+7.5  Was man lernen muss
+------------------------------------------------------------------------
+
+Was Embeddings sind und warum sie funktionieren:
+  - Vektorraummodelle für semantische Ähnlichkeit.
+  - Warum Cosinus-Ähnlichkeit besser ist als euklidische Distanz
+    für normalisierten Vektoren.
+
+numpy:
+  - Basics: Arrays erstellen, addieren, multiplizieren.
+  - np.dot (Skalarprodukt), np.linalg.norm (Vektorlänge).
+  - Warum numpy schneller ist als Python-Listen für Zahlenoperationen.
+
+Datenbankoptimierung für Vektoren:
+  - pgvector: PostgreSQL-Erweiterung die native Vektoroperationen und
+    Indizes unterstützt. Mit pgvector entfällt das numpy-Berechnen in
+    Python — die DB macht die Ähnlichkeitssuche direkt in SQL.
+    https://github.com/pgvector/pgvector
+  - Ohne pgvector: alle Vektoren aus DB laden, in numpy berechnen.
+    Funktioniert bis ca. 10.000 Nachrichten noch flüssig.
+
+Token-Zählung:
+  - Wie viele Token hat eine Nachricht? Das tiktoken-Paket kann das
+    approximieren (für Llama-Modelle mit deren Tokenizer).
+  - Das Backend muss grob zählen um zu entscheiden wann Zusammenfassung
+    nötig ist.
+
+
+================================================================================
+MODUL 8: Das Frontend
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Was das Frontend leisten muss
+------------------------------------------------------------------------
+
+Das ist kein generisches Interface — es ist ein vollständiges
+Chat-Interface mit diesen Features:
+  - Login/Logout mit Formular.
+  - Chat-Liste links, Chatverlauf rechts.
+  - Eingabefeld mit Dateianhang-Button.
+  - Streaming-Antworten (der Schreibmaschinen-Effekt).
+  - Bildvorschau vor dem Senden.
+  - Markdown-Rendering der Antworten (Codeblöcke, Fettschrift usw.)
+  - Responsive Layout (funktioniert auch auf Smartphones).
+  - Dark Mode.
+
+------------------------------------------------------------------------
+8.2  Projektstruktur des Frontends
+------------------------------------------------------------------------
+
+  frontend/
+    index.html       → Login-Seite
+    chat.html        → Chat-Interface
+    css/
+      reset.css      → Browser-Defaults zurücksetzen
+      variables.css  → CSS-Variablen (Farben, Schriften)
+      layout.css     → Grid/Flexbox-Struktur
+      components.css → Buttons, Inputs, Chatblasen, Loader
+      dark.css        → Dark-Mode-Overrides
+    js/
+      api.js         → alle fetch()-Aufrufe zum Backend
+      auth.js        → Login/Logout-Logik
+      chat.js        → Chatverlauf laden, anzeigen
+      stream.js      → Streaming-Antworten verarbeiten
+      upload.js      → Dateianhänge verwalten
+      render.js      → Markdown zu HTML umwandeln
+      state.js       → globaler App-Zustand (aktueller Chat, User etc.)
+
+------------------------------------------------------------------------
+8.3  CSS-Grundstruktur
+------------------------------------------------------------------------
+
+Das Layout ist ein zweispaltiges Grid:
+
+  .app-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      grid-template-rows: 100vh;
+  }
+
+  .sidebar {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-color);
+      overflow-y: auto;
+  }
+
+  .chat-area {
+      display: flex;
+      flex-direction: column;
+  }
+
+  .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+  }
+
+  .input-area {
+      padding: 1rem;
+      border-top: 1px solid var(--border-color);
+  }
+
+CSS-Variablen für Theming:
+
+  :root {
+      --bg-primary:      #1a1a1a;
+      --bg-secondary:    #252525;
+      --text-primary:    #e0e0e0;
+      --text-secondary:  #888;
+      --accent:          #7c3aed;
+      --border-color:    #333;
+      --user-bubble-bg:  #2d2060;
+      --ai-bubble-bg:    #252525;
+  }
+
+Was man hier über CSS hinaus lernen muss:
+  - CSS Grid: grid-template-columns, grid-template-rows, grid-area.
+  - CSS Flexbox: flex-direction, flex, align-items, justify-content.
+  - CSS-Variablen: --name: wert und var(--name).
+  - Media Queries: @media (max-width: 768px) { ... } für Mobile.
+  - CSS-Animationen für den Loader (der Punkt der blinkt während die KI
+    antwortet): @keyframes, animation-name, animation-duration.
+  - overflow-y: auto für scrollbare Bereiche.
+
+------------------------------------------------------------------------
+8.4  JavaScript — was man lernen muss
+------------------------------------------------------------------------
+
+Wer HTML/CSS kann, braucht JavaScript von Grund auf für die Logik.
+
+Stufe 1 — Grundlagen:
+  Variablen (let, const), Datentypen, Bedingungen, Schleifen, Funktionen.
+  Das Mozilla-Tutorial: https://developer.mozilla.org/en-US/docs/Learn/JavaScript
+
+Stufe 2 — DOM-Manipulation:
+  document.getElementById, querySelector, createElement, appendChild,
+  textContent, innerHTML (mit Vorsicht wegen XSS).
+  Event-Listener: addEventListener('click', handler).
+  Das DOM ist der Baum der HTML-Elemente im Speicher. JS manipuliert ihn
+  und der Browser aktualisiert die Seite.
+
+Stufe 3 — Asynchrones JavaScript (KRITISCH für dieses Projekt):
+  Das ist das wichtigste Konzept. API-Anfragen und Streaming sind async.
+
+  fetch() — HTTP-Anfragen aus dem Browser:
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: input.value, chat_id: currentChat})
+    });
+    const data = await response.json();
+
+  Promises und async/await:
+    async function schicke_nachricht() {
+        const result = await fetch('/api/chat', ...);
+        // await wartet bis fetch fertig ist, dann weiter
+        const data = await result.json();
+        zeige_antwort(data.response);
+    }
+
+  Warum async/await: Netzwerkanfragen dauern. JS läuft single-threaded.
+  Wenn man auf eine Anfrage wartet ohne async, blockiert der Browser
+  komplett — kein Klick, kein Scroll, nichts. await gibt die Kontrolle
+  zurück während gewartet wird.
+
+Stufe 4 — Streaming (Modul 13 im Detail):
+  ReadableStream, getReader(), read() in einer Schleife.
+
+Stufe 5 — FileReader-API:
+  Dateien die der Nutzer auswählt als Base64 auslesen.
+
+Stufe 6 — LocalStorage / SessionStorage:
+  Session-Token im Browser speichern (nach Login).
+  window.localStorage.setItem('token', 'abc'), getItem, removeItem.
+
+------------------------------------------------------------------------
+8.5  Markdown-Rendering
+------------------------------------------------------------------------
+
+Die KI antwortet mit Markdown (Fettschrift, Code, Listen usw.).
+Im Browser muss das zu HTML werden.
+
+Dafür gibt es marked.js — eine kleine Bibliothek die Markdown zu HTML
+konvertiert:
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  function render_message(text) {
+      const html = marked.parse(text);
+      messageEl.innerHTML = DOMPurify.sanitize(html);
+      // DOMPurify verhindert XSS — eingeschleuster JS-Code in der Antwort
+  }
+
+DOMPurify ist wichtig: wenn man innerHTML setzt, wird HTML interpretiert.
+Eine bösartige KI-Antwort (oder ein kompromittierter Server) könnte
+<script>-Tags einschleusen. DOMPurify bereinigt das.
+
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+
+Für Code-Highlighting innerhalb von Codeblöcken: highlight.js.
+
+------------------------------------------------------------------------
+8.6  Dateianhänge — die FileReader-API
+------------------------------------------------------------------------
+
+  const fileInput = document.getElementById('file-input');
+
+  fileInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+          const base64 = e.target.result;  // "data:image/jpeg;base64,/9j/..."
+          // Nur den Base64-Teil (ohne data:...-Präfix):
+          const base64Data = base64.split(',')[1];
+          // Vorschau anzeigen:
+          previewImg.src = e.target.result;
+          // Für späteres Senden speichern:
+          pendingAttachment = { type: file.type, data: base64Data };
+      };
+
+      reader.readAsDataURL(file);
+  });
+
+  // Beim Absenden:
+  const payload = {
+      message: input.value,
+      chat_id: currentChat,
+      attachment: pendingAttachment   // null wenn kein Anhang
+  };
+
+Drag & Drop zusätzlich:
+
+  chatArea.addEventListener('dragover', (e) => e.preventDefault());
+  chatArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      // gleiche Logik wie oben
+  });
+
+
+================================================================================
+MODUL 9: Nginx
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Was Nginx hier tut
+------------------------------------------------------------------------
+
+Nginx ist kein Application-Server — es macht keine Logik. Es macht zwei
+Dinge:
+
+  1. Statische Dateien ausliefern: HTML, CSS, JS ans Browser schicken.
+  2. API-Anfragen weiterleiten (Reverse Proxy): /api/... → Backend.
+
+Der Browser kennt nur Nginx auf Port 80. Er weiß nicht dass dahinter
+ein Python-Server auf Port 8000 läuft. Nginx übersetzt.
+
+------------------------------------------------------------------------
+9.2  nginx.conf — die Konfiguration
+------------------------------------------------------------------------
+
+  server {
+      listen 80;
+      server_name mein-server.de;
+
+      # Statische Dateien
+      root /usr/share/nginx/html;
+      index index.html;
+
+      # Alle /api/-Anfragen ans Backend
+      location /api/ {
+          proxy_pass         http://backend:8000;
+          proxy_set_header   Host $host;
+          proxy_set_header   X-Real-IP $remote_addr;
+          proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+
+          # Für Streaming: Buffer abschalten
+          proxy_buffering    off;
+          proxy_cache        off;
+
+          # Für lange KI-Antworten: Timeout erhöhen
+          proxy_read_timeout 300s;
+      }
+
+      # Alle anderen Anfragen → index.html (Single-Page-App-Muster)
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+  }
+
+Was wichtig ist:
+  proxy_pass         → wohin wird weitergeleitet (Container-Name!)
+  proxy_buffering off → für Streaming zwingend nötig. Sonst puffert Nginx
+                        die komplette Antwort bevor es weitergibt — kein
+                        Streaming mehr beim Client.
+  proxy_read_timeout → Standard ist 60 Sekunden. KI-Antworten können
+                        länger dauern.
+
+------------------------------------------------------------------------
+9.3  HTTPS einrichten (optional aber empfohlen)
+------------------------------------------------------------------------
+
+Mit Certbot (Let's Encrypt) kostenlose TLS-Zertifikate:
+
+  certbot --nginx -d mein-server.de
+
+Certbot modifiziert die nginx.conf automatisch. Danach ist der Server
+erreichbar auf https://mein-server.de.
+
+Was man lernen muss:
+  - Nginx-Konfigurationssyntax: server-Block, location-Block, directives.
+  - Was ein Reverse Proxy ist und warum er nötig ist.
+  - proxy_set_header: warum das Backend die echte Client-IP braucht.
+  - TLS-Grundlagen: Zertifikate, HTTPS, warum HTTP nicht reicht.
+
+Lernressource: https://nginx.org/en/docs/beginners_guide.html
+
+
+================================================================================
+MODUL 10: Sicherheit — Authentifizierung
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Passwörter richtig speichern
+------------------------------------------------------------------------
+
+Passwörter werden NIEMALS im Klartext in der Datenbank gespeichert.
+Das geht mit bcrypt — einem speziell für Passwörter entwickelten
+Hashing-Algorithmus.
+
+  import bcrypt
+
+  # Beim Registrieren:
+  def hash_password(plain: str) -> str:
+      salt   = bcrypt.gensalt(rounds=12)
+      hashed = bcrypt.hashpw(plain.encode(), salt)
+      return hashed.decode()
+
+  # Beim Login (Prüfung):
+  def check_password(plain: str, stored_hash: str) -> bool:
+      return bcrypt.checkpw(plain.encode(), stored_hash.encode())
+
+  # In der DB steht dann sowas: "$2b$12$abcdefghij..."
+  # Niemand kann daraus das Originalpasswort rekonstruieren.
+
+Warum bcrypt statt SHA256 oder MD5:
+  SHA256/MD5 sind schnell — Angreifer können Milliarden von Hashes
+  pro Sekunde berechnen (Brute-Force). bcrypt ist absichtlich langsam
+  (der rounds-Parameter). 12 rounds bedeutet 2^12 = 4096 Iterationen.
+  Ein modernes System braucht ~250ms für einen Hash — für Angreifer
+  macht das Brute-Force unpraktikabel.
+
+------------------------------------------------------------------------
+10.2  Session-Tokens
+------------------------------------------------------------------------
+
+Nach erfolgreichem Login braucht der Browser eine Möglichkeit zu beweisen
+dass er eingeloggt ist — ohne bei jeder Anfrage das Passwort mitzuschicken.
+
+Lösung: Session-Tokens.
+
+  Backend beim Login:
+    1. Passwort prüfen (bcrypt.checkpw).
+    2. Zufälligen Token generieren: secrets.token_hex(32) → 64 Hex-Zeichen.
+    3. Token in sessions-Tabelle speichern mit Ablaufzeit (z.B. 30 Tage).
+    4. Token im Response-Cookie setzen.
+
+  Browser speichert den Cookie. Bei jeder folgenden Anfrage schickt der
+  Browser den Cookie automatisch mit.
+
+  Backend bei jeder API-Anfrage:
+    1. Cookie auslesen.
+    2. In sessions-Tabelle nachschlagen.
+    3. Ist er gültig und nicht abgelaufen? → Anfrage durchlassen.
+    4. Sonst: 401 Unauthorized zurückgeben.
+
+  import secrets
+
+  def create_session(user_id: int) -> str:
+      token = secrets.token_hex(32)
+      with conn.cursor() as cur:
+          cur.execute("""
+              INSERT INTO sessions (token, user_id, expires_at)
+              VALUES (%s, %s, NOW() + INTERVAL '30 days')
+          """, (token, user_id))
+          conn.commit()
+      return token
+
+  def validate_session(token: str) -> int | None:
+      with conn.cursor() as cur:
+          cur.execute("""
+              SELECT user_id FROM sessions
+              WHERE token = %s AND expires_at > NOW()
+          """, (token,))
+          row = cur.fetchone()
+      return row[0] if row else None
+
+------------------------------------------------------------------------
+10.3  Cookies sicher setzen
+------------------------------------------------------------------------
+
+  Set-Cookie: session=TOKEN; HttpOnly; SameSite=Strict; Max-Age=2592000
+
+  HttpOnly    → Cookie ist nicht per JavaScript lesbar — schützt vor XSS.
+  SameSite=Strict → Cookie wird nur bei Same-Origin-Anfragen geschickt —
+                schützt vor CSRF.
+  Max-Age     → 2592000 = 30 Tage in Sekunden.
+  Secure      → nur über HTTPS senden (wenn HTTPS eingerichtet ist).
+
+------------------------------------------------------------------------
+10.4  Was man lernen muss
+------------------------------------------------------------------------
+
+  - Kryptographisch sichere Zufallszahlen: secrets-Modul (nicht random!).
+    random ist vorhersagbar. secrets nutzt os.urandom() — systemnaher
+    Zufallsgenerator.
+  - bcrypt und warum es besser ist als allgemeine Hash-Algorithmen.
+  - Was ein Cookie ist, wie er gesetzt und ausgelesen wird.
+  - HttpOnly, SameSite, Secure — was jedes Attribut schützt.
+  - CSRF und XSS: die häufigsten Web-Sicherheitslücken verstehen.
+  - SQL-Injection: warum Parameterized Queries Pflicht sind (s. Modul 6).
+
+Lernressource: https://owasp.org/www-project-top-ten/
+
+
+================================================================================
+MODUL 11: Multimodalität — Bilder, Dokumente, Audio
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Bilder verarbeiten
+------------------------------------------------------------------------
+
+Llama 4 Scout versteht Bilder nativ. Das Backend muss das Bild als
+Base64-String in den Chat-Request einbauen:
+
+  {
+    "role": "user",
+    "content": "Was siehst du auf diesem Bild?",
+    "images": ["BASE64_JPEG_ODER_PNG"]
+  }
+
+Das Backend empfängt das Bild vom Frontend (bereits als Base64 vom
+FileReader), validiert es und reicht es weiter:
+
+  import base64
+  from PIL import Image
+  import io
+
+  def validate_and_prepare_image(base64_str: str) -> str:
+      # Dekodieren
+      img_bytes = base64.b64decode(base64_str)
+      # Validieren ob es wirklich ein Bild ist
+      img = Image.open(io.BytesIO(img_bytes))
+      img.verify()
+      # Zurück zu Base64 (nach verify() muss man neu öffnen)
+      img = Image.open(io.BytesIO(img_bytes))
+      # Auf vernünftige Größe reduzieren wenn zu groß
+      if max(img.size) > 2048:
+          img.thumbnail((2048, 2048))
+      # Als JPEG komprimieren
+      buffer = io.BytesIO()
+      img.convert('RGB').save(buffer, format='JPEG', quality=85)
+      return base64.b64encode(buffer.getvalue()).decode()
+
+Warum Pillow (PIL):
+  Pillow ist die Standard-Bildverarbeitung in Python. Unterstützt
+  JPEG, PNG, WebP, GIF, BMP und mehr. Kann verkleinern, konvertieren,
+  drehen, zuschneiden.
+
+------------------------------------------------------------------------
+11.2  PDF und Dokumententext extrahieren
+------------------------------------------------------------------------
+
+Wenn jemand eine PDF hochlädt, kann die KI kein PDF-Binary lesen —
+sie braucht den Text daraus.
+
+  import pymupdf   # pip install pymupdf (auch bekannt als fitz)
+
+  def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+      doc  = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+      text = ""
+      for page in doc:
+          text += page.get_text()
+      return text
+
+pymupdf ist das schnellste Python-PDF-Paket. Auch für Bilder in PDFs
+kann es pages als Bild rastern (dann OCR).
+
+Für Word-Dokumente:
+
+  from docx import Document
+  import io
+
+  def extract_text_from_docx(docx_bytes: bytes) -> str:
+      doc = Document(io.BytesIO(docx_bytes))
+      return "\n".join(para.text for para in doc.paragraphs)
+
+Der extrahierte Text wird dann wie eine normale Textnachricht behandelt:
+in den Kontext eingebettet, mit einem Präfix wie "Der Nutzer hat folgendes
+Dokument hochgeladen: [TEXT]".
+
+------------------------------------------------------------------------
+11.3  Audio — Transkription mit Whisper
+------------------------------------------------------------------------
+
+Whisper ist OpenAIs Open-Source-Spracherkennung. Sehr akkurat,
+läuft lokal, unterstützt Deutsch und Dutzende andere Sprachen.
+
+  pip install openai-whisper
+
+  import whisper
+
+  model = whisper.load_model("medium")   # oder "large" für mehr Qualität
+
+  def transcribe_audio(audio_bytes: bytes) -> str:
+      import tempfile, os
+      with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+          f.write(audio_bytes)
+          tmp_path = f.name
+      try:
+          result = model.transcribe(tmp_path, language="de")
+          return result["text"]
+      finally:
+          os.unlink(tmp_path)
+
+Whisper braucht FFmpeg auf dem System. Im Docker-Container:
+
+  FROM python:3.12-slim
+  RUN apt-get update && apt-get install -y ffmpeg
+
+Whisper-Modellgrößen:
+  tiny      → sehr schnell, schlechtere Qualität
+  base      → schnell, okay
+  small     → guter Kompromiss
+  medium    → gute Qualität, ~2-3 GB VRAM
+  large-v3  → beste Qualität, ~10 GB VRAM
+
+Für dieses System: medium oder small. Das Transkript wird wie
+Dokumententext eingebettet: "Der Nutzer hat folgende Sprachnachricht
+geschickt: [TRANSKRIPT]".
+
+------------------------------------------------------------------------
+11.4  Unterstützte Dateiformate im Überblick
+------------------------------------------------------------------------
+
+  Bilder    → JPEG, PNG, WebP, GIF     → Pillow, direkt an Ollama (Base64)
+  PDF       → .pdf                      → pymupdf, Text extrahieren
+  Word      → .docx                     → python-docx, Text extrahieren
+  Audio     → .mp3, .wav, .m4a, .ogg   → Whisper, Transkript extrahieren
+  Text      → .txt, .md, .csv          → direkt einlesen
+  Code      → .py, .js, .sh, usw.      → direkt einlesen
+
+Für jedes Format im Backend: ein Handler der erkennt was die Datei ist
+(MIME-Type aus dem Upload), den richtigen Extraktor aufruft, und das
+Ergebnis in den Kontext einbettet.
+
+
+================================================================================
+MODUL 12: Rate-Limiting und Zugangsbeschränkung
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Das 1-Nutzer-Limit
+------------------------------------------------------------------------
+
+Das Ziel: nur eine Person gleichzeitig kann die KI befragen.
+Warum: Ollama verarbeitet eine Anfrage sequentiell. Mehrere gleichzeitige
+Anfragen würden sich in den VRAM teilen und alles verlangsamen — oder
+abstürzen.
+
+Die Implementierung mit einem Threading-Lock:
+
+  import threading
+
+  inference_lock = threading.Semaphore(1)
+  # Semaphore(1) = genau ein gleichzeitiger Zugriff erlaubt
+
+  def handle_chat(request_data, user_id):
+
+      # Versuche den Lock zu erwerben (nicht-blockierend)
+      acquired = inference_lock.acquire(blocking=False)
+
+      if not acquired:
+          # Jemand anderes nutzt die KI gerade
+          return error_response(429, "KI ist gerade beschäftigt. Bitte warte.")
+
+      try:
+          # Lock gehalten — jetzt mit Ollama kommunizieren
+          response = ask_ollama(request_data["messages"])
+          return success_response(response)
+      finally:
+          # Lock IMMER freigeben — auch bei Exceptions
+          inference_lock.release()
+
+Das try/finally ist kritisch: wenn ask_ollama() einen Fehler wirft,
+würde ohne finally der Lock nie freigegeben werden. Das System wäre
+blockiert bis zum Neustart.
+
+------------------------------------------------------------------------
+12.2  Passwort-Schutz (zusätzlich zu User-Accounts)
+------------------------------------------------------------------------
+
+Wenn man keinen öffentlichen Registrierungs-Endpoint will, sondern nur
+bekannte Nutzer zulassen: ein globales Zugangskennwort das bei der
+Registrierung eingegeben werden muss.
+
+  REGISTRATION_PASSWORD = os.environ.get('REGISTRATION_PASSWORD', '')
+
+  def handle_register(data):
+      if data.get('access_code') != REGISTRATION_PASSWORD:
+          return error_response(403, "Ungültiger Zugangscode.")
+      # ... normale Registrierung ...
+
+Das Passwort kommt aus einer Umgebungsvariable im docker-compose.yml
+(nie im Code hardcoden).
+
+------------------------------------------------------------------------
+12.3  IP-basiertes Rate-Limiting (Anti-Spam)
+------------------------------------------------------------------------
+
+Für Login-Versuche: nach 5 Fehlversuchen von einer IP, 15 Minuten sperren.
+
+  from collections import defaultdict
+  from datetime import datetime, timedelta
+  import threading
+
+  failed_attempts = defaultdict(list)   # IP → [Zeitstempel der Fehlversuche]
+  lock = threading.Lock()
+
+  def check_rate_limit(ip: str) -> bool:
+      with lock:
+          now     = datetime.now()
+          cutoff  = now - timedelta(minutes=15)
+          # Alte Einträge löschen
+          failed_attempts[ip] = [t for t in failed_attempts[ip] if t > cutoff]
+          # Prüfen ob Limit überschritten
+          return len(failed_attempts[ip]) >= 5
+
+  def record_failed_attempt(ip: str):
+      with lock:
+          failed_attempts[ip].append(datetime.now())
+
+Warum threading.Lock hier: defaultdict ist nicht thread-safe für
+gleichzeitige Reads und Writes. Der Lock stellt sicher dass nur ein
+Thread gleichzeitig das Dict modifiziert.
+
+------------------------------------------------------------------------
+12.4  Was man lernen muss
+------------------------------------------------------------------------
+
+  Python threading:
+    - threading.Thread, threading.Lock, threading.Semaphore.
+    - Was Thread-Safety bedeutet und warum shared state geschützt werden muss.
+    - Das GIL (Global Interpreter Lock): Pythons globale Bremse.
+      Für I/O-bound Code (Netzwerk, Datenbank) kein großes Problem.
+      Für CPU-bound (Berechnungen): multiprocessing statt threading.
+
+  asyncio (Alternative):
+    - Wenn FastAPI verwendet wird: alles ist async/await.
+    - asyncio.Semaphore statt threading.Semaphore.
+    - Kein echtes Multithreading, aber kooperatives Multitasking —
+      ausreichend für einen Web-Server.
+
+  Umgebungsvariablen:
+    - os.environ.get('VARIABLE_NAME', 'default').
+    - Warum Konfiguration niemals im Code stehen soll.
+    - .env-Dateien und docker-compose environment-Sektion.
+
+
+================================================================================
+MODUL 13: Streaming — Der Schreibmaschinen-Effekt
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Was Streaming ist und warum es nötig ist
+------------------------------------------------------------------------
+
+Ohne Streaming: Der Browser schickt eine Anfrage, wartet 10-30 Sekunden
+während Ollama rechnet, dann kommt die komplette Antwort auf einmal.
+Das fühlt sich tot an.
+
+Mit Streaming: Ollama schickt jeden generierten Token sofort zurück.
+Das Backend gibt ihn sofort weiter. Der Browser zeigt jeden Token
+sofort an. So erscheint die Antwort Wort für Wort — wie beim Tippen.
+
+------------------------------------------------------------------------
+13.2  Backend: Streaming von Ollama empfangen und weiterleiten
+------------------------------------------------------------------------
+
+Das Backend muss zwei Dinge gleichzeitig:
+  1. Ollama streamen lassen (stream: true).
+  2. Die Antwort als Server-Sent Events (SSE) ans Frontend weiterleiten.
+
+Server-Sent Events (SSE) ist ein einfaches HTTP-Protokoll für
+Echtzeit-Daten vom Server zum Browser. Es ist einfacher als WebSockets
+und für diesen Anwendungsfall ausreichend.
+
+  def handle_chat_streaming(request_data, response_writer):
+      messages = request_data["messages"]
+
+      # An Nginx-Proxy und Browser sagen: kein Buffering
+      response_writer.send_response(200)
+      response_writer.send_header('Content-Type', 'text/event-stream')
+      response_writer.send_header('Cache-Control', 'no-cache')
+      response_writer.send_header('Connection', 'keep-alive')
+      response_writer.send_header('X-Accel-Buffering', 'no')  # Nginx-spezifisch
+      response_writer.end_headers()
+
+      # Streaming-Anfrage an Ollama
+      with requests.post(
+          "http://ollama:11434/api/chat",
+          json={"model": "meinmodell", "stream": True, "messages": messages},
+          stream=True,          # requests: Response nicht puffern
+          timeout=300
+      ) as ollama_response:
+
+          full_response = ""    # für Datenbank-Speicherung nach dem Stream
+
+          for line in ollama_response.iter_lines():
+              if not line:
+                  continue
+              chunk = json.loads(line)
+              token = chunk.get("message", {}).get("content", "")
+              done  = chunk.get("done", False)
+
+              if token:
+                  full_response += token
+                  # SSE-Format: "data: TOKEN\n\n"
+                  event = f"data: {json.dumps({'token': token})}\n\n"
+                  response_writer.wfile.write(event.encode())
+                  response_writer.wfile.flush()   # sofort senden!
+
+              if done:
+                  # Stream abgeschlossen
+                  event = "data: [DONE]\n\n"
+                  response_writer.wfile.write(event.encode())
+                  response_writer.wfile.flush()
+                  break
+
+      # Vollständige Antwort in Datenbank speichern
+      save_message(request_data["chat_id"], "assistant", full_response)
+
+------------------------------------------------------------------------
+13.3  Frontend: SSE empfangen und anzeigen
+------------------------------------------------------------------------
+
+  async function sendMessage(message, chatId, attachment) {
+      const messagesDiv = document.getElementById('messages');
+
+      // Eigene Nachricht sofort anzeigen
+      appendMessage('user', message);
+
+      // KI-Antwort-Bubble erstellen (noch leer)
+      const aiDiv = document.createElement('div');
+      aiDiv.className = 'message assistant';
+      messagesDiv.appendChild(aiDiv);
+
+      // SSE-Verbindung aufbauen
+      // EventSource kann nur GET-Requests — für POST-Streaming braucht
+      // man fetch() mit ReadableStream
+      const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message, chat_id: chatId, attachment }),
+      });
+
+      if (!response.ok) {
+          aiDiv.textContent = 'Fehler: ' + response.status;
+          return;
+      }
+
+      // ReadableStream verarbeiten (Token by Token)
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+
+      while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE-Events aus dem Buffer parsen (getrennt durch \n\n)
+          const events = buffer.split('\n\n');
+          buffer = events.pop();   // letztes (evtl. unvollständiges) behalten
+
+          for (const event of events) {
+              if (!event.startsWith('data: ')) continue;
+              const payload = event.slice(6).trim();
+
+              if (payload === '[DONE]') break;
+
+              const chunk = JSON.parse(payload);
+              fullText += chunk.token;
+
+              // Markdown rendern und anzeigen
+              aiDiv.innerHTML = DOMPurify.sanitize(marked.parse(fullText));
+
+              // Auto-scroll nach unten
+              messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
+      }
+  }
+
+Was man hier an JavaScript wissen muss:
+  - fetch() mit stream: true (implizit — Response-Body ist immer streambar).
+  - response.body.getReader() → gibt einen ReadableStream-Reader.
+  - reader.read() → asynchron, gibt { done: bool, value: Uint8Array }.
+  - TextDecoder mit stream: true → dekodiert Bytes zu Text, auch über
+    Chunk-Grenzen hinweg (wichtig wenn ein UTF-8-Zeichen über zwei Chunks geht).
+  - SSE-Format parsen: "data: ...\n\n".
+
+
+================================================================================
+MODUL 14: Wie alles kommuniziert
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Ein vollständiger Request-Cycle
+------------------------------------------------------------------------
+
+Hier ist was passiert wenn ein Nutzer auf Senden drückt:
+
+  1. Browser (Frontend - chat.js)
+     sendMessage() aufgerufen.
+     Baut JSON-Payload: { message, chat_id, attachment }.
+     Sendet POST /api/chat an Nginx.
+
+  2. Nginx (nginx.conf)
+     Empfängt Request auf Port 80.
+     Matcht location /api/ → proxy_pass an backend:8000.
+     Setzt Header: X-Real-IP, Host.
+     Leitet Request weiter.
+
+  3. Backend (server.py)
+     Empfängt POST /api/chat.
+     Liest Session-Cookie → validate_session() → user_id.
+     Prüft rate limit (inference_lock.acquire).
+     Lädt letzte 20 Nachrichten aus DB (load_recent_messages).
+     Lädt Zusammenfassung aus DB.
+     Berechnet Embedding der Frage.
+     Sucht relevante alte Nachrichten (Cosinus-Ähnlichkeit).
+     Baut messages-Array: System + Erinnerungen + Zusammenfassung + Verlauf.
+     Speichert neue User-Nachricht in DB.
+     Öffnet Streaming-Request an Ollama.
+
+  4. Ollama (Container A)
+     Empfängt POST /api/chat mit messages.
+     Lädt Kontext in GPU-Speicher.
+     Generiert Token für Token.
+     Schickt jeden Token sofort zurück (stream).
+
+  5. Backend (weiter)
+     Empfängt Token von Ollama.
+     Schickt sofort als SSE ans Nginx weiter (flush()).
+     Sammelt vollständige Antwort intern.
+     Nach DONE: Speichert Antwort in DB. Berechnet Embedding.
+                Gibt inference_lock frei.
+
+  6. Nginx (weiter)
+     Leitet SSE-Chunks sofort weiter (proxy_buffering off).
+
+  7. Browser (weiter)
+     ReadableStream.read() gibt neue Chunks.
+     Dekodiert SSE-Events.
+     Aktualisiert AI-Bubble per innerHTML.
+     Scrollt nach unten.
+
+------------------------------------------------------------------------
+14.2  Warum Container-Namen als Hostnamen funktionieren
+------------------------------------------------------------------------
+
+In der docker-compose.yml sind alle Container im gleichen Docker-Netz.
+Docker hat einen eingebauten DNS-Server für dieses Netz.
+Wenn das Backend http://ollama:11434 aufruft, löst Docker "ollama"
+zur internen IP des Ollama-Containers auf.
+
+Das funktioniert nur innerhalb des Docker-Netzes.
+Von außen ist nur Nginx auf Port 80 erreichbar.
+
+------------------------------------------------------------------------
+14.3  Datenpersistenz
+------------------------------------------------------------------------
+
+Container sind stateless. Wenn ein Container neugestartet wird, sind
+alle Daten darin weg. Daher Volumes:
+
+  pg_data: → /var/lib/postgresql/data
+    Alle Datenbanken, Tabellen, Nutzer, Chats, Nachrichten.
+    Überlebt Neustart, Rebuild, Update.
+
+  ollama_data: → /root/.ollama
+    Modell-Gewichte (GGUF-Dateien). Mehrere GB.
+    Wird einmal geladen, dann wiederverwendet.
+
+  ./frontend → /usr/share/nginx/html (read-only)
+    Statische Dateien. Kein Volume nötig — sie liegen auf dem Host
+    und werden eingebunden.
+
+
+================================================================================
+MODUL 15: Deployment und Betrieb
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Das Modell das erste Mal laden
+------------------------------------------------------------------------
+
+Beim ersten Start ist der ollama_data-Volume leer. Das Modell muss
+heruntergeladen oder kopiert werden.
+
+Option 1 — Aus der Ollama-Registry (wenn Internetverbindung vorhanden):
+  docker compose exec ollama ollama pull llama4:scout
+
+Option 2 — GGUF-Datei manuell laden (wenn man eine heruntergeladen hat):
+  # Datei in den Container kopieren
+  docker compose cp llama4-scout-dolphin.gguf ollama:/models/
+
+  # Modelfile im Container erstellen
+  docker compose exec ollama sh -c 'cat > /tmp/Modelfile << EOF
+  FROM /models/llama4-scout-dolphin.gguf
+  PARAMETER num_ctx 32768
+  PARAMETER temperature 0.7
+  SYSTEM "Du bist..."
+  EOF'
+
+  # Modell registrieren
+  docker compose exec ollama ollama create meinmodell -f /tmp/Modelfile
+
+------------------------------------------------------------------------
+15.2  Das System starten und verwalten
+------------------------------------------------------------------------
+
+  # Alles starten (im Hintergrund):
+  docker compose up -d
+
+  # Status prüfen:
+  docker compose ps
+
+  # Logs eines Containers:
+  docker compose logs -f backend      # -f = live verfolgen
+  docker compose logs ollama
+
+  # In einen Container einloggen:
+  docker compose exec backend bash
+  docker compose exec db psql -U user ki_db
+
+  # Alles stoppen:
+  docker compose down
+
+  # Alles stoppen und Volumes löschen (ACHTUNG: Datenverlust!):
+  docker compose down -v
+
+  # Image neu bauen (nach Code-Änderungen):
+  docker compose build backend
+  docker compose up -d backend        # nur den Backend-Container neustart
+
+------------------------------------------------------------------------
+15.3  Datenbank-Migrations-Strategie
+------------------------------------------------------------------------
+
+Wenn das Schema sich ändert (neue Spalte, neue Tabelle), muss die
+bestehende Datenbank migriert werden. Dafür gibt es zwei Ansätze:
+
+Manuell (für kleine Projekte):
+  docker compose exec db psql -U user ki_db -c "ALTER TABLE messages ADD COLUMN ..."
+
+Mit Alembic (Python-Migrationstool):
+  Alembic versioniert das Schema und kann Änderungen automatisch anwenden.
+  Lernressource: https://alembic.sqlalchemy.org/en/latest/
+
+------------------------------------------------------------------------
+15.4  Monitoring und Logs
+------------------------------------------------------------------------
+
+Das Backend sollte strukturierte Logs schreiben:
+
+  import logging
+  import json
+  from datetime import datetime
+
+  def log(level: str, message: str, **extra):
+      entry = {
+          "timestamp": datetime.utcnow().isoformat(),
+          "level":     level,
+          "message":   message,
+          **extra
+      }
+      print(json.dumps(entry))   # docker compose logs fängt stdout
+
+  log("INFO", "Chat-Anfrage", user_id=42, chat_id=7, tokens=1200)
+
+Docker sammelt alles was auf stdout/stderr geht als Container-Log.
+Mit docker compose logs -f backend kann man live mitlesen.
+
+------------------------------------------------------------------------
+15.5  Backup
+------------------------------------------------------------------------
+
+Die Datenbank regelmäßig sichern:
+
+  # Einmaliges Backup:
+  docker compose exec db pg_dump -U user ki_db > backup_$(date +%Y%m%d).sql
+
+  # Cronjob (auf dem Host):
+  0 3 * * * docker compose -f /pfad/zum/projekt/docker-compose.yml \
+            exec -T db pg_dump -U user ki_db > \
+            /backups/ki_db_$(date +\%Y\%m\%d).sql
+
+Die Modell-Gewichte brauchen kein Backup — sie sind von HuggingFace
+oder der Ollama-Registry jederzeit neu ladbar.
+
+------------------------------------------------------------------------
+15.6  Updates
+------------------------------------------------------------------------
+
+  Modell aktualisieren:
+    docker compose exec ollama ollama pull llama4:scout   # neue Version
+    docker compose exec ollama ollama create meinmodell -f /tmp/Modelfile
+
+  Backend aktualisieren:
+    # Code ändern, dann:
+    docker compose build backend
+    docker compose up -d backend
+
+  Ollama aktualisieren:
+    docker compose pull ollama
+    docker compose up -d ollama
+
+
+================================================================================
+SCHNELLREFERENZ — Lernpfad in Phasen
+================================================================================
+
+PHASE 1 — GRUNDLAGEN (3-6 Monate parallel):
+  Python:    https://docs.python.org/3/tutorial/
+  SQL:       https://www.postgresqltutorial.com
+  Docker:    https://docs.docker.com/get-started/
+  JavaScript: https://developer.mozilla.org/en-US/docs/Learn/JavaScript
+  HTTP:      https://developer.mozilla.org/en-US/docs/Web/HTTP
+
+PHASE 2 — EINZELNE KOMPONENTEN VERSTEHEN (1-2 Monate):
+  Ollama lokal installieren und Modelle ausprobieren.
+  Ollama-API manuell mit curl ansprechen.
+  Einen simplen Python-HTTP-Server bauen.
+  PostgreSQL lokal installieren, Schema anlegen, Daten einsetzen.
+
+PHASE 3 — PROTOTYP BAUEN (2-3 Monate):
+  Docker Compose mit Ollama + Backend + DB zum Laufen bringen.
+  Login-System implementieren.
+  Einfaches Chat-Interface (ohne Streaming, ohne Gedächtnis).
+  Antworten speichern und Verlauf laden.
+
+PHASE 4 — FEATURES AUSBAUEN (laufend):
+  Streaming implementieren.
+  Gedächtnissystem (Zusammenfassung, Embeddings).
+  Multimodalität (Bilder, Dokumente).
+  Rate-Limiting verfeinern.
+  Nginx konfigurieren.
+
+PHASE 5 — POLISH:
+  HTTPS einrichten.
+  Mobile UI.
+  Fehlerbehandlung ausbauen.
+  Logging und Monitoring.
+  Backup-Strategie.
+
+------------------------------------------------------------------------
+WICHTIGE BEFEHLE AUF EINEN BLICK
+------------------------------------------------------------------------
+
+  Docker:
+    docker compose up -d            → System starten
+    docker compose down             → stoppen
+    docker compose logs -f NAME     → Logs live
+    docker compose exec NAME bash   → Shell im Container
+    docker compose build NAME       → Image neu bauen
+
+  Ollama:
+    ollama list                     → geladene Modelle
+    ollama run MODELL               → interaktiv testen
+    ollama create NAME -f Modelfile → Modell registrieren
+
+  PostgreSQL:
+    psql -U user ki_db              → SQL-Shell
+    \dt                             → Tabellen anzeigen
+    \d TABLE                        → Tabellenstruktur
+    \q                              → beenden
+
+  Python (Pakete):
+    pip install requests            → HTTP-Client
+    pip install psycopg[binary]     → PostgreSQL-Treiber
+    pip install bcrypt              → Passwort-Hashing
+    pip install Pillow              → Bildverarbeitung
+    pip install pymupdf             → PDF-Text-Extraktion
+    pip install openai-whisper      → Audio-Transkription
+    pip install numpy               → Vektorberechnungen
+
+------------------------------------------------------------------------
+LERNRESSOURCEN
+------------------------------------------------------------------------
+
+Python Offizielle Doku:       https://docs.python.org/3/
+Python Tutorial (Mozilla):    https://developer.mozilla.org/en-US/docs/Learn/Server-side/Django
+JavaScript Tutorial:          https://developer.mozilla.org/en-US/docs/Learn/JavaScript
+PostgreSQL Tutorial:          https://www.postgresqltutorial.com
+Docker Docs:                  https://docs.docker.com
+Docker Compose Docs:          https://docs.docker.com/compose/
+Nginx Beginner Guide:         https://nginx.org/en/docs/beginners_guide.html
+Ollama Docs:                  https://github.com/ollama/ollama/tree/main/docs
+Ollama Modelfile:             https://github.com/ollama/ollama/blob/main/docs/modelfile.md
+Ollama API:                   https://github.com/ollama/ollama/blob/main/docs/api.md
+pgvector:                     https://github.com/pgvector/pgvector
+psycopg3 Docs:                https://www.psycopg.org/psycopg3/docs/
+bcrypt PyPI:                  https://pypi.org/project/bcrypt/
+OWASP Top 10:                 https://owasp.org/www-project-top-ten/
+Whisper GitHub:               https://github.com/openai/whisper
+marked.js:                    https://marked.js.org
+DOMPurify:                    https://github.com/cure53/DOMPurify
+
+
+================================================================================
+Ende des Kurses
+================================================================================
+
+Dieser Kurs wurde für ein Zukunftsprojekt geschrieben. Alles hier ist
+machbar — es braucht Zeit und systematisches Lernen. Kein Schritt
+ist unnötig kompliziert, wenn man ihn in der richtigen Reihenfolge angeht.
+
+Das System am Ende: eine eigene KI die du vollständig kontrollierst,
+die niemandem Daten schickt außer Ollama auf deinem eigenen Server,
+die monatelange Gespräche führt ohne etwas zu vergessen, die Bilder
+sieht und Dokumente liest, und die hinter einem Login-Screen sitzt
+den nur du kennst.
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

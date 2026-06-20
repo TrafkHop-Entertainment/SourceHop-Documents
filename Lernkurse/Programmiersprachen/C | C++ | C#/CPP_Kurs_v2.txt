@@ -1,0 +1,2084 @@
+================================================================================
+C++ — VOLLSTÄNDIGER PROFIKURS v2
+Von OOP-Grundlagen bis zu Coroutines und Multithreading
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+Alle Rechte vorbehalten. Erstellt mit Unterstützung von Claude (Anthropic).
+================================================================================
+
+C++ ist eine der mächtigsten — und komplexesten — Sprachen der Welt.
+Dieser Kurs macht dich zum C++-Profi. Du wirst moderne C++-Idiome verstehen,
+Template-Metaprogrammierung einsetzen und sichere, effiziente Software bauen.
+
+Struktur:
+  TEIL 1 — C++ Grundlagen & OOP (Module 1–4)
+  TEIL 2 — Modernes C++ (Module 5–8)
+  TEIL 3 — Templates & STL (Module 9–11)
+  TEIL 4 — Nebenläufigkeit (Modul 12)
+  TEIL 5 — C++17/20 Features (Module 13–14)
+  TEIL 6 — Design & Architektur (Module 15–16)
+  TEIL 7 — Build, Testing, Tooling (Modul 17)
+  SCHNELLREFERENZ
+
+================================================================================
+TEIL 1 — GRUNDLAGEN & OOP
+================================================================================
+
+================================================================================
+MODUL 1: C++ Grundlagen — Was ist anders als C?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  C++ — Geschichte und Konzepte
+------------------------------------------------------------------------
+
+C++ (Bjarne Stroustrup, Bell Labs, ab 1979) ist eine Multi-Paradigmen-Sprache:
+  → Prozedurale Programmierung (wie C)
+  → Objektorientierte Programmierung (Klassen, Vererbung, Polymorphismus)
+  → Generische Programmierung (Templates)
+  → Funktionale Programmierung (Lambdas, Ranges in C++20)
+
+C++-Standards:
+  C++98/03  Erster Standard — Klassen, STL, Templates
+  C++11     Revolutionär: Move Semantics, auto, lambda, smart pointer, threads
+  C++14     Verbesserungen: generische Lambdas, make_unique
+  C++17     std::optional, std::variant, if constexpr, Structured Bindings
+  C++20     Concepts, Ranges, Coroutines, std::span, Modules
+  C++23     Ranges-Erweiterungen, std::expected, Stackful Coroutines
+
+Kompilieren:
+  g++ -Wall -Wextra -std=c++17 datei.cpp -o programm
+  g++ -std=c++20 -O2 datei.cpp -o programm   ← Release
+  clang++ -std=c++20 datei.cpp -o programm   ← Alternative zu g++
+
+------------------------------------------------------------------------
+1.2  Neue Sprachfeatures vs. C
+------------------------------------------------------------------------
+
+// Kommentare (C99 hat das auch, C++ schon immer):
+  // Einzeilig
+  /* Mehrzeilig */
+
+Namespace:
+  std::cout << "Hallo\n";   // std = Standard-Namespace
+  
+  using namespace std;       // alle Namen aus std direkt nutzbar
+  // → Bequem in .cpp, NIEMALS in .h!
+  
+  using std::cout;           // nur cout ohne std::
+  using std::string;
+  
+  namespace mein {
+      void funktion() { cout << "Meine\n"; }
+  }
+  mein::funktion();
+
+Referenzen (echtes Call-by-Reference ohne Pointer):
+  int x = 5;
+  int &ref = x;   // ref ist ein ALIAS für x
+  ref = 10;        // ändert x!
+  
+  void verdopple(int &x) { x *= 2; }
+  int z = 5;
+  verdopple(z);   // KEIN & beim Aufruf!
+  // z ist jetzt 10
+
+const-Referenzen (für große Objekte ohne Kopie):
+  void drucke(const std::string &s) {   // kein Kopieren!
+      std::cout << s << "\n";
+  }
+
+bool (echter Typ in C++):
+  bool flag = true;   // direkt, kein <stdbool.h> nötig
+  bool test = (x > 0);
+  
+  // Keine numerische Bedeutung erzwingen:
+  int i = true;   // möglich, aber Schlechter Stil
+
+nullptr (C++11, typsicherer als NULL):
+  int *p = nullptr;   // klar: kein int, kein 0, ein Null-Pointer
+  // NULL war nur #define NULL 0 — kein Typ!
+  
+  void f(int *p)  { cout << "pointer\n"; }
+  void f(int  i)  { cout << "int\n"; }
+  f(NULL);        // ambiguous! Welche Überladung?
+  f(nullptr);     // eindeutig: f(int*) wird aufgerufen
+
+Type Deduction mit auto (C++11):
+  auto x = 42;            // int
+  auto s = std::string("Hallo"); // string
+  auto d = 3.14;          // double
+  auto *p = new int(5);   // int*
+  auto &r = x;            // int&
+  
+  // auto bei Iteratoren sehr nützlich:
+  std::vector<int> v = {1, 2, 3};
+  auto it = v.begin();    // std::vector<int>::iterator
+  
+  // Dekltye: Typ eines Ausdrucks:
+  int a = 5;
+  decltype(a) b = 10;     // b ist int (gleicher Typ wie a)
+  decltype(a + 3.14) c;   // c ist double
+
+------------------------------------------------------------------------
+1.3  Ein-/Ausgabe mit cin/cout
+------------------------------------------------------------------------
+
+  #include <iostream>
+  #include <string>
+  
+  std::cin  >> x;              // Eingabe (whitespace-getrennt)
+  std::cout << "Wert: " << x << "\n";  // Ausgabe
+  std::cerr << "Fehler!\n";   // Fehlerausgabe
+  
+  // Zeile einlesen:
+  std::string zeile;
+  std::getline(std::cin, zeile);
+  
+  // Formatierung:
+  #include <iomanip>
+  std::cout << std::fixed << std::setprecision(2) << 3.14159 << "\n";  // 3.14
+  std::cout << std::setw(10) << std::left << "Name:" << x << "\n";
+  std::cout << std::hex << 255 << "\n";   // ff
+  std::cout << std::boolalpha << true << "\n";  // true (statt 1)
+
+------------------------------------------------------------------------
+1.4  std::string (vollständig)
+------------------------------------------------------------------------
+
+  #include <string>
+  
+  std::string s1 = "Hallo";
+  std::string s2("Welt");
+  std::string s3(5, 'A');        // "AAAAA"
+  std::string s4 = s1 + " " + s2; // "Hallo Welt" — Operator+!
+  
+  s1 += "!";                     // Operator+=
+  s1.append(" Welt");
+  s1.push_back('!');             // einzelnes Zeichen anhängen
+  
+  // Zugriff:
+  char c = s1[0];               // kein Bounds Check!
+  char c2 = s1.at(0);           // MIT Bounds Check (wirft exception)
+  s1.front();                    // erstes Zeichen
+  s1.back();                     // letztes Zeichen
+  s1.data();                     // const char* (C++11: kein \0 garantiert)
+  s1.c_str();                    // const char* mit \0 (für C-Kompatibilität)
+  
+  // Größe:
+  s1.size();      // Länge (kein \0)
+  s1.length();    // identisch zu size()
+  s1.empty();     // true wenn leer
+  s1.capacity();  // tatsächlich allozierter Platz
+  s1.reserve(100); // Speicher vorallozieren
+  
+  // Suche:
+  size_t pos = s1.find("Welt");         // Position oder string::npos
+  size_t pos2 = s1.rfind("l");          // letzte Position
+  size_t pos3 = s1.find_first_of("aeiou"); // erstes Vokal
+  
+  // Teilstring:
+  std::string sub = s1.substr(6, 4);   // ab Index 6, Länge 4
+  
+  // Vergleich:
+  s1 == s2        // bool
+  s1 <  s2        // lexikographisch (für sort/map)
+  s1.compare(s2)  // -1/0/+1
+  
+  // Ersetzen/Löschen:
+  s1.replace(0, 5, "Tschüss");
+  s1.erase(5, 6);   // ab Index 5, 6 Zeichen
+  s1.clear();        // alles löschen
+  
+  // Konvertierung:
+  std::string str = std::to_string(42);
+  int i = std::stoi("42");
+  double d = std::stod("3.14");
+  long l = std::stol("12345678");
+
+  // String-Literale (C++14):
+  using namespace std::string_literals;
+  auto s = "Hallo"s;   // std::string, NICHT const char*!
+
+------------------------------------------------------------------------
+1.5  std::vector (vollständig)
+------------------------------------------------------------------------
+
+  #include <vector>
+  
+  std::vector<int> v;              // leer
+  std::vector<int> v2 = {1,2,3,4,5};
+  std::vector<int> v3(10, 0);     // 10 Elemente, alle 0
+  std::vector<std::string> vs(3, "Hallo");  // 3x "Hallo"
+  
+  v.push_back(42);      // am Ende einfügen O(1) amortized
+  v.emplace_back(42);   // BESSER: direkt konstruieren, kein Kopieren
+  v.pop_back();         // letztes entfernen O(1)
+  v.insert(v.begin() + 2, 99);   // an Position 2 O(n)
+  v.erase(v.begin() + 1);        // Element 1 löschen O(n)
+  v.erase(v.begin(), v.begin() + 3);  // Range löschen
+  
+  v[0];          // Zugriff ohne Bounds Check
+  v.at(0);       // MIT Bounds Check
+  v.front();     // erstes
+  v.back();      // letztes
+  v.data();      // roher Pointer auf C-Array
+  v.size();      // Anzahl Elemente
+  v.capacity();  // allozierter Platz
+  v.empty();     // leer?
+  v.clear();     // alle löschen (capacity bleibt!)
+  v.shrink_to_fit();  // capacity auf size reduzieren
+  v.resize(10);  // Größe ändern (neue Elemente = 0)
+  v.reserve(100); // Speicher vorallozieren
+  
+  // Iteration:
+  for (int i = 0; i < v.size(); i++) std::cout << v[i] << " ";
+  for (auto &x : v) std::cout << x << " ";    // range-based for
+  
+  // Sortieren:
+  #include <algorithm>
+  std::sort(v.begin(), v.end());               // aufsteigend
+  std::sort(v.begin(), v.end(), std::greater<int>());  // absteigend
+  std::sort(v.begin(), v.end(), [](int a, int b){ return a > b; });
+
+------------------------------------------------------------------------
+1.6  try/catch — Exceptions
+------------------------------------------------------------------------
+
+  #include <stdexcept>
+  
+  double dividiere(double a, double b) {
+      if (b == 0.0)
+          throw std::invalid_argument("Division durch Null");
+      return a / b;
+  }
+  
+  try {
+      double ergebnis = dividiere(10, 0);
+  } catch (const std::invalid_argument &e) {
+      std::cerr << "Fehler: " << e.what() << "\n";
+  } catch (const std::runtime_error &e) {
+      std::cerr << "Laufzeitfehler: " << e.what() << "\n";
+  } catch (const std::exception &e) {
+      std::cerr << "Exception: " << e.what() << "\n";
+  } catch (...) {
+      std::cerr << "Unbekannte Exception!\n";
+  }
+
+Exception-Hierarchie:
+  std::exception
+  ├── std::bad_alloc         (new fehlgeschlagen)
+  ├── std::bad_cast          (dynamic_cast fehlgeschlagen)
+  ├── std::bad_typeid
+  ├── std::logic_error
+  │   ├── std::invalid_argument
+  │   ├── std::domain_error
+  │   ├── std::length_error
+  │   └── std::out_of_range
+  └── std::runtime_error
+      ├── std::overflow_error
+      ├── std::underflow_error
+      └── std::range_error
+
+Eigene Exceptions:
+  class NetzwerkFehler : public std::runtime_error {
+  public:
+      int fehlercode;
+      NetzwerkFehler(const std::string &msg, int code)
+          : std::runtime_error(msg), fehlercode(code) {}
+  };
+  
+  throw NetzwerkFehler("Verbindung getrennt", 503);
+
+noexcept (C++11):
+  int sicher_addieren(int a, int b) noexcept {
+      return a + b;   // garantiert keine Exception
+  }
+  // Compiler kann besser optimieren, move-Operationen nutzen noexcept
+
+================================================================================
+MODUL 2: Klassen in C++ — OOP Grundlagen
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Klassen — Grundlagen
+------------------------------------------------------------------------
+
+  class BankKonto {
+  private:
+      std::string inhaber;
+      double saldo;
+      int kontonummer;
+      static int naechste_nummer;   // shared by all instances
+  
+  public:
+      // Konstruktor mit Initializer List (IMMER verwenden!):
+      BankKonto(const std::string &name, double anfang)
+          : inhaber(name), saldo(anfang), kontonummer(naechste_nummer++) {
+          std::cout << "Konto " << kontonummer << " für " << inhaber << " erstellt\n";
+      }
+      
+      // Copy-Konstruktor (C++11: default verwenden wenn OK):
+      BankKonto(const BankKonto &other) = default;
+      
+      // Destruktor:
+      ~BankKonto() {
+          std::cout << "Konto " << kontonummer << " geschlossen\n";
+      }
+      
+      // Methoden:
+      void einzahlen(double betrag) {
+          if (betrag <= 0) throw std::invalid_argument("Betrag muss positiv sein");
+          saldo += betrag;
+      }
+      
+      bool abheben(double betrag) {
+          if (betrag > saldo) return false;
+          saldo -= betrag;
+          return true;
+      }
+      
+      // const-Methoden (ändern KEIN Member):
+      double getSaldo() const { return saldo; }
+      const std::string &getInhaber() const { return inhaber; }
+      int getNummer() const { return kontonummer; }
+      
+      // Statische Methode (kein this):
+      static int getAnzahlKonten() { return naechste_nummer; }
+  };
+  
+  int BankKonto::naechste_nummer = 1;   // static Member definieren!
+
+------------------------------------------------------------------------
+2.2  Rule of Five (wichtig!)
+------------------------------------------------------------------------
+
+Wenn du einen von diesen implementierst, implementiere ALLE fünf:
+
+  class Ressource {
+      int *daten;
+      size_t groesse;
+  
+  public:
+      // 1. Destruktor:
+      ~Ressource() { delete[] daten; }
+      
+      // 2. Copy-Konstruktor:
+      Ressource(const Ressource &other)
+          : groesse(other.groesse), daten(new int[other.groesse]) {
+          std::copy(other.daten, other.daten + groesse, daten);
+      }
+      
+      // 3. Copy-Assignment:
+      Ressource &operator=(const Ressource &other) {
+          if (this != &other) {  // Self-Assignment-Guard!
+              delete[] daten;
+              groesse = other.groesse;
+              daten = new int[groesse];
+              std::copy(other.daten, other.daten + groesse, daten);
+          }
+          return *this;
+      }
+      
+      // 4. Move-Konstruktor (C++11):
+      Ressource(Ressource &&other) noexcept
+          : groesse(other.groesse), daten(other.daten) {
+          other.daten = nullptr;   // Quelle "ausrauben"!
+          other.groesse = 0;
+      }
+      
+      // 5. Move-Assignment (C++11):
+      Ressource &operator=(Ressource &&other) noexcept {
+          if (this != &other) {
+              delete[] daten;
+              daten = other.daten;
+              groesse = other.groesse;
+              other.daten = nullptr;
+              other.groesse = 0;
+          }
+          return *this;
+      }
+  };
+
+  // Oder: = default / = delete:
+  class NichtKopierbar {
+  public:
+      NichtKopierbar(const NichtKopierbar &) = delete;
+      NichtKopierbar &operator=(const NichtKopierbar &) = delete;
+      NichtKopierbar(NichtKopierbar &&) = default;
+      NichtKopierbar &operator=(NichtKopierbar &&) = default;
+  };
+
+------------------------------------------------------------------------
+2.3  Operatorüberladung
+------------------------------------------------------------------------
+
+  class Komplex {
+  public:
+      double real, imag;
+      
+      Komplex(double r = 0, double i = 0) : real(r), imag(i) {}
+      
+      // Arithmetik:
+      Komplex operator+(const Komplex &o) const {
+          return {real + o.real, imag + o.imag};
+      }
+      Komplex operator*(const Komplex &o) const {
+          return {real*o.real - imag*o.imag, real*o.imag + imag*o.real};
+      }
+      Komplex &operator+=(const Komplex &o) {
+          real += o.real; imag += o.imag; return *this;
+      }
+      Komplex operator-() const { return {-real, -imag}; }   // unär -
+      
+      // Vergleich:
+      bool operator==(const Komplex &o) const {
+          return real == o.real && imag == o.imag;
+      }
+      bool operator!=(const Komplex &o) const { return !(*this == o); }
+      
+      // Ausgabe (als friend da linker Operand kein Komplex):
+      friend std::ostream &operator<<(std::ostream &os, const Komplex &c) {
+          os << c.real;
+          if (c.imag >= 0) os << "+";
+          return os << c.imag << "i";
+      }
+      
+      // Subscript:
+      double &operator[](int i) {
+          return (i == 0) ? real : imag;
+      }
+      
+      // Funktionsaufruf (Funktor):
+      double operator()() const {
+          return std::sqrt(real*real + imag*imag);   // Betrag
+      }
+      
+      // Explizite Konvertierung:
+      explicit operator double() const { return (*this)(); }  // Betrag
+  };
+  
+  Komplex a(3, 4), b(1, -2);
+  Komplex c = a + b;
+  std::cout << c << "\n";      // 4+2i
+  double betrag = (double)a;   // 5.0 (explicit cast nötig!)
+
+------------------------------------------------------------------------
+2.4  Vererbung und Polymorphismus
+------------------------------------------------------------------------
+
+  class Fahrzeug {
+  protected:
+      std::string marke;
+      int baujahr;
+      double geschwindigkeit = 0.0;
+  
+  public:
+      Fahrzeug(const std::string &m, int j) : marke(m), baujahr(j) {}
+      
+      // IMMER virtual Destruktor bei Basisklassen!
+      virtual ~Fahrzeug() = default;
+      
+      // virtual für Polymorphismus:
+      virtual void beschleunige(double kmh) { geschwindigkeit += kmh; }
+      virtual void info() const {
+          std::cout << marke << " (" << baujahr << "): "
+                    << geschwindigkeit << " km/h\n";
+      }
+      
+      double getGeschwindigkeit() const { return geschwindigkeit; }
+  };
+  
+  class ElektroAuto : public Fahrzeug {
+      double akkustand;
+  public:
+      ElektroAuto(const std::string &m, int j, double akku)
+          : Fahrzeug(m, j), akkustand(akku) {}
+      
+      void beschleunige(double kmh) override {
+          akkustand -= kmh * 0.01;   // Akku verbrauchen
+          Fahrzeug::beschleunige(kmh);   // Basis-Methode aufrufen
+      }
+      
+      void info() const override {
+          Fahrzeug::info();
+          std::cout << "  Akkustand: " << akkustand << "%\n";
+      }
+  };
+  
+  // Polymorphismus:
+  std::vector<std::unique_ptr<Fahrzeug>> fuhrpark;
+  fuhrpark.push_back(std::make_unique<ElektroAuto>("Tesla", 2023, 90.0));
+  fuhrpark.push_back(std::make_unique<Fahrzeug>("BMW", 2022));
+  
+  for (auto &f : fuhrpark) {
+      f->info();   // RICHTIGE Methode für jeden Typ!
+  }
+
+------------------------------------------------------------------------
+2.5  Abstrakte Klassen und Interfaces
+------------------------------------------------------------------------
+
+  // Abstrakte Basisklasse (Interface-ähnlich):
+  class IForm {
+  public:
+      virtual ~IForm() = default;
+      virtual double flaeche() const = 0;    // rein virtuell
+      virtual double umfang() const = 0;
+      virtual std::string name() const = 0;
+      
+      // Nicht-virtuell (Template Method Pattern):
+      void drucke() const {
+          std::cout << name() << ": Fläche=" << flaeche()
+                    << ", Umfang=" << umfang() << "\n";
+      }
+  };
+  
+  class Kreis : public IForm {
+      double r;
+  public:
+      static constexpr double PI = 3.14159265358979;
+      Kreis(double radius) : r(radius) {}
+      double flaeche() const override { return PI * r * r; }
+      double umfang() const  override { return 2 * PI * r; }
+      std::string name() const override { return "Kreis"; }
+  };
+  
+  class Dreieck : public IForm {
+      double a, b, c;
+  public:
+      Dreieck(double a, double b, double c) : a(a), b(b), c(c) {}
+      double umfang() const override { return a + b + c; }
+      double flaeche() const override {
+          double s = umfang() / 2;
+          return std::sqrt(s * (s-a) * (s-b) * (s-c));  // Heron
+      }
+      std::string name() const override { return "Dreieck"; }
+  };
+
+Virtuelle Methoden-Mechanismus (vtable):
+  // Jede Klasse mit virtual Methoden hat eine vtable (Tabelle von Funktionspointern)
+  // Jedes Objekt hat einen vptr (Pointer auf vtable)
+  // virtual call → vptr → vtable → richtige Funktion
+  // Overhead: 1 Pointer Indirektion pro virtual call
+  
+  // sizeof mit virtual:
+  class A { };            // sizeof = 1 (leere Klasse)
+  class B { virtual void f(); }; // sizeof = 8 (vptr!)
+
+================================================================================
+MODUL 3: Move Semantics & Smart Pointer
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Lvalues, Rvalues und Rvalue-Referenzen
+------------------------------------------------------------------------
+
+  // Lvalue: Hat Namen/Adresse, "links vom = stehbar"
+  int x = 5;         // x ist Lvalue
+  int *p = &x;       // &x ist möglich
+  
+  // Rvalue: Temporärer Wert, kein Name, keine persistente Adresse
+  int y = x + 3;     // x+3 ist Rvalue
+  // &(x + 3)        // FEHLER: Adresse eines Rvalue nehmen
+
+  // Rvalue-Referenz (C++11, &&):
+  int &&rref = x + 3;   // rref referenziert den Temporärwert
+  
+  void f(int &)   { std::cout << "Lvalue\n"; }
+  void f(int &&)  { std::cout << "Rvalue\n"; }
+  
+  f(x);       // Lvalue
+  f(x + 3);   // Rvalue
+  f(5);       // Rvalue
+
+------------------------------------------------------------------------
+3.2  Move Semantics — "Stehlen" statt "Kopieren"
+------------------------------------------------------------------------
+
+Problem ohne Move:
+  std::vector<int> a(1000000);   // 1M Ints
+  std::vector<int> b = a;        // KOPIERT alle 1M Ints → langsam!
+
+Mit Move (C++11):
+  std::vector<int> b = std::move(a);  // "stiehlt" Pointer von a
+  // a ist danach leer! b hat alle Daten.
+  // Nur Pointer-Kopie → O(1) statt O(n)!
+
+std::move:
+  // std::move ist nur ein CAST zu rvalue-Referenz:
+  template<typename T>
+  constexpr typename std::remove_reference<T>::type &&move(T &&t) noexcept {
+      return static_cast<typename std::remove_reference<T>::type &&>(t);
+  }
+  // move macht NICHTS — es sagt nur dem Compiler: "Behandle das als Rvalue"
+
+Wann werden Move-Operationen aufgerufen?
+  // 1. Bei Rückgabe aus Funktion (Named Return Value Optimization):
+  std::vector<int> erstelle_vector() {
+      std::vector<int> v = {1, 2, 3};
+      return v;   // Move (oder NRVO: gar kein Kopieren!)
+  }
+  
+  // 2. Bei std::move():
+  auto a = erstelle_vector();
+  auto b = std::move(a);   // Move statt Copy
+  
+  // 3. Bei Rvalue-Argumement:
+  void consume(std::string s);
+  consume(std::string("Temporär"));  // Move-Konstruktor für s
+
+Perfect Forwarding:
+  // Problem: Wir wollen Argumente weiterreichen OHNE Typ/Value-Category zu ändern
+  template<typename T, typename... Args>
+  std::unique_ptr<T> make_object(Args&&... args) {
+      return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  }
+  // std::forward erhält Lvalue/Rvalue-Natur des Arguments!
+
+------------------------------------------------------------------------
+3.3  Smart Pointer — kein manuelles delete mehr!
+------------------------------------------------------------------------
+
+UNIQUE_PTR — exklusives Eigentum:
+  #include <memory>
+  
+  // Erstellen (IMMER make_unique verwenden!):
+  auto p = std::make_unique<int>(42);         // einzelnes int
+  auto arr = std::make_unique<int[]>(10);     // int-Array[10]
+  auto obj = std::make_unique<Fahrzeug>("BMW", 2022);
+  
+  // Benutzen (wie normaler Pointer):
+  *p = 100;
+  obj->info();
+  
+  // Eigentum übertragen (nicht kopieren!):
+  auto p2 = std::move(p);   // p ist jetzt null!
+  
+  // Raw Pointer holen (VORSICHT: Eigentum bleibt bei unique_ptr!):
+  int *raw = p2.get();
+  
+  // Explizit freigeben:
+  p2.reset();    // gibt frei, p2 ist null
+  p2.reset(new int(99));  // gibt alten frei, zeigt auf neuen
+  
+  // Unique_ptr in Funktionen:
+  void consume(std::unique_ptr<Fahrzeug> f) { f->info(); }
+  consume(std::move(obj));   // Eigentum übergeben!
+  
+  std::unique_ptr<Fahrzeug> erzeugen() {
+      return std::make_unique<Fahrzeug>("VW", 2023);
+  }  // Move automatisch
+
+SHARED_PTR — geteiltes Eigentum:
+  auto sp1 = std::make_shared<int>(42);   // Reference Count = 1
+  {
+      auto sp2 = sp1;   // Kopieren erlaubt! RC = 2
+      auto sp3 = sp1;   // RC = 3
+      std::cout << sp1.use_count() << "\n";   // 3
+  }   // sp2, sp3 gehen aus Scope → RC = 1
+  // Erst wenn RC = 0 → Speicher freigegeben
+  
+  // shared_ptr ist schwerer als unique_ptr:
+  // → Atomic Reference Count (thread-safe)
+  // → 2 Pointer intern (Objekt + Control Block)
+
+WEAK_PTR — Beobachter (verhindert zyklische Referenzen):
+  auto shared = std::make_shared<int>(42);
+  std::weak_ptr<int> weak = shared;   // zählt NICHT
+  
+  // Nutzung: erst lock() aufrufen (gibt shared_ptr zurück):
+  if (auto locked = weak.lock()) {
+      std::cout << *locked << "\n";
+  } else {
+      std::cout << "Objekt nicht mehr da\n";
+  }
+  
+  // Typisches Beispiel: Observer vermeidet Zyklus:
+  //   Subject hat shared_ptr auf Observer
+  //   Observer hat weak_ptr zurück auf Subject
+
+Custom Deleter:
+  // Für Ressourcen die nicht delete brauchen:
+  auto datei = std::unique_ptr<FILE, decltype(&fclose)>(
+      fopen("datei.txt", "r"), &fclose);
+  // FILE* wird automatisch mit fclose() freigegeben!
+
+------------------------------------------------------------------------
+3.4  RAII — Resource Acquisition Is Initialization
+------------------------------------------------------------------------
+
+RAII ist DAS fundamentale C++-Idiom:
+  → Ressource wird im Konstruktor erworben
+  → Ressource wird im Destruktor freigegeben
+  → Kein explizites "aufräumen" nötig
+
+  class DateiGuard {
+      FILE *datei;
+  public:
+      explicit DateiGuard(const char *pfad, const char *modus)
+          : datei(fopen(pfad, modus)) {
+          if (!datei) throw std::runtime_error("Datei nicht geöffnet");
+      }
+      ~DateiGuard() { fclose(datei); }           // garantiert aufgeräumt!
+      FILE *get() const { return datei; }
+      
+      // Nicht kopierbar (RAII-Ressourcen meist singleton):
+      DateiGuard(const DateiGuard &) = delete;
+      DateiGuard &operator=(const DateiGuard &) = delete;
+  };
+  
+  void lese_datei() {
+      DateiGuard f("datei.txt", "r");   // öffnet
+      // ... lesen ...
+      // Egal ob Exception, return, Scope-Ende:
+  }   // Destruktor schließt Datei IMMER!
+
+  class MutexGuard {
+      pthread_mutex_t &mutex;
+  public:
+      explicit MutexGuard(pthread_mutex_t &m) : mutex(m) {
+          pthread_mutex_lock(&mutex);
+      }
+      ~MutexGuard() { pthread_mutex_unlock(&mutex); }
+      MutexGuard(const MutexGuard &) = delete;
+  };
+
+================================================================================
+MODUL 4: Templates und Metaprogrammierung
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Function Templates
+------------------------------------------------------------------------
+
+  template<typename T>
+  T maximum(T a, T b) {
+      return a > b ? a : b;
+  }
+  
+  maximum(3, 7);            // int
+  maximum(3.14, 2.71);      // double
+  maximum<int>(3.14, 2);    // explizit int angeben (3.14 → 3)
+  
+  // Mehrere Template-Parameter:
+  template<typename T, typename U>
+  auto addiere(T a, U b) -> decltype(a + b) {   // trailing return type
+      return a + b;
+  }
+  
+  // Oder mit C++14 auto return:
+  template<typename T, typename U>
+  auto addiere(T a, U b) {
+      return a + b;
+  }
+  
+  // Non-type Template Parameter:
+  template<int N>
+  struct Fibonacci {
+      static const int wert = Fibonacci<N-1>::wert + Fibonacci<N-2>::wert;
+  };
+  template<> struct Fibonacci<0> { static const int wert = 0; };
+  template<> struct Fibonacci<1> { static const int wert = 1; };
+  
+  std::cout << Fibonacci<10>::wert << "\n";  // 55 — zur COMPILEZEIT berechnet!
+
+------------------------------------------------------------------------
+4.2  Klassen-Templates
+------------------------------------------------------------------------
+
+  template<typename T, size_t N>
+  class FestesArray {
+      T daten[N];
+  public:
+      FestesArray() = default;
+      
+      T &operator[](size_t i) {
+          if (i >= N) throw std::out_of_range("Index zu groß");
+          return daten[i];
+      }
+      const T &operator[](size_t i) const {
+          if (i >= N) throw std::out_of_range("Index zu groß");
+          return daten[i];
+      }
+      
+      size_t size() const noexcept { return N; }
+      T *begin() noexcept { return daten; }
+      T *end()   noexcept { return daten + N; }
+      const T *begin() const noexcept { return daten; }
+      const T *end()   const noexcept { return daten + N; }
+  };
+  
+  FestesArray<int, 5> arr;
+  arr[0] = 42;
+  for (int x : arr) std::cout << x << " ";
+
+Template Spezialisierung:
+  // Vollständige Spezialisierung:
+  template<> class FestesArray<bool, 8> {
+      unsigned char bits;
+  public:
+      bool operator[](size_t i) const { return (bits >> i) & 1; }
+      void setze(size_t i, bool wert) {
+          if (wert) bits |= (1 << i);
+          else      bits &= ~(1 << i);
+      }
+  };
+  
+  // Partielle Spezialisierung (nur für Pointer-Typen):
+  template<typename T>
+  class Stack<T*> {
+      // spezielle Implementierung für Pointer
+  };
+
+------------------------------------------------------------------------
+4.3  Variadic Templates (C++11)
+------------------------------------------------------------------------
+
+  // Beliebig viele Template-Parameter:
+  template<typename... Args>
+  void drucke(Args... args) {
+      (std::cout << ... << args) << "\n";   // Fold Expression (C++17)
+  }
+  drucke(1, "Hallo", 3.14, true);   // 1Hallo3.141
+
+  // Rekursive Variadic:
+  void drucke_r() {}   // Basisfall: keine Argumente
+  
+  template<typename T, typename... Rest>
+  void drucke_r(T erstes, Rest... rest) {
+      std::cout << erstes << " ";
+      drucke_r(rest...);   // rekursiv mit rest
+  }
+  
+  // Alle Argumente summieren:
+  template<typename... Ts>
+  auto summe(Ts... args) {
+      return (args + ... + 0);  // Fold: args0 + args1 + ... + 0
+  }
+
+  // make_unique mit perfect forwarding:
+  template<typename T, typename... Args>
+  std::unique_ptr<T> mein_make_unique(Args&&... args) {
+      return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  }
+
+------------------------------------------------------------------------
+4.4  Template Metaprogrammierung (TMP)
+------------------------------------------------------------------------
+
+Type Traits aus <type_traits>:
+  std::is_integral<T>::value      // true wenn T = int, char, long etc.
+  std::is_floating_point<T>::value
+  std::is_pointer<T>::value
+  std::is_same<T, U>::value       // true wenn T == U
+  std::remove_const<T>::type      // const entfernen
+  std::remove_reference<T>::type  // Referenz entfernen
+  std::decay<T>::type             // Array/Funktion → Pointer, const/& entfernen
+  
+  // C++17: _v und _t Suffixe:
+  std::is_integral_v<int>         // statt ::value
+  std::remove_const_t<const int>  // statt ::type
+
+SFINAE (Substitution Failure Is Not An Error):
+  // Funktion nur wenn T ein Integer-Typ ist:
+  template<typename T>
+  typename std::enable_if<std::is_integral<T>::value, T>::type
+  verdopple(T x) { return x * 2; }
+  
+  // C++17 if constexpr (viel sauberer):
+  template<typename T>
+  T verarbeite(T x) {
+      if constexpr (std::is_integral_v<T>) {
+          return x * 2;
+      } else if constexpr (std::is_floating_point_v<T>) {
+          return x * 2.0;
+      } else {
+          static_assert(sizeof(T) == 0, "Unbekannter Typ!");
+      }
+  }
+
+
+================================================================================
+TEIL 2 — MODERNES C++
+================================================================================
+
+================================================================================
+MODUL 5: Lambda-Ausdrücke und funktionale Programmierung
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Lambda-Ausdrücke (vollständig)
+------------------------------------------------------------------------
+
+Syntax: [capture](parameter) -> return_type { body }
+
+Einfache Lambdas:
+  auto quadrat = [](int x) { return x * x; };
+  std::cout << quadrat(5) << "\n";   // 25
+  
+  auto gruss = []() { std::cout << "Hallo!\n"; };
+  gruss();
+
+Captures (wie Lambdas auf äußere Variablen zugreifen):
+  int x = 10, y = 20;
+  
+  auto by_value   = [x, y]() { return x + y; };   // Kopie von x und y
+  auto by_ref     = [&x, &y]() { x++; y++; };     // Referenz
+  auto all_value  = [=]() { return x + y; };       // alle by value
+  auto all_ref    = [&]() { x++; y++; };           // alle by reference
+  auto gemischt   = [=, &y]() { return x; y++; }; // x by value, y by ref
+  
+  // Lambda mit this capture (in Methoden):
+  class Timer {
+      int intervall = 60;
+  public:
+      auto getCallback() {
+          return [this]() { std::cout << intervall << " Sek\n"; };
+          // oder [*this] um KOPIE des Objekts zu cachen (C++17)
+      }
+  };
+
+Generische Lambdas (C++14):
+  auto drucke = [](auto x) { std::cout << x << "\n"; };
+  drucke(42);         // int
+  drucke("Hallo");    // const char*
+  drucke(3.14);       // double
+  
+  // Wie ein Template, aber kürzer:
+  auto summe = [](auto a, auto b) { return a + b; };
+
+Mutable Lambdas:
+  int count = 0;
+  auto zaehler = [count]() mutable { return ++count; };  // mutable: Kopie änderbar
+  zaehler();   // 1
+  zaehler();   // 2
+  // count selbst ändert sich NICHT! (war by-value capture)
+
+Lambda als Funktionsobjekt:
+  // Lambdas sind Objekte mit operator():
+  auto add = [](int a, int b) { return a + b; };
+  // Typ ist irgendwas wie: struct __lambda_123 { int operator()(int,int); };
+  
+  // Können in std::function gespeichert werden:
+  std::function<int(int,int)> f = add;
+  // ABER: std::function hat Overhead (heap allocation)! Direkt besser.
+
+Immediately Invoked Lambda:
+  int ergebnis = [](int a, int b) { return a + b; }(10, 20);  // 30
+  
+  // Nützlich für komplexe Initialisierung:
+  const std::string konfigurationspfad = []() -> std::string {
+      const char *env = getenv("KONFIG_PFAD");
+      return env ? env : "/etc/default.conf";
+  }();
+
+Lambda mit STL:
+  std::vector<int> v = {5, 2, 8, 1, 9, 3};
+  
+  // Sortieren:
+  std::sort(v.begin(), v.end(), [](int a, int b){ return a > b; });
+  
+  // Filtern:
+  auto end = std::remove_if(v.begin(), v.end(), [](int x){ return x % 2 == 0; });
+  v.erase(end, v.end());
+  
+  // Transformieren:
+  std::transform(v.begin(), v.end(), v.begin(), [](int x){ return x * x; });
+  
+  // Suchen:
+  auto it = std::find_if(v.begin(), v.end(), [](int x){ return x > 5; });
+  
+  // Ausgeben:
+  std::for_each(v.begin(), v.end(), [](int x){ std::cout << x << " "; });
+
+------------------------------------------------------------------------
+5.2  std::function und Higher-Order Functions
+------------------------------------------------------------------------
+
+  #include <functional>
+  
+  // std::function speichert beliebige Callables:
+  std::function<int(int, int)> op;
+  
+  op = [](int a, int b) { return a + b; };
+  op = std::plus<int>();      // Standard-Funktionsobjekt
+  op = [](int a, int b) { return a * b; };
+  
+  // Higher-Order Functions:
+  auto mappe = [](std::vector<int> v, std::function<int(int)> f) {
+      std::transform(v.begin(), v.end(), v.begin(), f);
+      return v;
+  };
+  
+  auto v = mappe({1,2,3,4,5}, [](int x){ return x*x; });
+  // v = {1, 4, 9, 16, 25}
+
+std::bind (veraltet, Lambdas bevorzugt):
+  auto add5 = std::bind(std::plus<int>(), std::placeholders::_1, 5);
+  add5(10);   // 15
+  
+  // Modern mit Lambda:
+  auto add5_lambda = [](int x){ return x + 5; };
+
+Funktionsobjekte (Funktoren):
+  struct Multiplikator {
+      int faktor;
+      Multiplikator(int f) : faktor(f) {}
+      int operator()(int x) const { return x * faktor; }
+  };
+  
+  Multiplikator mal3(3);
+  std::cout << mal3(5) << "\n";   // 15
+  std::transform(v.begin(), v.end(), v.begin(), Multiplikator(2));
+
+================================================================================
+MODUL 6: STL — Standard Template Library
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Container (vollständig)
+------------------------------------------------------------------------
+
+SEQUENCE CONTAINER:
+  std::vector<T>    Dynamic array, O(1) amortized push_back, O(n) insert
+  std::deque<T>     Double-ended queue, O(1) push_front/back
+  std::list<T>      Doubly linked list, O(1) insert/delete anywhere, no rand. access
+  std::forward_list<T>  Singly linked, weniger Overhead als list
+  std::array<T,N>   Statisches Array mit STL-Interface (C++11)
+  std::string       Spezialisierter Container für Zeichen
+
+ASSOCIATIVE CONTAINER (Baumbasiert, sortiert, O(log n)):
+  std::map<K,V>        Key-Value, sortiert, eindeutige Keys
+  std::multimap<K,V>   Key-Value, sortiert, doppelte Keys erlaubt
+  std::set<T>          Menge, sortiert, eindeutig
+  std::multiset<T>     Menge, sortiert, Duplikate erlaubt
+
+UNORDERED CONTAINER (Hashbasiert, O(1) avg, O(n) worst):
+  std::unordered_map<K,V>    Hashmap, eindeutige Keys
+  std::unordered_multimap    Hashmap, doppelte Keys
+  std::unordered_set<T>      Hashset
+  std::unordered_multiset    Hashset mit Duplikaten
+
+CONTAINER ADAPTOR:
+  std::stack<T>          LIFO (auf deque basiert)
+  std::queue<T>          FIFO (auf deque basiert)
+  std::priority_queue<T> Max-Heap (auf vector basiert)
+
+Wann welchen Container?
+  → Zugriff per Index, wenig Einfügen/Löschen: vector
+  → Viel Einfügen/Löschen in der Mitte: list
+  → Schneller push_front: deque
+  → Key-Value, sortiert: map
+  → Key-Value, schnell: unordered_map
+  → Eindeutige Elemente: set/unordered_set
+  → Priorität: priority_queue
+
+map/unordered_map:
+  std::map<std::string, int> noten;
+  noten["Max"]  = 2;
+  noten["Anna"] = 1;
+  noten.insert({"Tim", 3});
+  noten.emplace("Lia", 1);   // BESSER: direkt konstruieren
+  
+  // Zugriff:
+  int n = noten["Max"];         // erstellt Eintrag wenn nicht vorhanden!
+  int n2 = noten.at("Max");     // wirft exception wenn nicht vorhanden
+  
+  // Existenz prüfen:
+  if (noten.count("Anna") > 0) { ... }
+  if (noten.contains("Anna"))   { ... }   // C++20
+  auto it = noten.find("Anna");
+  if (it != noten.end()) {
+      std::cout << it->first << ": " << it->second << "\n";
+  }
+  
+  // Löschen:
+  noten.erase("Max");
+  noten.erase(it);
+  
+  // Iteration (sortiert nach Key):
+  for (const auto &[key, wert] : noten) {    // C++17 Structured Bindings!
+      std::cout << key << ": " << wert << "\n";
+  }
+
+priority_queue:
+  std::priority_queue<int> maxHeap;           // Max-Heap (größtes oben)
+  std::priority_queue<int, std::vector<int>,
+      std::greater<int>> minHeap;             // Min-Heap
+  
+  maxHeap.push(5); maxHeap.push(1); maxHeap.push(9);
+  std::cout << maxHeap.top() << "\n";   // 9 (größtes!)
+  maxHeap.pop();
+
+------------------------------------------------------------------------
+6.2  Iteratoren
+------------------------------------------------------------------------
+
+  // Input Iterator:  einmal lesen
+  // Output Iterator: einmal schreiben
+  // Forward:         mehrmals lesen/schreiben, vorwärts
+  // Bidirectional:   vorwärts + rückwärts (list, map)
+  // Random Access:   ± n, vergleichen (vector, deque, array)
+  
+  std::vector<int> v = {1, 2, 3, 4, 5};
+  
+  // Iterator-Operationen:
+  auto it = v.begin();   // zeigt auf erstes Element
+  auto end = v.end();    // zeigt HINTER letztes Element
+  ++it;                  // vorwärts
+  --it;                  // rückwärts (bidirectional)
+  it += 2;               // random access
+  *it = 99;              // Wert setzen
+  
+  // Reverse Iteratoren:
+  for (auto it = v.rbegin(); it != v.rend(); ++it)
+      std::cout << *it << " ";   // 5 4 3 2 1
+  
+  // Insert Iteratoren:
+  std::vector<int> ziel;
+  std::copy(v.begin(), v.end(), std::back_inserter(ziel));   // push_back
+  std::copy(v.begin(), v.end(), std::front_inserter(ziel));  // push_front
+  std::copy(v.begin(), v.end(), std::inserter(ziel, ziel.begin()+2));
+  
+  // Stream-Iteratoren:
+  std::copy(v.begin(), v.end(), std::ostream_iterator<int>(std::cout, " "));
+  
+  std::vector<int> eingabe;
+  std::copy(std::istream_iterator<int>(std::cin),
+            std::istream_iterator<int>(),
+            std::back_inserter(eingabe));
+
+------------------------------------------------------------------------
+6.3  Algorithmen (vollständig)
+------------------------------------------------------------------------
+
+  #include <algorithm>
+  #include <numeric>
+  
+  // NICHT-MODIFIZIEREND:
+  std::all_of(b, e, pred)       // alle Elemente erfüllen Bedingung?
+  std::any_of(b, e, pred)       // mindestens eines?
+  std::none_of(b, e, pred)      // keines?
+  std::count(b, e, wert)        // Anzahl von wert
+  std::count_if(b, e, pred)     // Anzahl die pred erfüllen
+  std::find(b, e, wert)         // Iterator auf ersten Treffer
+  std::find_if(b, e, pred)      // Iterator auf erstes pred-treffen
+  std::min_element(b, e)        // Iterator auf Minimum
+  std::max_element(b, e)        // Iterator auf Maximum
+  std::minmax_element(b, e)     // Pair: (min, max)
+  std::equal(b1, e1, b2)        // Zwei Ranges gleich?
+  std::mismatch(b1, e1, b2)     // Erste Abweichung
+  std::search(b, e, sb, se)     // Teilsequenz finden
+  std::for_each(b, e, func)     // Funktion auf alle anwenden
+  
+  // MODIFIZIEREND:
+  std::copy(b, e, out)          // kopieren
+  std::copy_if(b, e, out, pred) // selektiv kopieren
+  std::transform(b, e, out, f)  // transformieren
+  std::transform(b1,e1, b2, out, f)  // zwei Ranges kombinieren
+  std::fill(b, e, wert)         // alle auf wert setzen
+  std::fill_n(b, n, wert)       // n Elemente auf wert
+  std::generate(b, e, gen)      // Funktion für jeden aufruf
+  std::replace(b, e, alt, neu)  // ersetzen
+  std::replace_if(b, e, pred, neu)
+  std::remove(b, e, wert)       // "entfernen" (erase-remove idiom!)
+  std::remove_if(b, e, pred)
+  std::unique(b, e)             // aufeinanderfolgende Duplikate entfernen
+  std::reverse(b, e)            // umkehren
+  std::rotate(b, mid, e)        // um mid rotieren
+  std::shuffle(b, e, rng)       // mischen
+  std::move(b, e, out)          // move statt copy
+  
+  // SORTIEREN:
+  std::sort(b, e)               // O(n log n), nicht stabil
+  std::sort(b, e, comp)         // mit Vergleichsfunktion
+  std::stable_sort(b, e)        // O(n log n), stabil
+  std::partial_sort(b, m, e)    // nur erste m sortieren
+  std::nth_element(b, n, e)     // n-tes Element am richtigen Platz
+  std::is_sorted(b, e)          // ist sortiert?
+  
+  // BINÄRE SUCHE (nur auf sortierten Ranges!):
+  std::binary_search(b, e, wert)       // bool
+  std::lower_bound(b, e, wert)         // Iterator auf >= wert
+  std::upper_bound(b, e, wert)         // Iterator auf > wert
+  std::equal_range(b, e, wert)         // Pair: lower, upper
+  
+  // NUMERISCH (<numeric>):
+  std::accumulate(b, e, init)           // Summe
+  std::accumulate(b, e, init, op)       // mit eigener Operation
+  std::reduce(b, e)                     // wie accumulate, parallelisierbar
+  std::inner_product(b1, e1, b2, init)  // Skalarprodukt
+  std::partial_sum(b, e, out)           // Präfixsumme
+  std::adjacent_difference(b, e, out)   // Differenz aufeinanderfolgender
+  std::iota(b, e, start)                // 0, 1, 2, 3, ...
+
+Erase-Remove Idiom:
+  std::vector<int> v = {1, 2, 3, 2, 4, 2, 5};
+  
+  // FALSCH: remove() löscht NICHT! Es verschiebt nur!
+  std::remove(v.begin(), v.end(), 2);   // "logisch" entfernt, Size unverändert!
+  
+  // RICHTIG: remove() + erase():
+  v.erase(std::remove(v.begin(), v.end(), 2), v.end());
+  // v = {1, 3, 4, 5}
+  
+  // C++20: std::erase (direkt):
+  std::erase(v, 2);           // entfernt alle 2er
+  std::erase_if(v, [](int x){ return x % 2 == 0; });  // entfernt Gerade
+
+================================================================================
+MODUL 7: Designpatterns in C++
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Singleton
+------------------------------------------------------------------------
+
+  class Logger {
+  public:
+      // C++11: Meyers' Singleton (thread-safe):
+      static Logger &getInstance() {
+          static Logger instanz;   // garantiert thread-safe initialisiert!
+          return instanz;
+      }
+      
+      void log(const std::string &msg) {
+          std::cout << "[LOG] " << msg << "\n";
+      }
+      
+  private:
+      Logger() = default;
+      Logger(const Logger &) = delete;
+      Logger &operator=(const Logger &) = delete;
+  };
+  
+  Logger::getInstance().log("Programm gestartet");
+
+------------------------------------------------------------------------
+7.2  Factory Method und Abstract Factory
+------------------------------------------------------------------------
+
+  // Abstract Product:
+  class Button {
+  public:
+      virtual ~Button() = default;
+      virtual void render() = 0;
+  };
+  
+  // Concrete Products:
+  class WindowsButton : public Button {
+  public: void render() override { std::cout << "[Win] Button\n"; }
+  };
+  class MacButton : public Button {
+  public: void render() override { std::cout << "[Mac] Button\n"; }
+  };
+  
+  // Abstract Factory:
+  class UIFactory {
+  public:
+      virtual ~UIFactory() = default;
+      virtual std::unique_ptr<Button> createButton() = 0;
+  };
+  
+  class WindowsFactory : public UIFactory {
+  public:
+      std::unique_ptr<Button> createButton() override {
+          return std::make_unique<WindowsButton>();
+      }
+  };
+  
+  class MacFactory : public UIFactory {
+  public:
+      std::unique_ptr<Button> createButton() override {
+          return std::make_unique<MacButton>();
+      }
+  };
+  
+  // Client-Code kennt keine konkreten Klassen:
+  void renderUI(UIFactory &factory) {
+      auto btn = factory.createButton();
+      btn->render();
+  }
+
+------------------------------------------------------------------------
+7.3  Observer (Event-System)
+------------------------------------------------------------------------
+
+  #include <functional>
+  #include <vector>
+  
+  template<typename... Args>
+  class Event {
+      using Handler = std::function<void(Args...)>;
+      std::vector<Handler> handlers;
+  public:
+      void subscribe(Handler h) { handlers.push_back(std::move(h)); }
+      void fire(Args... args) {
+          for (auto &h : handlers) h(args...);
+      }
+      Event &operator+=(Handler h) { subscribe(std::move(h)); return *this; }
+  };
+  
+  // Verwendung:
+  Event<int, std::string> onChange;
+  onChange += [](int wert, std::string name) {
+      std::cout << name << " geändert: " << wert << "\n";
+  };
+  onChange += [](int wert, std::string) {
+      if (wert > 100) std::cout << "ALARM!\n";
+  };
+  
+  onChange.fire(150, "Temperatur");
+
+------------------------------------------------------------------------
+7.4  Strategy Pattern mit Lambdas
+------------------------------------------------------------------------
+
+  class Sortierer {
+      std::function<bool(int, int)> vergleich;
+  public:
+      explicit Sortierer(std::function<bool(int,int)> v = std::less<int>())
+          : vergleich(std::move(v)) {}
+      
+      void sortiere(std::vector<int> &v) {
+          std::sort(v.begin(), v.end(), vergleich);
+      }
+  };
+  
+  Sortierer aufsteigend;
+  Sortierer absteigend([](int a, int b){ return a > b; });
+  Sortierer nach_betrag([](int a, int b){ return std::abs(a) < std::abs(b); });
+
+------------------------------------------------------------------------
+7.5  Builder Pattern
+------------------------------------------------------------------------
+
+  class ServerKonfiguration {
+  public:
+      std::string host = "localhost";
+      int port = 8080;
+      int max_verbindungen = 100;
+      int timeout_sek = 30;
+      bool ssl = false;
+      
+      class Builder {
+          ServerKonfiguration config;
+      public:
+          Builder &mitHost(std::string h) { config.host = std::move(h); return *this; }
+          Builder &mitPort(int p) { config.port = p; return *this; }
+          Builder &mitMaxVerbindungen(int n) { config.max_verbindungen = n; return *this; }
+          Builder &mitTimeout(int t) { config.timeout_sek = t; return *this; }
+          Builder &mitSSL(bool s) { config.ssl = s; return *this; }
+          ServerKonfiguration build() { return std::move(config); }
+      };
+  };
+  
+  auto config = ServerKonfiguration::Builder()
+      .mitHost("example.com")
+      .mitPort(443)
+      .mitSSL(true)
+      .mitMaxVerbindungen(1000)
+      .build();
+
+------------------------------------------------------------------------
+7.6  CRTP — Curiously Recurring Template Pattern
+------------------------------------------------------------------------
+
+  // Statischer Polymorphismus ohne vtable!
+  template<typename Abgeleitet>
+  class Basis {
+  public:
+      void arbeite() {
+          // Aufruf der abgeleiteten Methode zur Compilezeit:
+          static_cast<Abgeleitet*>(this)->tu_etwas();
+      }
+  };
+  
+  class Konkret : public Basis<Konkret> {
+  public:
+      void tu_etwas() { std::cout << "Konkrete Implementierung\n"; }
+  };
+  
+  Konkret k;
+  k.arbeite();   // kein virtual-Overhead!
+
+------------------------------------------------------------------------
+7.7  SOLID Prinzipien in C++
+------------------------------------------------------------------------
+
+S — Single Responsibility:
+  // SCHLECHT: Eine Klasse macht alles
+  class UserManager {
+      void create(User &u); void delete(User &u); void saveToFile(); void sendEmail();
+  };
+  
+  // GUT: Getrennte Zuständigkeiten
+  class UserRepository { void save(User &u); void load(int id); };
+  class EmailService    { void sendWelcome(User &u); };
+
+O — Open/Closed:
+  // Offen für Erweiterung, geschlossen für Änderung:
+  // Verwende abstrakte Basisklasse — neues Verhalten = neue Klasse, kein Ändern!
+
+L — Liskov Substitution:
+  // Abgeleitete Klasse muss Basisklasse ÜBERALL ersetzen können:
+  // FALSCH: class Square : public Rectangle { void setWidth() override { setHeight(); } }
+  // Das bricht Erwartungen von Rectangle-Code!
+
+I — Interface Segregation:
+  // Lieber viele kleine Interfaces als ein großes:
+  class IDrawable { virtual void draw() = 0; };
+  class ISaveable { virtual void save() = 0; };
+  // Statt: class IEverything { virtual void draw()=0; virtual void save()=0; };
+
+D — Dependency Inversion:
+  // High-Level-Module hängen nicht von Low-Level ab:
+  class Verarbeitung {
+      std::shared_ptr<IDataSource> quelle;   // Interface!
+  public:
+      Verarbeitung(std::shared_ptr<IDataSource> q) : quelle(q) {}
+  };
+
+================================================================================
+TEIL 3 — TEMPLATES & STL VERTIEFT
+================================================================================
+
+================================================================================
+MODUL 8: C++17 Features
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Structured Bindings (C++17)
+------------------------------------------------------------------------
+
+  // Tupel, Pair, Array, Struct entbinden:
+  auto [x, y] = std::make_pair(3, 4.0);   // x=int, y=double
+  
+  std::tuple<int, std::string, double> t = {42, "Hallo", 3.14};
+  auto [i, s, d] = t;
+  
+  // Bei Map-Iteration:
+  std::map<std::string, int> m = {{"A", 1}, {"B", 2}};
+  for (const auto &[key, wert] : m) {
+      std::cout << key << "=" << wert << "\n";
+  }
+  
+  // Struct:
+  struct Punkt { int x, y; };
+  Punkt p = {3, 4};
+  auto [px, py] = p;
+
+------------------------------------------------------------------------
+8.2  std::optional (C++17)
+------------------------------------------------------------------------
+
+  #include <optional>
+  
+  // Funktion die vielleicht einen Wert zurückgibt:
+  std::optional<int> parse_int(const std::string &s) {
+      try {
+          return std::stoi(s);
+      } catch (...) {
+          return std::nullopt;   // kein Wert
+      }
+  }
+  
+  auto result = parse_int("42");
+  if (result.has_value()) {
+      std::cout << *result << "\n";      // 42
+  }
+  
+  // Oder kürzer:
+  if (result) {
+      std::cout << result.value() << "\n";
+  }
+  
+  int wert = result.value_or(-1);       // Default wenn leer
+  
+  // Besser als: nullptr, -1, bool+out-param, exception-Missbrauch!
+
+------------------------------------------------------------------------
+8.3  std::variant (C++17)
+------------------------------------------------------------------------
+
+  #include <variant>
+  
+  // Typ-sichere Union:
+  std::variant<int, double, std::string> v;
+  
+  v = 42;
+  v = 3.14;
+  v = "Hallo";
+  
+  // Zugriff:
+  std::get<std::string>(v);          // wirft wenn falscher Typ
+  std::get_if<int>(&v);              // null wenn falscher Typ
+  v.index();                          // Index des aktiven Typs
+  std::holds_alternative<double>(v); // bool
+  
+  // std::visit für Visitor-Pattern:
+  std::visit([](auto &&val) {
+      std::cout << val << "\n";
+  }, v);
+  
+  // Mit verschiedenen Typen:
+  std::visit([](auto &&val) {
+      using T = std::decay_t<decltype(val)>;
+      if constexpr (std::is_same_v<T, int>)         std::cout << "int: " << val;
+      else if constexpr (std::is_same_v<T, double>) std::cout << "double: " << val;
+      else                                           std::cout << "string: " << val;
+  }, v);
+
+------------------------------------------------------------------------
+8.4  std::any (C++17)
+------------------------------------------------------------------------
+
+  #include <any>
+  
+  std::any a = 42;
+  a = std::string("Hallo");
+  a = 3.14;
+  
+  // Typ abfragen:
+  if (a.type() == typeid(double)) {
+      std::cout << std::any_cast<double>(a) << "\n";
+  }
+  
+  double d = std::any_cast<double>(a);  // wirft bad_any_cast wenn falscher Typ
+  double *dp = std::any_cast<double>(&a); // nullptr wenn falscher Typ
+
+------------------------------------------------------------------------
+8.5  if constexpr (C++17)
+------------------------------------------------------------------------
+
+  template<typename T>
+  void verarbeite(T wert) {
+      // Kompiliert je nach T unterschiedlich:
+      if constexpr (std::is_integral_v<T>) {
+          std::cout << "Integer: " << wert * 2 << "\n";
+      } else if constexpr (std::is_floating_point_v<T>) {
+          std::cout << "Float: " << wert * 2.0 << "\n";
+      } else if constexpr (std::is_same_v<T, std::string>) {
+          std::cout << "String: " << wert + wert << "\n";
+      } else {
+          static_assert(sizeof(T)==0, "Unbekannter Typ!");
+      }
+  }
+  
+  verarbeite(42);             // Integer: 84
+  verarbeite(3.14);           // Float: 6.28
+  verarbeite(std::string("Hi")); // String: HiHi
+
+------------------------------------------------------------------------
+8.6  std::filesystem (C++17)
+------------------------------------------------------------------------
+
+  #include <filesystem>
+  namespace fs = std::filesystem;
+  
+  // Pfad-Operationen:
+  fs::path p = "/home/user/dokumente";
+  fs::path datei = p / "bericht.txt";   // Operator/ für Pfade!
+  
+  datei.filename();      // "bericht.txt"
+  datei.stem();          // "bericht"
+  datei.extension();     // ".txt"
+  datei.parent_path();   // "/home/user/dokumente"
+  datei.is_absolute();   // true
+  
+  // Prüfen:
+  fs::exists(p)
+  fs::is_regular_file(datei)
+  fs::is_directory(p)
+  
+  // Operationen:
+  fs::create_directory(p / "neu");
+  fs::create_directories(p / "a/b/c");
+  fs::copy(von, nach);
+  fs::remove(datei);
+  fs::remove_all(verzeichnis);
+  fs::rename(alt, neu);
+  fs::file_size(datei);         // in Bytes
+  
+  // Verzeichnis durchlaufen:
+  for (const auto &entry : fs::directory_iterator(p)) {
+      std::cout << entry.path().filename() << "\n";
+  }
+  
+  // Rekursiv:
+  for (const auto &entry : fs::recursive_directory_iterator(p)) {
+      if (entry.is_regular_file()) {
+          std::cout << entry.path() << " (" << entry.file_size() << " Bytes)\n";
+      }
+  }
+
+================================================================================
+MODUL 9: C++20 Features
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Concepts (C++20)
+------------------------------------------------------------------------
+
+  #include <concepts>
+  
+  // Concept = benannte Einschränkung für Template-Parameter:
+  template<typename T>
+  concept Numerisch = std::is_arithmetic_v<T>;
+  
+  template<Numerisch T>
+  T addiere(T a, T b) { return a + b; }
+  // Klarer Fehler wenn T kein numerischer Typ!
+  
+  // Eigene Concepts:
+  template<typename T>
+  concept Summierbar = requires(T a, T b) {
+      { a + b } -> std::convertible_to<T>;
+  };
+  
+  template<typename T>
+  concept Container = requires(T c) {
+      c.begin(); c.end(); c.size();
+  };
+  
+  // Standard-Concepts:
+  std::integral<T>           // int, char, long, etc.
+  std::floating_point<T>     // float, double
+  std::signed_integral<T>    // signed ints
+  std::unsigned_integral<T>  // unsigned ints
+  std::same_as<T, U>         // T == U
+  std::derived_from<T, B>    // T erbt von B
+  std::convertible_to<T, U>  // T konvertierbar zu U
+  std::invocable<F, Args...> // F kann mit Args aufgerufen werden
+  std::regular<T>            // kopierbar, vergleichbar
+
+------------------------------------------------------------------------
+9.2  Ranges (C++20)
+------------------------------------------------------------------------
+
+  #include <ranges>
+  namespace rv = std::ranges::views;
+  
+  std::vector<int> v = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  
+  // Pipe-Syntax für Komposition:
+  auto ergebnis = v
+      | rv::filter([](int x){ return x % 2 == 0; })  // nur gerade
+      | rv::transform([](int x){ return x * x; })     // quadrieren
+      | rv::take(3);                                    // erste 3
+  
+  for (int x : ergebnis) std::cout << x << " ";  // 4 16 36
+  
+  // Lazy evaluation: nichts wird bis zur Iteration berechnet!
+  
+  // Weitere Views:
+  rv::iota(1, 11)            // {1, 2, 3, ..., 10}
+  rv::iota(0)                // {0, 1, 2, ...} (unendlich!)
+  rv::take(10)               // erste 10 nehmen
+  rv::drop(3)                // erste 3 überspringen
+  rv::reverse                // umkehren
+  rv::keys                   // Keys aus map
+  rv::values                 // Values aus map
+  rv::zip(a, b)              // zwei Ranges zusammenzippen (C++23)
+  rv::enumerate(v)           // (index, wert) Paare
+  rv::join(rv)               // verschachtelte Ranges flatten
+
+------------------------------------------------------------------------
+9.3  std::span (C++20)
+------------------------------------------------------------------------
+
+  #include <span>
+  
+  // Nicht-besitzende Sicht auf kontinuierlichen Speicher:
+  void verarbeite(std::span<int> daten) {
+      for (int &x : daten) x *= 2;
+  }
+  
+  std::vector<int> v = {1, 2, 3, 4, 5};
+  int arr[] = {1, 2, 3};
+  
+  verarbeite(v);          // funktioniert mit vector
+  verarbeite(arr);        // funktioniert mit Array
+  verarbeite({v.data(), 3});  // nur erste 3
+  
+  // span ist wie string_view für beliebige Arrays:
+  // kein Kopieren, kein Eigentum, kein new/delete
+  std::span<const int> readonly(v);   // const span
+
+------------------------------------------------------------------------
+9.4  Coroutines (C++20)
+------------------------------------------------------------------------
+
+  #include <coroutine>
+  
+  // Generator-Coroutine:
+  struct Generator {
+      struct promise_type {
+          int aktuell;
+          Generator get_return_object() { return {.handle = handle_type::from_promise(*this)}; }
+          std::suspend_always initial_suspend() { return {}; }
+          std::suspend_always final_suspend() noexcept { return {}; }
+          std::suspend_always yield_value(int v) { aktuell = v; return {}; }
+          void return_void() {}
+          void unhandled_exception() {}
+      };
+      
+      using handle_type = std::coroutine_handle<promise_type>;
+      handle_type handle;
+      
+      bool next() { handle.resume(); return !handle.done(); }
+      int wert()  { return handle.promise().aktuell; }
+      ~Generator() { if (handle) handle.destroy(); }
+  };
+  
+  Generator fibonacci() {
+      int a = 0, b = 1;
+      while (true) {
+          co_yield a;   // Wert zurückgeben und pausieren
+          auto c = a + b;
+          a = b; b = c;
+      }
+  }
+  
+  auto gen = fibonacci();
+  for (int i = 0; i < 10 && gen.next(); i++) {
+      std::cout << gen.wert() << " ";   // 0 1 1 2 3 5 8 13 21 34
+  }
+
+================================================================================
+TEIL 4 — NEBENLÄUFIGKEIT
+================================================================================
+
+================================================================================
+MODUL 10: Multithreading (std::thread)
+================================================================================
+
+------------------------------------------------------------------------
+10.1  std::thread Grundlagen
+------------------------------------------------------------------------
+
+  #include <thread>
+  
+  void arbeit(int id, std::string name) {
+      std::cout << "Thread " << id << " (" << name << ") läuft\n";
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+  
+  // Thread erstellen:
+  std::thread t1(arbeit, 1, "Alpha");
+  std::thread t2([]{ std::cout << "Lambda-Thread\n"; });
+  
+  t1.join();   // Warten bis t1 fertig
+  t2.join();
+  
+  // Oder detach() (läuft unabhängig weiter):
+  std::thread t3(arbeit, 3, "Hintergrund");
+  t3.detach();   // t3 läuft ohne Kontrolle weiter
+  // ACHTUNG: Lifetime-Probleme bei lokalen Variablen!
+
+------------------------------------------------------------------------
+10.2  Mutex und Lock
+------------------------------------------------------------------------
+
+  #include <mutex>
+  
+  std::mutex mtx;
+  int zaehler = 0;
+  
+  void inkrement(int n) {
+      for (int i = 0; i < n; i++) {
+          std::lock_guard<std::mutex> lock(mtx);   // RAII: automatisch unlock
+          zaehler++;
+      }
+  }
+  
+  std::thread t1(inkrement, 100000);
+  std::thread t2(inkrement, 100000);
+  t1.join(); t2.join();
+  std::cout << zaehler << "\n";   // immer 200000
+
+  // std::unique_lock: flexibler als lock_guard (kann deferred, unlock, relock):
+  std::unique_lock<std::mutex> lock(mtx, std::defer_lock);
+  // ... später:
+  lock.lock();
+  // ... kritischer Abschnitt ...
+  lock.unlock();   // optional: früh freigeben
+  
+  // Mehrere Mutexes gleichzeitig (verhindert Deadlock!):
+  std::mutex m1, m2;
+  std::scoped_lock lock(m1, m2);   // C++17: beide auf einmal, deadlock-sicher!
+
+------------------------------------------------------------------------
+10.3  Condition Variables
+------------------------------------------------------------------------
+
+  #include <condition_variable>
+  
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool bereit = false;
+  
+  void produzent() {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      {
+          std::lock_guard<std::mutex> lock(mtx);
+          bereit = true;
+      }
+      cv.notify_one();   // einen Thread aufwecken
+      // cv.notify_all(); // ALLE wecken
+  }
+  
+  void konsument() {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait(lock, []{ return bereit; });   // warten bis bereit
+      // Oder mit Timeout:
+      cv.wait_for(lock, std::chrono::seconds(5), []{ return bereit; });
+      std::cout << "Daten bereit!\n";
+  }
+
+------------------------------------------------------------------------
+10.4  Atomare Typen
+------------------------------------------------------------------------
+
+  #include <atomic>
+  
+  std::atomic<int> zaehler{0};
+  
+  // Lock-frei (auf den meisten Plattformen):
+  zaehler++;
+  zaehler.fetch_add(1);
+  zaehler.fetch_sub(1);
+  int wert = zaehler.load();
+  zaehler.store(42);
+  
+  // Compare-Exchange (Basis für Lock-Free Algorithmen):
+  int erwartet = 5;
+  zaehler.compare_exchange_strong(erwartet, 10);
+  // Wenn zaehler == 5: zaehler = 10, return true
+  // Wenn zaehler != 5: erwartet = zaehler, return false
+  
+  // Memory Ordering:
+  zaehler.store(1, std::memory_order_relaxed);   // keine Synchronisation
+  zaehler.store(1, std::memory_order_release);   // Release für anderen Thread
+  zaehler.load(std::memory_order_acquire);        // Acquire
+  zaehler.store(1, std::memory_order_seq_cst);   // Sequential Consistency (default)
+
+------------------------------------------------------------------------
+10.5  std::future und std::promise
+------------------------------------------------------------------------
+
+  #include <future>
+  
+  // Einfach: std::async
+  std::future<int> fut = std::async(std::launch::async, []{
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      return 42;
+  });
+  
+  std::cout << "Warte auf Ergebnis...\n";
+  int wert = fut.get();   // BLOCKIERT bis Ergebnis da ist
+  std::cout << "Ergebnis: " << wert << "\n";
+  
+  // Prüfen ob bereit:
+  if (fut.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready) {
+      // Ergebnis ist da!
+  }
+  
+  // std::promise für manuelle Kontrolle:
+  std::promise<int> p;
+  std::future<int> f = p.get_future();
+  
+  std::thread t([&p]{
+      p.set_value(99);   // Wert setzen
+  });
+  
+  std::cout << f.get() << "\n";   // 99
+  t.join();
+
+================================================================================
+TEIL 5 — BUILD & TESTING
+================================================================================
+
+================================================================================
+MODUL 11: CMake und Testing
+================================================================================
+
+------------------------------------------------------------------------
+11.1  CMake (Modernes Build-System)
+------------------------------------------------------------------------
+
+  # CMakeLists.txt
+  cmake_minimum_required(VERSION 3.15)
+  project(MeinProjekt VERSION 1.0 LANGUAGES CXX)
+  
+  # C++-Standard:
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+  
+  # Executable:
+  add_executable(programm
+      src/main.cpp
+      src/person.cpp
+  )
+  
+  # Library:
+  add_library(meine_lib STATIC
+      src/lib.cpp
+  )
+  
+  # Include-Directories:
+  target_include_directories(programm PRIVATE include)
+  
+  # Compiler-Flags:
+  target_compile_options(programm PRIVATE
+      -Wall -Wextra -Wpedantic
+  )
+  
+  # Libraries linken:
+  target_link_libraries(programm PRIVATE meine_lib)
+  
+  # Build:
+  # mkdir build && cd build && cmake .. && make
+  # oder: cmake -B build && cmake --build build
+
+------------------------------------------------------------------------
+11.2  Google Test (GTest)
+------------------------------------------------------------------------
+
+  // test_rechner.cpp
+  #include <gtest/gtest.h>
+  
+  int addiere(int a, int b) { return a + b; }
+  
+  // Test-Case:
+  TEST(RechnerTest, AdditionPositiv) {
+      EXPECT_EQ(addiere(3, 4), 7);
+      EXPECT_EQ(addiere(0, 0), 0);
+  }
+  
+  TEST(RechnerTest, AdditionNegativ) {
+      EXPECT_EQ(addiere(-3, -4), -7);
+      EXPECT_EQ(addiere(-1, 1), 0);
+  }
+  
+  // Fixtures:
+  class BankkontoTest : public testing::Test {
+  protected:
+      BankKonto konto{"Test", 1000.0};
+      
+      void SetUp() override { /* vor jedem Test */ }
+      void TearDown() override { /* nach jedem Test */ }
+  };
+  
+  TEST_F(BankkontoTest, EinzahlenErhoehtSaldo) {
+      konto.einzahlen(500);
+      EXPECT_DOUBLE_EQ(konto.getSaldo(), 1500.0);
+  }
+  
+  TEST_F(BankkontoTest, UeberziehungNichtMoeglich) {
+      EXPECT_FALSE(konto.abheben(2000));
+      EXPECT_DOUBLE_EQ(konto.getSaldo(), 1000.0);
+  }
+  
+  // Exception-Test:
+  TEST_F(BankkontoTest, NegativeBetragWirftException) {
+      EXPECT_THROW(konto.einzahlen(-100), std::invalid_argument);
+  }
+  
+  // CMakeLists für Tests:
+  // find_package(GTest REQUIRED)
+  // add_executable(tests test_rechner.cpp)
+  // target_link_libraries(tests PRIVATE GTest::gtest_main)
+
+================================================================================
+SCHNELLREFERENZ C++ — ProfiKurs v2
+================================================================================
+
+KOMPILIEREN:
+  g++ -Wall -Wextra -std=c++17 datei.cpp -o prog
+  g++ -O2 -DNDEBUG -std=c++20 datei.cpp -o prog
+  cmake -B build && cmake --build build
+
+NEUE C++ TYPEN vs. C:
+  std::string   → kein char[] mehr
+  std::vector   → kein malloc'tes Array mehr
+  auto          → Typ-Deduktion
+  nullptr       → kein NULL mehr
+
+SMART POINTER (kein delete mehr!):
+  unique_ptr  exklusiv, kein Overhead
+  shared_ptr  geteilt, Reference Count (Overhead!)
+  weak_ptr    Beobachter, kein Eigentum
+  IMMER make_unique / make_shared verwenden!
+
+KLASSEN — REGEL DER FÜNF:
+  Destruktor, Copy-Ctor, Copy-Assign, Move-Ctor, Move-Assign
+  Wenn einer nötig: alle implementieren oder = delete/default!
+  IMMER virtual Destruktor in Basisklassen!
+
+POLYMORPHISMUS:
+  virtual → vtable → dynamischer Dispatch
+  override → Compiler prüft ob Basis-Methode existiert
+  final → keine weitere Ableitung/Override
+  = 0 → rein virtuelle Methode → abstrakte Klasse
+
+TEMPLATES:
+  template<typename T>           Typ-Parameter
+  template<int N>                Nicht-Typ-Parameter
+  template<typename... Ts>       Variadic
+  if constexpr (bedingung)       Bedingte Kompilierung
+  static_assert(expr, "msg")     Compile-Zeit-Assert
+
+C++17 FEATURES:
+  auto [k, v] = map_pair;        Structured Bindings
+  std::optional<T>               Vielleicht-Wert
+  std::variant<A,B,C>            Typ-sichere Union
+  std::any                       Beliebiger Typ
+  if constexpr (...)             Compile-Zeit if
+  std::filesystem                Dateisystem-Library
+
+C++20 FEATURES:
+  concept Summierbar = ...       Benannte Einschränkung
+  std::span<T>                   Nicht-besitzende Sicht
+  std::ranges                    Kompositions-Algorithmen
+  co_yield, co_await, co_return  Coroutinen
+
+MULTITHREADING:
+  std::thread t(funktion)        Thread erstellen
+  t.join()                       Warten
+  std::mutex / lock_guard        Mutex + RAII
+  std::atomic<T>                 Lock-freie Operationen
+  std::future / std::async       Asynchrone Tasks
+
+STL CONTAINER WAHL:
+  vector   → Standard, random access
+  deque    → push_front/back O(1)
+  list     → viel insert/delete in der Mitte
+  map      → sortiertes Key-Value, O(log n)
+  unordered_map → Hash Key-Value, O(1) avg
+  set      → eindeutige Elemente, sortiert
+
+DESIGN PATTERNS:
+  Singleton    Meyers' Singleton (static local, thread-safe C++11)
+  Factory      Virtuelle Methode für Objekterstellung
+  Observer     Event<Args...> mit function-Vektor
+  Strategy     function<> als Policy
+  CRTP         Statischer Polymorphismus ohne vtable
+
+================================================================================
+LITERATUR & RESSOURCEN
+================================================================================
+  "The C++ Programming Language" von Bjarne Stroustrup
+  "Effective Modern C++" von Scott Meyers (C++11/14)
+  "C++ Core Guidelines" https://isocpp.github.io/CppCoreGuidelines/
+  https://cppreference.com    — ultimative Referenz
+  https://learncpp.com        — freier C++-Kurs
+  https://godbolt.org         — Code → Assembly online
+  https://cppinsights.io      — Template-Expansion sichtbar machen
+  "A Tour of C++" von Bjarne Stroustrup — kurze Übersicht
+
+================================================================================
+Copyright © 2026 TrafkHop Entertainment
+================================================================================

@@ -1,0 +1,1483 @@
+================================================================================
+PYTHON KOMPLETTKURS — TEIL 3 von 4
+subprocess · threading · GTK 3 · GLib · GtkLayerShell · cairo · urllib
+================================================================================
+
+Voraussetzung: Teil 1 (Grundlagen) und Teil 2 (OOP, Module, Fehlerbehandlung)
+
+Dieser Teil erklärt DIREKT deine Popup-Dateien:
+  volume-popup.py     → subprocess, re, GLib.timeout_add
+  bluetooth-popup.py  → subprocess.Popen, threading, GLib.idle_add
+  network-popup.py    → subprocess.run, threading, urllib
+  calendar-popup.py   → urllib.request, json, threading, cairo, GTK
+  brightness-popup.py → subprocess, GTK Slider/Scale
+
+Jede Zeile in deinen Dateien die du je gewundert hast wird hier erklärt.
+
+================================================================================
+MODUL 14: subprocess — Shell-Befehle aus Python aufrufen
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Warum subprocess?
+------------------------------------------------------------------------
+
+Deine Popups müssen mit Linux-Systemtools kommunizieren:
+  pactl list sinks        ← PulseAudio/PipeWire Lautstärke
+  nmcli dev wifi list     ← NetworkManager WLAN-Liste
+  bluetoothctl show       ← Bluetooth-Status
+  brightnessctl set 50%   ← Display-Helligkeit
+  playerctl metadata      ← Media-Player-Info
+
+Alle diese Befehle werden über das subprocess-Modul aufgerufen.
+Das ist der Standardweg um externe Programme in Python zu starten.
+
+  import subprocess
+
+------------------------------------------------------------------------
+14.2  subprocess.check_output — Ausgabe lesen
+------------------------------------------------------------------------
+
+Das ist das häufigste Muster in deinen Dateien.
+Du hast es als run()-Hilfsfunktion verpackt:
+
+  # Aus volume-popup.py, bluetooth-popup.py, network-popup.py:
+  def run(cmd):
+      try:
+          return subprocess.check_output(cmd, shell=True, text=True,
+                                         stderr=subprocess.DEVNULL).strip()
+      except Exception:
+          return ""
+
+Was die Parameter bedeuten:
+  cmd               Der Shell-Befehl als String (z.B. "pactl list sinks")
+
+  shell=True        Der Befehl wird durch die Shell (/bin/sh) ausgeführt.
+                    Erlaubt Pipes (|), Wildcards (*), Shell-Variablen ($HOME).
+                    SICHERHEITSHINWEIS: Niemals shell=True mit
+                    benutzer-eingegebenen Strings! Gefahr für
+                    Shell-Injection: run(f"rm -rf {benutzereingabe}")
+                    Bei eigenen Befehlen (wie hier) ist es ok.
+
+  text=True         Gibt den Output als str zurück, nicht als bytes.
+                    Ohne text=True: b"Ergebnis\n" (bytes)
+                    Mit text=True: "Ergebnis\n" (str)
+
+  stderr=subprocess.DEVNULL
+                    Fehlermeldungen werden verworfen (wie > /dev/null).
+                    Ohne das würden Fehler im Terminal sichtbar sein.
+
+  .strip()          Entfernt führende/nachfolgende Leerzeichen und \n.
+
+  try/except:       Wenn der Befehl nicht existiert oder fehlschlägt,
+                    gib "" zurück statt das Programm zu crashen.
+
+Rückgabewert:
+  Die Standardausgabe (stdout) des Befehls als String.
+  Wenn der Befehl einen Fehlercode zurückgibt (exit code ≠ 0),
+  wirft check_output eine CalledProcessError-Exception.
+
+Direktes Beispiel:
+  ausgabe = subprocess.check_output("pactl get-sink-volume @DEFAULT_SINK@",
+                                    shell=True, text=True,
+                                    stderr=subprocess.DEVNULL).strip()
+  # → "Volume: front-left: 65536 /  100% / 0.00 dB"
+
+  import re
+  m = re.search(r"(\d+)%", ausgabe)
+  lautstärke = int(m.group(1)) if m else 50
+  # → 100
+
+------------------------------------------------------------------------
+14.3  subprocess.run — Flexibler und moderner
+------------------------------------------------------------------------
+
+subprocess.run ist die empfohlene Funktion seit Python 3.5.
+Du benutzt sie in network-popup.py:
+
+  # Aus network-popup.py:
+  result = subprocess.run(
+      f"nmcli dev wifi connect '{ssid}' password '{password}'",
+      shell=True, capture_output=True, text=True)
+  return result.returncode == 0
+
+Was run() anders macht:
+  - Gibt ein CompletedProcess-Objekt zurück, kein String!
+  - Wirft KEINE Exception wenn der Befehl fehlschlägt (Exit-Code ≠ 0)
+  - capture_output=True  →  stdout UND stderr einfangen
+
+CompletedProcess-Objekt:
+  result.returncode     → Exit-Code (0 = Erfolg, alles andere = Fehler)
+  result.stdout         → Standardausgabe als str (wenn text=True)
+  result.stderr         → Fehlerausgabe als str
+
+  result = subprocess.run("nmcli con up 'WLAN'", shell=True,
+                          capture_output=True, text=True)
+  if result.returncode == 0:
+      print("Verbunden!")
+  else:
+      print(f"Fehler: {result.stderr}")
+
+Wichtige Parameter:
+  capture_output=True   Wie stdout=PIPE, stderr=PIPE — fängt beide ein
+  timeout=10            Bricht nach 10 Sekunden ab (wichtig für hängende Befehle!)
+  check=True            Wirft Exception wenn exit code ≠ 0
+  cwd="/pfad"           Arbeitsverzeichnis für den Befehl
+  env={"KEY": "val"}    Umgebungsvariablen setzen
+
+Vergleich check_output vs run:
+  # check_output — kurz, direkter String-Rückgabe:
+  text = subprocess.check_output("cmd", shell=True, text=True).strip()
+
+  # run — flexibler, besonders wenn exit-code wichtig:
+  r = subprocess.run("cmd", shell=True, capture_output=True, text=True)
+  if r.returncode == 0:
+      verarbeite(r.stdout)
+
+------------------------------------------------------------------------
+14.4  subprocess.Popen — Interaktive Prozesse
+------------------------------------------------------------------------
+
+Für Programme die Eingaben brauchen — z.B. bluetoothctl:
+
+  # Aus bluetooth-popup.py:
+  def btctl(cmd):
+      try:
+          p = subprocess.Popen(
+              ["bluetoothctl"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL, text=True)
+          out, _ = p.communicate(input=f"{cmd}\nquit\n", timeout=10)
+          return out
+      except Exception:
+          return ""
+
+Was hier passiert, Schritt für Schritt:
+  1. Popen(["bluetoothctl"], ...)
+     → Startet bluetoothctl als Kindprozess.
+     → Beachte: Liste statt String! ["bluetoothctl"] ist sicherer als
+       "bluetoothctl" mit shell=True wenn keine Shell-Features gebraucht werden.
+
+  2. stdin=subprocess.PIPE
+     → Wir wollen Daten AN den Prozess senden (Eingabe)
+
+  3. stdout=subprocess.PIPE
+     → Wir wollen die Ausgabe des Prozesses lesen
+
+  4. p.communicate(input=f"{cmd}\nquit\n", timeout=10)
+     → Schickt den String an stdin
+     → Wartet bis der Prozess fertig ist (max. 10 Sekunden)
+     → Gibt (stdout, stderr) als Tupel zurück
+     → out, _ = ...  →  _ bedeutet "diesen Wert interessiert mich nicht"
+
+  5. timeout=10
+     → Kritisch! Ohne das könnte bluetoothctl ewig hängen.
+
+Beispiel für btctl("pair AA:BB:CC:DD:EE:FF"):
+  Schickt an bluetoothctl:
+    pair AA:BB:CC:DD:EE:FF
+    quit
+
+Popen vs run vs check_output:
+  check_output   → Einfach, Ausgabe lesen, kein Input an Prozess
+  run            → Flexibel, Exit-Code prüfen, capture_output
+  Popen          → Interaktiv, bidirektionale Kommunikation, Streaming
+
+------------------------------------------------------------------------
+14.5  subprocess ohne Shell — sicherere Alternative
+------------------------------------------------------------------------
+
+Wenn der Befehl KEINE Shell-Features braucht:
+
+  # Unsicher (shell=True mit Variablen):
+  run(f"pactl set-sink-volume '{name}' {vol}%")   ← Injektionsgefahr wenn name unbekannt!
+
+  # Sicher (Liste, kein shell=True):
+  subprocess.run(["pactl", "set-sink-volume", name, f"{vol}%"],
+                 capture_output=True)
+
+Als Liste übergeben: Jedes Argument ist ein eigener String.
+Keine Shell-Interpretation → keine Injektion möglich.
+
+------------------------------------------------------------------------
+14.6  Hintergrundprozesse starten (fire and forget)
+------------------------------------------------------------------------
+
+Manchmal will man einen Befehl starten und nicht warten:
+
+  # Aus network-popup.py (nmtui im Hintergrund öffnen):
+  subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
+
+  ← Kein .wait(), kein .communicate() → Prozess läuft im Hintergrund
+  ← Das Popup läuft weiter ohne zu warten
+
+  # Alternative mit os.system (älter, vermeiden):
+  os.system("nmtui")   ← blockiert bis fertig, kein Output einfangen
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+Schreibe eine Funktion get_volume() die:
+1. pactl get-sink-volume @DEFAULT_SINK@ ausführt
+2. Mit re.search die Prozentzahl extrahiert (Muster: r"(\d+)%")
+3. Den int-Wert zurückgibt (oder 50 als Default)
+4. Alle Fehler abfängt und "" zurückgibt
+
+Dann schreibe set_volume(prozent) die:
+1. Prüft ob prozent zwischen 0 und 150 liegt (clamp)
+2. pactl set-sink-volume @DEFAULT_SINK@ {prozent}% ausführt
+3. Den Exit-Code prüft und True/False zurückgibt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: threading — Mehrere Aufgaben gleichzeitig
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Das Problem: GTK und blockierende Operationen
+------------------------------------------------------------------------
+
+GTK hat einen einzigen Haupt-Thread — den "UI-Thread" oder "Main Loop".
+Alles was die GUI macht (zeichnen, Events verarbeiten, Buttons reagieren)
+läuft in diesem Thread.
+
+Das Problem: Wenn du im UI-Thread etwas Langsames machst...
+  def _load_weather(self):
+      data = fetch_weather()          ← braucht 1-5 Sekunden (Netzwerk!)
+      self._update_weather(data)
+
+...friert das gesamte Fenster ein. Kein Button reagiert, nichts zeichnet.
+
+Die Lösung: Langsame Arbeit in einen separaten Thread auslagern.
+
+------------------------------------------------------------------------
+15.2  threading.Thread — Grundlagen
+------------------------------------------------------------------------
+
+  import threading
+
+  # Funktion in separatem Thread ausführen:
+  def meine_aufgabe():
+      import time
+      time.sleep(2)     ← simuliert langsame Arbeit
+      print("Fertig!")
+
+  t = threading.Thread(target=meine_aufgabe)
+  t.start()             ← Thread starten (kehrt SOFORT zurück!)
+  print("Läuft weiter")  ← wird sofort ausgeführt!
+  t.join()              ← optional: warte bis Thread fertig ist
+
+  # Mit Argumenten:
+  def lade(url, timeout):
+      ...
+
+  t = threading.Thread(target=lade, args=(url,), kwargs={"timeout": 5})
+
+Aus deinen Dateien — das Standard-Muster:
+  # calendar-popup.py:
+  threading.Thread(target=self._load_weather, daemon=True).start()
+
+  # bluetooth-popup.py:
+  threading.Thread(target=self._load_paired, daemon=True).start()
+  threading.Thread(target=self._do_scan, daemon=True).start()
+
+------------------------------------------------------------------------
+15.3  daemon=True — Was bedeutet das?
+------------------------------------------------------------------------
+
+Ein Daemon-Thread läuft im Hintergrund und wird automatisch beendet
+wenn der Haupt-Thread (die App) beendet wird.
+
+Ohne daemon=True:
+  Das Programm wartet beim Beenden bis ALLE Threads fertig sind.
+  Ein hängender Thread (z.B. wartet auf Netzwerk) hält das Programm offen!
+
+Mit daemon=True:
+  Wenn das Fenster geschlossen wird → Programm endet → Daemon-Threads sterben mit.
+  Ideal für Hintergrund-Aufgaben die kein sauberes Aufräumen brauchen.
+
+Regel: Fast immer daemon=True für Hintergrund-Threads in GUI-Apps.
+
+------------------------------------------------------------------------
+15.4  Das KRITISCHE Problem: Thread-Sicherheit bei GTK
+------------------------------------------------------------------------
+
+GTK ist NICHT thread-sicher. Das bedeutet:
+Du darfst GTK-Widgets NUR im Haupt-Thread (dem UI-Thread) ändern!
+
+  # FALSCH — GTK aus Background-Thread aufrufen:
+  def _load_weather(self):         ← läuft in Background-Thread!
+      data = fetch_weather()
+      self._w_temp.set_text("21°C")  ← CRASH oder undefiniertes Verhalten!
+
+  # RICHTIG — GTK-Änderung in Haupt-Thread einplanen:
+  def _load_weather(self):         ← Background-Thread: nur Daten holen
+      data = fetch_weather()
+      GLib.idle_add(self._update_weather, data)  ← GTK-Änderung übergeben!
+
+  def _update_weather(self, data):  ← Haupt-Thread: GUI aktualisieren
+      self._w_temp.set_text("21°C")
+
+  Regel: Daten im Thread holen, GUI-Update mit GLib.idle_add übergeben.
+
+------------------------------------------------------------------------
+15.5  GLib.idle_add — GTK-safe Code einplanen
+------------------------------------------------------------------------
+
+GLib.idle_add() plant eine Funktion für den nächsten "ruhigen Moment"
+des GTK-Main-Loops ein. Das ist thread-sicher!
+
+  GLib.idle_add(funktion, argument1, argument2)
+  ← Ruft funktion(argument1, argument2) im Haupt-Thread auf
+
+Aus deinen Dateien:
+  # calendar-popup.py — das komplette threading-Muster:
+  def _load_weather(self):                        ← Background-Thread
+      data = fetch_weather()                      ← langsame Netzwerk-Anfrage
+      GLib.idle_add(self._update_weather, data)   ← sicher übergeben
+
+  def _update_weather(self, data):                ← Haupt-Thread
+      if not data:
+          self._w_temp.set_text("Offline")
+          return
+      self._w_icon.set_text(WMO_ICONS.get(code, "❓"))  ← GTK ändern: OK!
+
+  # bluetooth-popup.py — komplexeres Muster:
+  def _load_paired(self):                  ← Background-Thread
+      paired = get_paired_devices()
+      connected = get_connected_devices()
+      GLib.idle_add(self._render_paired, paired, connected)  ← übergeben
+
+  def _do_scan(self):                      ← Background-Thread
+      devices = scan_devices()             ← bluetoothctl aufrufen
+      GLib.idle_add(self._render_scan, devices)
+
+Rückgabewert von idle_add-Funktionen:
+  Gibt die Funktion True zurück → sie wird ERNEUT eingeplantt (Endlosschleife)
+  Gibt die Funktion False zurück → sie wird nur einmal ausgeführt
+
+  # Nützlich für periodische Updates:
+  def aktualisiere(self):
+      self._refresh()
+      return False   ← einmal ausführen
+
+  GLib.idle_add(aktualisiere)
+
+------------------------------------------------------------------------
+15.6  GLib.timeout_add — Timer in GTK
+------------------------------------------------------------------------
+
+GLib.timeout_add() ruft eine Funktion nach einer Verzögerung (in Millisekunden)
+im Haupt-Thread auf. Thread-sicher, kein threading.Thread nötig.
+
+  # Aus volume-popup.py:
+  GLib.timeout_add(1500, self._refresh_media)   ← nach 1.5 Sekunden
+  GLib.timeout_add(300, self._refresh_devices)  ← nach 0.3 Sekunden
+  GLib.timeout_add(80, self._apply_app_vol, idx, v)  ← mit Argumenten
+
+  # Aus network-popup.py:
+  GLib.timeout_add(2000, self._refresh)         ← nach 2 Sekunden
+
+  # Aus calendar-popup.py:
+  GLib.timeout_add(150, self._check_focus)
+
+Rückgabewert — genau wie idle_add:
+  True   → Timer läuft erneut (periodisch, alle X ms)
+  False  → Timer läuft nur einmal
+
+  # Periodischer Timer (läuft alle 5 Sekunden):
+  def aktualisiere_wetter(self):
+      self._refresh_weather()
+      return True    ← True = wiederholen!
+
+  GLib.timeout_add(5000, self.aktualisiere_wetter)
+
+  # Einmaliger Timer (nach 150ms prüfen):
+  def _check_focus(self):
+      if not self.has_toplevel_focus():
+          Gtk.main_quit()
+      return False   ← False = nicht wiederholen
+
+  GLib.timeout_add(150, self._check_focus)
+
+Timer abbrechen:
+  timer_id = GLib.timeout_add(1000, self._aktualisiere)
+  ...
+  GLib.source_remove(timer_id)   ← Timer abbrechen
+
+Aus volume-popup.py — Debouncing-Muster:
+  # Volume-Slider: nicht bei JEDEM Pixel-Schritt pactl aufrufen!
+  def _on_vol_change(self, scale, v):
+      if self._vol_timer:
+          GLib.source_remove(self._vol_timer)   ← alten Timer löschen
+      self._vol_timer = GLib.timeout_add(60, self._apply_vol, v)
+      ← neuen Timer starten
+  ← So wird pactl erst nach 60ms Pause aufgerufen — sehr elegant!
+
+------------------------------------------------------------------------
+15.7  threading.Lock — Datenkonflikte vermeiden
+------------------------------------------------------------------------
+
+Wenn mehrere Threads auf die gleichen Daten zugreifen,
+kann es zu Race Conditions kommen:
+
+  zaehler = 0   ← globale Variable
+
+  def increment():
+      global zaehler
+      zaehler += 1   ← NICHT atomar! Kann zu Problemen führen bei Threads
+
+  # Race Condition:
+  # Thread A liest zaehler = 5
+  # Thread B liest zaehler = 5
+  # Thread A schreibt 6
+  # Thread B schreibt 6   ← 6 statt 7! Ein Increment geht verloren
+
+  # Lösung: Lock
+  lock = threading.Lock()
+
+  def increment():
+      global zaehler
+      with lock:        ← nur ein Thread gleichzeitig darf hier rein
+          zaehler += 1
+
+  threading.RLock()     ← Re-entrant Lock (gleicher Thread darf mehrfach sperren)
+  threading.Event()     ← Thread-Signalisierung (wait/set)
+  threading.Semaphore() ← Zähler-Lock (max. N Threads gleichzeitig)
+
+In deinen Popups: Da alle GTK-Updates über GLib.idle_add laufen und
+Python's GIL (Global Interpreter Lock) kurze Operationen schützt,
+brauchst du in einfachen Popups meist kein explizites Lock.
+
+------------------------------------------------------------------------
+15.8  Das vollständige threading-Muster für Popups
+------------------------------------------------------------------------
+
+  import threading
+  from gi.repository import GLib
+
+  class MeinPopup(Gtk.Window):
+      def __init__(self):
+          ...
+          # Thread starten NACH show_all() — GUI muss bereit sein!
+          self.show_all()
+          threading.Thread(target=self._lade_daten, daemon=True).start()
+
+      def _lade_daten(self):
+          """Läuft in Background-Thread. KEIN GTK hier!"""
+          try:
+              daten = irgendwas_langsames()
+          except Exception:
+              daten = None
+          # GTK-Update sicher übergeben:
+          GLib.idle_add(self._zeige_daten, daten)
+
+      def _zeige_daten(self, daten):
+          """Läuft im Haupt-Thread. GTK ist hier safe."""
+          if daten is None:
+              self._label.set_text("Fehler")
+              return
+          self._label.set_text(str(daten))
+          # False zurückgeben damit idle_add nicht nochmal aufruft:
+          return False
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+Schreibe eine Klasse InfoPopup (ohne echtes GTK, nur als Simulation) die:
+1. Eine Methode starte_laden(self) hat, die einen daemon-Thread startet
+2. Der Thread ruft eine langsame Funktion auf (time.sleep(2) als Simulation)
+3. Nach dem Laden wird ein "Ergebnis" in self._daten gespeichert
+4. Simuliere GLib.idle_add mit einer Queue (queue.Queue) um das Thread-safe zu machen:
+   - Thread legt Ergebnis in die Queue
+   - Hauptprogramm holt es heraus
+
+Bonus: Baue ein Debouncing ein: bei mehrmaligem Aufruf von starte_laden()
+innerhalb von 500ms soll nur der letzte tatsächlich starten.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 16: GTK 3 — Grafische Oberflächen mit Python
+================================================================================
+
+------------------------------------------------------------------------
+16.1  Was ist GTK?
+------------------------------------------------------------------------
+
+GTK (GIMP Toolkit) ist ein Widget-Toolkit für grafische Oberflächen.
+Deine Popups benutzen GTK 3 über das gi.repository (GObject Introspection).
+
+gi = GObject Introspection → Python kann C-Bibliotheken direkt benutzen
+                             ohne dass sie neu für Python geschrieben werden.
+
+  import gi
+  gi.require_version("Gtk", "3.0")          ← Version festlegen (MUSS vor Import!)
+  from gi.repository import Gtk, Gdk, GLib  ← die eigentlichen Module
+
+  Gtk    → die Widgets (Fenster, Buttons, Labels, ...)
+  Gdk    → Grafik-Primitiven, Display, Tastatur, Maus
+  GLib   → Utilities (Timer, idle_add, ...)
+  Pango  → Textrendering (Schriftarten)
+  cairo  → 2D-Zeichnen (in deinen Popups für transparenten Hintergrund)
+
+------------------------------------------------------------------------
+16.2  Der GTK-Lebenszyklus
+------------------------------------------------------------------------
+
+  # Grundstruktur jeder GTK-App:
+  win = CalendarPopup()     ← Fenster erstellen und anzeigen
+  Gtk.main()                ← Hauptschleife starten (blockiert!)
+
+  Gtk.main() läuft bis:
+    Gtk.main_quit() aufgerufen wird
+    oder das letzte Fenster geschlossen wird (wenn eingestellt)
+
+  # In deinen Popups:
+  self.connect("key-press-event",
+      lambda _w, e: Gtk.main_quit() if e.keyval == Gdk.KEY_Escape else None)
+  ← Escape-Taste → Gtk.main_quit() → App beendet
+
+  self.connect("focus-out-event", self._on_focus_out)
+  def _on_focus_out(self, *_):
+      GLib.timeout_add(150, self._check_focus)
+  def _check_focus(self):
+      if not self.has_toplevel_focus():
+          Gtk.main_quit()   ← Fokus verloren → App beendet
+      return False
+
+------------------------------------------------------------------------
+16.3  Fenster — Gtk.Window
+------------------------------------------------------------------------
+
+  class MeinFenster(Gtk.Window):
+      def __init__(self):
+          super().__init__(type=Gtk.WindowType.TOPLEVEL)
+          ← TOPLEVEL = normales Fenster (vs POPUP für Menüs)
+
+  Wichtige Fenster-Methoden:
+  self.set_title("Mein Popup")
+  self.set_default_size(400, 300)      ← Startgröße
+  self.set_size_request(200, 100)      ← Mindestgröße
+  self.set_decorated(False)            ← keine Titelleiste
+  self.set_keep_above(True)            ← immer im Vordergrund
+  self.set_skip_taskbar_hint(True)     ← nicht in Taskleiste
+  self.set_skip_pager_hint(True)       ← nicht in Alt+Tab
+  self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU)  ← Popup-Fenstertyp
+  self.set_app_paintable(True)         ← für custom drawing (cairo)
+  self.move(x, y)                      ← Fenster positionieren
+  self.show_all()                      ← Fenster + alle Kinder anzeigen
+  self.hide()                          ← verstecken
+  self.resize(w, h)                    ← Größe ändern
+  w, h = self.get_size()               ← aktuelle Größe
+  self.add(widget)                     ← Kind-Widget hinzufügen
+
+Transparenz — aus deinen Popups:
+  screen = self.get_screen()
+  visual = screen.get_rgba_visual()            ← RGBA-Visual (Alpha-Kanal!)
+  if visual and screen.is_composited():        ← Compositor muss aktiv sein
+      self.set_visual(visual)                  ← Transparenz aktivieren
+  self.set_app_paintable(True)                 ← manuelles Zeichnen erlauben
+  self.connect("draw", self._clear_bg)         ← Hintergrund selbst zeichnen
+
+------------------------------------------------------------------------
+16.4  Layout-Container — Widgets anordnen
+------------------------------------------------------------------------
+
+Gtk.Box — der wichtigste Container:
+  box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+  box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+
+  box.pack_start(widget, expand, fill, padding)
+  ← expand: True = nimmt extra Platz ein wenn vorhanden
+  ← fill:   True = füllt den extra Platz aus (nur wenn expand=True)
+  ← padding: Pixel Abstand zum nächsten Element
+
+  box.pack_end(widget, expand, fill, padding)
+  ← fügt Widget am Ende ein (rechtsbündig/unten)
+
+  # Aus calendar-popup.py:
+  self._outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+  self._outer.set_margin_top(6)
+  self._outer.set_margin_bottom(6)
+  self._outer.set_margin_start(6)
+  self._outer.set_margin_end(6)
+
+  main_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+  box.pack_start(main_row, False, False, 0)
+  ←  expand=False, fill=False, padding=0
+
+  main_row.pack_end(self._forecast, False, False, 0)
+  ← Forecast-Box am rechten Ende
+
+Gtk.Grid — für tabellarische Anordnung:
+  grid = Gtk.Grid()
+  grid.set_column_spacing(2)
+  grid.set_row_spacing(2)
+  grid.set_halign(Gtk.Align.CENTER)
+
+  grid.attach(widget, column, row, width, height)
+  ← column, row: Position im Gitter (0-basiert)
+  ← width, height: wie viele Zellen das Widget einnimmt
+
+  # Aus calendar-popup.py:
+  grid.attach(lbl, col, 0, 1, 1)       ← Wochentag-Kopfzeile
+  grid.attach(btn, col_idx, row_idx + 1, 1, 1)  ← Kalender-Tag
+
+Weitere Container:
+  Gtk.ScrolledWindow    ← Scrollbarer Bereich
+  Gtk.Frame             ← Mit Rahmen und optionalem Titel
+  Gtk.Notebook          ← Tabs
+  Gtk.Stack             ← Seiten die übereinander liegen (umschalten)
+  Gtk.Revealer          ← Ein-/Ausblenden mit Animation
+  Gtk.Overlay           ← Widgets übereinanderlegen
+  Gtk.Expander          ← Aufklappbarer Bereich
+  Gtk.Paned             ← Geteilter Bereich mit Trennleiste
+
+------------------------------------------------------------------------
+16.5  Widgets — Labels, Buttons, Eingaben
+------------------------------------------------------------------------
+
+Gtk.Label:
+  lbl = Gtk.Label(label="Hallo TrafkHop!")
+  lbl.set_text("Neuer Text")
+  lbl.get_text()
+  lbl.set_markup("<b>Fett</b> und <i>kursiv</i>")  ← Pango Markup
+  lbl.set_selectable(True)   ← Text auswählbar
+  lbl.set_line_wrap(True)    ← Zeilenumbruch
+  lbl.set_halign(Gtk.Align.START)   ← Linksbündig
+  lbl.set_halign(Gtk.Align.CENTER)  ← Zentriert
+  lbl.set_halign(Gtk.Align.END)     ← Rechtsbündig
+  lbl.set_valign(Gtk.Align.CENTER)  ← Vertikal zentriert
+
+  # Aus calendar-popup.py:
+  self._w_temp = Gtk.Label(label="Lade…")
+  self._w_temp.get_style_context().add_class("lbl-wtemp")
+  self._w_temp.set_halign(Gtk.Align.START)
+
+Gtk.Button:
+  btn = Gtk.Button(label="Klick mich!")
+  btn.connect("clicked", self._on_click)  ← Signal-Handler
+  btn.set_sensitive(False)     ← deaktivieren (ausgegraut)
+  btn.set_sensitive(True)      ← aktivieren
+  btn.get_label()
+  btn.set_label("Neuer Text")
+
+  # Aus calendar-popup.py:
+  pb = Gtk.Button(label="‹")
+  pb.get_style_context().add_class("btn-nav")
+  pb.get_style_context().add_class("tile")
+  pb.connect("clicked", self._prev_month)
+
+  def _prev_month(self, *_):    ← *_ = Argumente ignorieren (GTK übergibt den Button)
+      ...
+
+Gtk.Entry (Texteingabe):
+  entry = Gtk.Entry()
+  entry.set_placeholder_text("Suchen...")
+  entry.get_text()                     ← Text lesen
+  entry.set_text("Vorausgefüllt")
+  entry.connect("activate", self._on_enter)  ← Enter-Taste
+  entry.connect("changed", self._on_change)  ← bei jeder Änderung
+  entry.set_visibility(False)          ← Passwort-Feld (zeigt ***)
+  entry.set_max_length(50)
+
+Gtk.Scale (Slider):
+  scale = Gtk.Scale.new_with_range(
+      Gtk.Orientation.HORIZONTAL, 0, 150, 1)  ← min, max, step
+  scale.set_value(50)
+  scale.get_value()
+  scale.set_draw_value(False)          ← Wert-Anzeige ausblenden
+  scale.connect("value-changed", self._on_change)
+
+  # Aus volume-popup.py:
+  self._vol_scale.set_draw_value(False)
+  self._vol_scale = Gtk.Scale.new_with_range(
+      Gtk.Orientation.HORIZONTAL, 0, 150, 1)
+
+Gtk.Switch (Toggle):
+  switch = Gtk.Switch()
+  switch.set_active(True)
+  switch.get_active()
+  switch.connect("notify::active", self._on_toggle)
+
+Gtk.CheckButton / Gtk.RadioButton:
+  cb = Gtk.CheckButton(label="Aktiviert?")
+  cb.set_active(True)
+  cb.get_active()
+
+Gtk.ComboBoxText (Dropdown):
+  combo = Gtk.ComboBoxText()
+  combo.append_text("Option 1")
+  combo.append_text("Option 2")
+  combo.set_active(0)           ← erste Option vorauswählen
+  combo.get_active_text()       ← ausgewählten Text lesen
+
+Gtk.Separator:
+  sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+
+------------------------------------------------------------------------
+16.6  Signale und Callbacks — Event-Handling
+------------------------------------------------------------------------
+
+GTK nutzt ein Signal-System. Widgets senden Signale wenn etwas passiert.
+Du verbindest Signale mit Callback-Funktionen über .connect():
+
+  widget.connect("signal-name", callback_funktion, *user_args)
+
+  # Callback bekommt immer das Widget als erstes Argument:
+  def on_click(button):             ← button = das Button-Objekt
+      print("Geklickt!")
+
+  def on_click(button, extra_arg):  ← mit user_args
+      print(extra_arg)
+
+  btn.connect("clicked", on_click)
+  btn.connect("clicked", on_click, "extra")
+
+Wichtige Signale:
+  Button:      "clicked"
+  Entry:       "activate" (Enter), "changed" (Texteingabe)
+  Scale:       "value-changed"
+  Switch:      "notify::active"
+  Window:      "destroy", "key-press-event", "focus-out-event", "draw"
+  Widget:      "button-press-event", "button-release-event"
+               "enter-notify-event", "leave-notify-event"
+               "realize" (Widget bereit), "show", "hide"
+
+Lambda in Callbacks:
+  # Für kurze Callbacks direkt als Lambda:
+  self.connect("key-press-event",
+      lambda _w, e: Gtk.main_quit() if e.keyval == Gdk.KEY_Escape else None)
+  ← _w = Widget (ignoriert), e = Event-Objekt
+  ← e.keyval = welche Taste gedrückt
+
+  # Gdk.KEY-Konstanten:
+  Gdk.KEY_Escape     Gdk.KEY_Return     Gdk.KEY_space
+  Gdk.KEY_Left       Gdk.KEY_Right      Gdk.KEY_Up      Gdk.KEY_Down
+
+*_ als Catch-All:
+  def _prev_month(self, *_):
+  ← GTK übergibt den auslösenden Button, wir brauchen ihn nicht
+  ← *_ fängt alle übrigen Argumente ab und ignoriert sie
+
+------------------------------------------------------------------------
+16.7  CSS in GTK — Styling
+------------------------------------------------------------------------
+
+GTK 3 unterstützt CSS-Styling. Du benutzt das ausgiebig in deinen Popups!
+
+  # CSS laden:
+  provider = Gtk.CssProvider()
+  provider.load_from_data(CSS.encode())   ← CSS ist ein str, encode() → bytes
+  Gtk.StyleContext.add_provider_for_screen(
+      screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+  # CSS-Klassen zu Widgets hinzufügen:
+  widget.get_style_context().add_class("meine-klasse")
+  widget.get_style_context().remove_class("meine-klasse")
+  widget.get_style_context().has_class("meine-klasse")  → True/False
+
+  # Widget-Name für CSS:
+  widget.set_name("mein-widget")
+  # CSS: #mein-widget { ... }
+
+GTK CSS vs Browser CSS — Unterschiede:
+  Viele Properties gleich: color, font-size, padding, margin, border-radius
+  background-image: url("...") funktioniert (wie in deinen Tiles!)
+  background-size: 100% 100% funktioniert
+  Kein Flexbox, kein Grid (GTK hat eigene Layout-Widgets stattdessen)
+  font-family mit Fallbacks: "Noto Sans Serif", "JetBrainsMono Nerd Font"
+
+  # CSS Widget-Selektor-Mapping:
+  GtkWindow         → window
+  GtkButton         → button
+  GtkLabel          → label
+  GtkEntry          → entry
+  GtkScale          → scale
+  GtkBox            → box
+  .klasse           → Widgets mit dieser CSS-Klasse
+  #name             → Widget mit diesem Namen
+  button:hover      → Pseudo-Klassen funktionieren!
+  button.tile       → Element mit BEIDEN Klassen
+
+  # Aus deinem calendar-popup.py:
+  .btn-today {
+      background-color: #8456dd;     ← Lila für heutigen Tag
+      color: #ffffff;
+      border-radius: 50%;            ← Kreisförmig
+  }
+  button:hover {
+      background-image: url("...");  ← Hover-Effekt mit anderem Bild
+  }
+
+f-String mit {{ }} für CSS:
+  CSS = f"""
+  .tile {{
+      background-image: url("{BUBBLE_URI}");
+  }}
+  """
+  ← In f-Strings: {{ bedeutet ein echtes {, }} bedeutet ein echtes }
+  ← Ohne das würde Python versuchen { background-image... als Variable zu interpretieren!
+
+------------------------------------------------------------------------
+16.8  Gtk.StyleContext und Theming
+------------------------------------------------------------------------
+
+  # Widget-Größe erzwingen:
+  widget.set_size_request(breite, höhe)   ← -1 = egal/auto
+
+  # Ausrichtung:
+  widget.set_halign(Gtk.Align.START)    ← links
+  widget.set_halign(Gtk.Align.CENTER)   ← mitte
+  widget.set_halign(Gtk.Align.END)      ← rechts
+  widget.set_halign(Gtk.Align.FILL)     ← strecken
+  widget.set_valign(...)                ← vertikal
+
+  # Sichtbarkeit:
+  widget.show()       ← einzelnes Widget zeigen
+  widget.hide()       ← verstecken
+  widget.show_all()   ← Widget + alle Kinder zeigen
+  widget.set_visible(True/False)
+
+  # Aktivierung:
+  widget.set_sensitive(False)  ← ausgegraut/nicht bedienbar
+
+  # Kinder-Widgets:
+  container.get_children()     → Liste aller Kind-Widgets
+  container.remove(child)      ← Kind entfernen
+
+  # Aus calendar-popup.py (_render_calendar):
+  for child in self._cal_bubble.get_children():
+      self._cal_bubble.remove(child)   ← alle alten Widgets entfernen
+  # ... dann neue aufbauen
+  self._cal_bubble.show_all()           ← alle neuen anzeigen
+
+--------------------------------------------------------------------------------
+ÜBUNG 16:
+Schreibe (ohne echtes GTK zum Ausführen, aber strukturell korrekt)
+eine Klasse TemperaturPopup(Gtk.Window) die:
+1. Ein Gtk.Box vertikal als Hauptcontainer hat
+2. Ein Gtk.Label mit der aktuellen Temperatur ("21°C")
+3. Einen Gtk.Scale von -30 bis 50 Grad
+4. Einen "Aktualisieren"-Button
+5. CSS-Klassen "tile" für den Container und "lbl-wtemp" für das Label
+6. Bei Escape-Taste schließt sich das Fenster
+7. Die Temperatur-Änderung am Scale gibt den neuen Wert im Terminal aus
+
+Zeichne dazu die Widget-Hierarchie als Kommentar:
+# Window
+#   └─ Box (vertikal)
+#        ├─ Label (Temperatur)
+#        ├─ Scale
+#        └─ Button
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 17: GtkLayerShell — Wayland-Popups
+================================================================================
+
+------------------------------------------------------------------------
+17.1  Was ist GtkLayerShell?
+------------------------------------------------------------------------
+
+Auf Wayland (dem modernen Linux-Display-Server, der X11 ersetzt) können
+normale GTK-Fenster keine feste Position auf dem Bildschirm haben.
+GtkLayerShell implementiert das "Layer Shell"-Protokoll von Wayland,
+das es Programmen wie Waybar, Rofi und deinen Popups erlaubt:
+  - An Bildschirmkanten zu verankern
+  - Über anderen Fenstern zu schweben
+  - Immer sichtbar zu bleiben
+
+  # Aus allen deinen Popup-Dateien:
+  import gi
+  gi.require_version("GtkLayerShell", "0.1")
+  try:
+      from gi.repository import GtkLayerShell
+      HAS_LAYER_SHELL = True
+  except (ValueError, ImportError):
+      HAS_LAYER_SHELL = False
+
+  ← try/except für Graceful Degradation:
+  ← Läuft auf Wayland mit GtkLayerShell? Super!
+  ← Läuft auf X11 oder ohne GtkLayerShell? Fallback!
+
+------------------------------------------------------------------------
+17.2  GtkLayerShell-API erklärt
+------------------------------------------------------------------------
+
+  if HAS_LAYER_SHELL:
+      GtkLayerShell.init_for_window(self)
+      ← Layer Shell für dieses Fenster aktivieren
+
+      GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
+      ← Layer.BACKGROUND  → ganz unten (Hintergrundbilder)
+      ← Layer.BOTTOM      → unter normalen Fenstern
+      ← Layer.TOP         → über normalen Fenstern
+      ← Layer.OVERLAY     → ganz oben (über allem, inkl. Vollbild)
+
+      GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.BOTTOM, True)
+      GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT,  True)
+      ← An welchen Kanten ist das Fenster verankert?
+      ← True = verankert, False = nicht verankert
+      ← BOTTOM + RIGHT → Fenster klebt an der rechten unteren Ecke
+
+      GtkLayerShell.set_margin(self, GtkLayerShell.Edge.BOTTOM, WAYBAR_OFFSET)
+      GtkLayerShell.set_margin(self, GtkLayerShell.Edge.RIGHT, 16)
+      ← Abstand von den Kanten in Pixeln
+      ← WAYBAR_OFFSET = 55 → Platz für Waybar lassen
+
+      GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+      ← ON_DEMAND → Tastaturereignisse nur wenn Fokus
+      ← EXCLUSIVE → immer Tastaturereignisse (z.B. für Vollbild-Apps)
+      ← NONE      → keine Tastaturereignisse
+
+  else:
+      # X11-Fallback:
+      self.set_decorated(False)
+      self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU)
+      self.set_keep_above(True)
+      self.set_skip_taskbar_hint(True)
+      self.set_skip_pager_hint(True)
+
+------------------------------------------------------------------------
+17.3  _fallback_position — X11 manuelle Positionierung
+------------------------------------------------------------------------
+
+Auf X11 muss das Popup manuell positioniert werden:
+
+  def _fallback_position(self):
+      display = Gdk.Display.get_default()
+      mon = display.get_primary_monitor() or display.get_monitor(0)
+      if not mon:
+          return
+      g = mon.get_geometry()   ← Monitor-Geometrie: x, y, width, height
+      w, h = self.get_size()   ← Fenstergrößte
+      self.move(
+          g.x + g.width - w - 16,   ← rechts, 16px vom Rand
+          g.y + g.height - h - WAYBAR_OFFSET   ← unten, Waybar freilassen
+      )
+
+  # Wichtig: self.show_all() MUSS vor self.get_size() kommen!
+  # Erst nach show_all() weiß GTK wie groß das Fenster ist.
+  self.show_all()
+  if not HAS_LAYER_SHELL:
+      self._fallback_position()
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: cairo — Benutzerdefiniertes Zeichnen
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Was ist cairo?
+------------------------------------------------------------------------
+
+Cairo ist eine 2D-Vektor-Grafik-Bibliothek. In deinen Popups wird es
+für eine einzige wichtige Aufgabe benutzt: den Fensterhintergrund
+vollständig transparent zu machen.
+
+  import cairo   ← Python-Bindings für cairo
+
+------------------------------------------------------------------------
+18.2  Der transparente Hintergrund
+------------------------------------------------------------------------
+
+Aus allen deinen Popup-Dateien:
+
+  def _clear_bg(self, _w, cr):
+      cr.set_source_rgba(0, 0, 0, 0)           ← RGBA: schwarz, aber 0% Opazität
+      cr.set_operator(cairo.OPERATOR_SOURCE)    ← Direkt setzen (nicht blenden)
+      cr.paint()                                ← gesamte Fläche füllen
+      cr.set_operator(cairo.OPERATOR_OVER)      ← zurück zu normalem Blending
+
+Was das macht, Schritt für Schritt:
+  1. cr.set_source_rgba(0, 0, 0, 0)
+     → Zeichenfarbe auf vollständig transparentes Schwarz setzen
+     → r=0, g=0, b=0, a=0 (alpha=0 = unsichtbar)
+
+  2. cr.set_operator(cairo.OPERATOR_SOURCE)
+     → Ersetzt alles im Puffer komplett (ignoriert darunter liegendes)
+     → Ohne das würde OVER-Blending nichts tun (transparentes über transparentem = nichts)
+
+  3. cr.paint()
+     → Füllt das gesamte Fenster mit der aktuellen Farbe (= transparent)
+
+  4. cr.set_operator(cairo.OPERATOR_OVER)
+     → Zurück zu normalem Alpha-Compositing für alles was danach kommt
+     → Damit zeichnen GTK-Widgets normal über dem transparenten Hintergrund
+
+  # Verbindung:
+  self.set_app_paintable(True)           ← GTK soll NICHT selbst malen
+  self.connect("draw", self._clear_bg)   ← Wir malen stattdessen
+
+------------------------------------------------------------------------
+18.3  Cairo für eigene Grafiken
+------------------------------------------------------------------------
+
+Du könntest auch eigene Grafiken zeichnen. Die wichtigsten Operationen:
+
+  import cairo
+  from gi.repository import Gtk
+
+  class ZeichenBereich(Gtk.DrawingArea):
+      def __init__(self):
+          super().__init__()
+          self.connect("draw", self.on_draw)
+          self.set_size_request(200, 200)
+
+      def on_draw(self, widget, cr):
+          # Rechteck:
+          cr.set_source_rgba(0.5, 0.2, 0.8, 1.0)   ← Lila, voll opak
+          cr.rectangle(10, 10, 100, 50)             ← x, y, breite, höhe
+          cr.fill()                                  ← ausfüllen
+          # oder cr.stroke() für nur den Umriss
+
+          # Kreis:
+          import math
+          cr.set_source_rgba(1.0, 0.8, 0.0, 0.8)   ← Gelb, 80% opak
+          cr.arc(100, 100, 30, 0, 2 * math.pi)      ← x, y, radius, start, end
+          cr.fill()
+
+          # Linie:
+          cr.set_source_rgba(1, 1, 1, 1)
+          cr.set_line_width(2)
+          cr.move_to(0, 0)
+          cr.line_to(200, 200)
+          cr.stroke()
+
+          # Text:
+          cr.set_source_rgba(1, 1, 1, 1)
+          cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL,
+                              cairo.FONT_WEIGHT_BOLD)
+          cr.set_font_size(16)
+          cr.move_to(10, 180)
+          cr.show_text("TrafkHop")
+
+          # Abgerundetes Rechteck (kein eingebautes):
+          def rounded_rect(cr, x, y, w, h, r):
+              cr.arc(x+r, y+r, r, math.pi, 3*math.pi/2)
+              cr.arc(x+w-r, y+r, r, 3*math.pi/2, 0)
+              cr.arc(x+w-r, y+h-r, r, 0, math.pi/2)
+              cr.arc(x+r, y+h-r, r, math.pi/2, math.pi)
+              cr.close_path()
+
+          rounded_rect(cr, 20, 20, 160, 80, 10)
+          cr.set_source_rgba(0.3, 0.1, 0.5, 0.9)
+          cr.fill()
+
+Cairo-Koordinaten:
+  Ursprung (0,0) ist oben links
+  x geht nach rechts, y geht nach unten
+  Alle Einheiten in Pixeln (auf normalen Displays)
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 19: urllib — HTTP-Anfragen
+================================================================================
+
+------------------------------------------------------------------------
+19.1  urllib.request — die eingebaute HTTP-Bibliothek
+------------------------------------------------------------------------
+
+Python hat urllib eingebaut. Du benutzt es in calendar-popup.py:
+
+  import urllib.request
+  import json
+
+  # GET-Anfrage:
+  url = "https://api.open-meteo.com/v1/forecast?latitude=48.05&longitude=14.13"
+  with urllib.request.urlopen(url, timeout=5) as response:
+      daten = json.loads(response.read())
+
+  # urlopen gibt ein Context-Manager-Objekt zurück
+  # response.read() → bytes (json.loads kann bytes direkt verarbeiten!)
+  # timeout=5 → nach 5 Sekunden aufgeben
+
+  # HTTP-Headers lesen:
+  with urllib.request.urlopen(url) as r:
+      print(r.status)          → 200
+      print(r.getheader("Content-Type"))
+
+  # POST-Anfrage:
+  daten = json.dumps({"key": "value"}).encode("utf-8")
+  request = urllib.request.Request(
+      url,
+      data=daten,
+      method="POST",
+      headers={"Content-Type": "application/json"}
+  )
+  with urllib.request.urlopen(request) as r:
+      antwort = json.loads(r.read())
+
+  # Fehlerbehandlung:
+  import urllib.error
+  try:
+      with urllib.request.urlopen(url, timeout=5) as r:
+          return json.loads(r.read())
+  except urllib.error.URLError as e:
+      print(f"Netzwerkfehler: {e.reason}")
+      return None
+  except urllib.error.HTTPError as e:
+      print(f"HTTP-Fehler: {e.code} {e.reason}")
+      return None
+  except Exception:
+      return None   ← wie in deinen Popups — alle Fehler abfangen
+
+------------------------------------------------------------------------
+19.2  requests — die bessere Alternative (Third-Party)
+------------------------------------------------------------------------
+
+urllib ist eingebaut aber etwas umständlich. requests ist die beliebte
+Alternative, muss aber installiert werden:
+
+  pip install requests
+
+  import requests
+
+  # GET:
+  r = requests.get("https://api.open-meteo.com/...", timeout=5)
+  r.status_code           → 200
+  r.json()                → direkt als Dict (kein json.loads nötig!)
+  r.text                  → als String
+  r.content               → als bytes
+
+  # POST:
+  r = requests.post(url, json={"key": "value"})
+
+  # Mit Headers:
+  r = requests.get(url, headers={"Authorization": "Bearer TOKEN"})
+
+  # Fehlerbehandlung:
+  try:
+      r = requests.get(url, timeout=5)
+      r.raise_for_status()   ← wirft Exception bei 4xx/5xx Status-Codes
+      return r.json()
+  except requests.RequestException as e:
+      print(f"Fehler: {e}")
+      return None
+
+Für deine Popups ist urllib gut (keine Extra-Abhängigkeit).
+Für größere Projekte mit vielen HTTP-Anfragen: requests.
+
+------------------------------------------------------------------------
+19.3  Die fetch_weather-Funktion erklärt
+------------------------------------------------------------------------
+
+Aus calendar-popup.py — vollständig kommentiert:
+
+  def fetch_weather():
+      lat, lon = 48.0533, 14.1291      ← Kremsmünster, Österreich
+
+      # URL zusammenbauen — Tuple Unpacking für Koordinaten,
+      # mehrzeiliger f-String in Klammern
+      url = (f"https://api.open-meteo.com/v1/forecast"
+             f"?latitude={lat}&longitude={lon}"
+             f"&current=temperature_2m,weathercode"
+             f"&daily=temperature_2m_max,temperature_2m_min,weathercode"
+             f"&timezone=Europe%2FVienna"    ← %2F = URL-kodierter /
+             f"&forecast_days=3")
+
+      try:
+          with urllib.request.urlopen(url, timeout=5) as r:
+              # r.read() → bytes
+              # json.loads(bytes) → Python-Dict
+              return json.loads(r.read())
+      except Exception:
+          return None              ← Bei JEDEM Fehler: None zurückgeben
+
+  # API-Antwort hat diese Struktur:
+  # {
+  #   "current": {
+  #     "temperature_2m": 21.5,
+  #     "weathercode": 2
+  #   },
+  #   "daily": {
+  #     "time": ["2026-06-13", "2026-06-14", "2026-06-15"],
+  #     "temperature_2m_max": [23.0, 22.0, 20.0],
+  #     "temperature_2m_min": [15.0, 14.0, 12.0],
+  #     "weathercode": [2, 61, 3]
+  #   }
+  # }
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+Schreibe eine Funktion hole_wetterdaten(lat, lon) die:
+1. Die open-meteo.com API aufruft (URL wie in calendar-popup.py)
+2. Bei Fehler None zurückgibt
+3. Bei Erfolg ein Dict zurückgibt:
+   {"temp": 21.5, "icon": "⛅", "beschreibung": "Teilbewölkt",
+    "vorhersage": [{"tag": "So", "icon": "☀️", "max": 23, "min": 15}, ...]}
+4. Die Funktion in einem Thread aufruft und das Ergebnis nach 0ms
+   mit GLib.idle_add (simuliert durch direkten Aufruf) verarbeitet
+
+Stelle sicher dass WMO_ICONS und WMO_DESC korrekt benutzt werden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Das große Gesamtbild — Alles zusammen
+================================================================================
+
+------------------------------------------------------------------------
+20.1  Wie dein CalendarPopup wirklich funktioniert
+------------------------------------------------------------------------
+
+Hier ist der komplette Ablauf von CalendarPopup in Reihenfolge:
+
+SCHRITT 1: Import und Vorbereitung
+  import gi                             ← gi für GTK
+  gi.require_version("Gtk", "3.0")      ← Version MUSS vor Import stehen
+  try: GtkLayerShell ...                ← Optional, mit Fallback
+  from gi.repository import Gtk, ...
+  import cairo, threading, json, ...    ← alle Module laden
+
+SCHRITT 2: Globale Konstanten
+  ROFI_DIR = os.path.expanduser("~/.config/rofi")
+  ← os.path.expanduser("~") → /home/username
+  BUBBLE_URI = f"file://{ROFI_DIR}/TrafkBubble.png"
+  ← f-String: Pfad als file://-URI für CSS background-image
+  CSS = f"""..."""
+  ← Mehrzeiliger f-String. {{ }} für echte { } in CSS.
+
+SCHRITT 3: Klasse CalendarPopup(Gtk.Window)
+  def __init__(self):
+    super().__init__(...)      ← Gtk.Window initialisieren
+
+    # Transparenz einrichten:
+    screen.get_rgba_visual()   ← RGBA-Support anfragen
+    self.set_visual(visual)    ← anwenden
+    self.set_app_paintable()   ← selbst zeichnen
+    self.connect("draw", ...)  ← Zeichnen-Callback
+
+    # CSS laden:
+    provider.load_from_data(CSS.encode())
+    ← encode() = str → bytes (GTK braucht bytes)
+
+    # Layer Shell oder X11-Fallback:
+    if HAS_LAYER_SHELL: ...
+    else: ...
+
+    # Zustand initialisieren:
+    today = datetime.date.today()
+    self._year, self._month, self._today = ...
+
+    # Event-Handler verbinden:
+    self.connect("key-press-event", ...)  ← Escape = quit
+    self.connect("focus-out-event", ...)  ← Fokus weg = quit
+
+    # UI aufbauen:
+    self._build_weather()   ← Wetter-Bereich (ohne Daten)
+    self._build_calendar()  ← Kalender
+
+    # Alles anzeigen:
+    self.show_all()
+
+    # NACH show_all(): Wetter im Hintergrund laden
+    threading.Thread(target=self._load_weather, daemon=True).start()
+
+SCHRITT 4: Wetter laden (Background-Thread)
+  def _load_weather(self):             ← läuft in Thread
+      data = fetch_weather()           ← urllib.request, blockiert ~1-5s
+      GLib.idle_add(self._update_weather, data)  ← sicher übergeben
+
+  def _update_weather(self, data):     ← läuft im Haupt-Thread
+      if not data:
+          self._w_temp.set_text("Offline")
+          return
+      # Widgets aktualisieren:
+      self._w_icon.set_text(WMO_ICONS.get(code, "❓"))
+      self._w_temp.set_text(f"{cur['temperature_2m']:.0f}°C")
+      # 3-Tage-Vorhersage aufbauen:
+      for i in range(min(3, len(daily["time"]))):
+          col = Gtk.Box(...)           ← neues Widget erstellen
+          self._forecast.pack_start(col, ...)
+      self._forecast.show_all()       ← neue Widgets anzeigen
+
+SCHRITT 5: Kalender rendern
+  def _render_calendar(self):
+      # Alle alten Kinder entfernen:
+      for child in self._cal_bubble.get_children():
+          self._cal_bubble.remove(child)
+
+      # Header mit Navigation:
+      pb = Gtk.Button(label="‹")
+      pb.connect("clicked", self._prev_month)
+
+      # Tage-Raster:
+      grid = Gtk.Grid()
+      for row_idx, week in enumerate(calendar.monthcalendar(...)):
+          for col_idx, day in enumerate(week):
+              btn = Gtk.Button(label=str(day))
+              if day == today: btn.add_class("btn-today")
+              grid.attach(btn, col_idx, row_idx+1, 1, 1)
+
+      self._cal_bubble.show_all()
+
+SCHRITT 6: Navigation
+  def _prev_month(self, *_):     ← *_ ignoriert Button-Argument
+      if self._month == 1:
+          self._month = 12
+          self._year -= 1
+      else:
+          self._month -= 1
+      self._render_calendar()    ← Kalender neu aufbauen
+
+SCHRITT 7: Haupt-Loop
+  if __name__ == "__main__":
+      win = CalendarPopup()      ← Objekt erstellen (läuft __init__)
+      Gtk.main()                 ← Event-Loop starten (blockiert bis quit)
+
+------------------------------------------------------------------------
+20.2  Gemeinsame Muster in allen deinen Popups
+------------------------------------------------------------------------
+
+MUSTER 1: run()-Hilfsfunktion
+  def run(cmd):
+      try:
+          return subprocess.check_output(cmd, shell=True, text=True,
+                                         stderr=subprocess.DEVNULL).strip()
+      except Exception:
+          return ""
+  ← In volume, bluetooth, network, brightness popup identisch
+
+MUSTER 2: Transparenz-Setup
+  screen = self.get_screen()
+  visual = screen.get_rgba_visual()
+  if visual and screen.is_composited():
+      self.set_visual(visual)
+  self.set_app_paintable(True)
+  self.connect("draw", self._clear_bg)
+  ← Identisch in ALLEN Popups
+
+MUSTER 3: Layer Shell / X11 Fallback
+  if HAS_LAYER_SHELL:
+      GtkLayerShell.init_for_window(self)
+      GtkLayerShell.set_layer(...OVERLAY)
+      GtkLayerShell.set_anchor(...BOTTOM, True)
+      GtkLayerShell.set_anchor(...RIGHT, True)
+      GtkLayerShell.set_margin(...BOTTOM, WAYBAR_OFFSET)
+      GtkLayerShell.set_margin(...RIGHT, 16)
+  else:
+      self.set_decorated(False)
+      self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU)
+      self.set_keep_above(True)
+  ← Fast identisch in allen Popups
+
+MUSTER 4: Fokus-Verlust = Schließen
+  self.connect("focus-out-event", self._on_focus_out)
+  def _on_focus_out(self, *_):
+      GLib.timeout_add(150, self._check_focus)
+  def _check_focus(self):
+      if not self.has_toplevel_focus():
+          Gtk.main_quit()
+      return False
+  ← 150ms Verzögerung damit Dialoge/Menüs öffnen können ohne zu schließen
+
+MUSTER 5: Background-Thread + GLib.idle_add
+  threading.Thread(target=self._lade_daten, daemon=True).start()
+  def _lade_daten(self):
+      daten = langsame_operation()
+      GLib.idle_add(self._zeige_daten, daten)
+  def _zeige_daten(self, daten):
+      self._label.set_text(str(daten))
+  ← Saubers Thread-GTK-Muster
+
+MUSTER 6: CSS-Klassen für Styling
+  widget.get_style_context().add_class("tile")
+  widget.get_style_context().add_class("lbl-wtemp")
+  ← Jedes Widget bekommt mehrere CSS-Klassen
+
+MUSTER 7: Debouncing mit GLib.timeout_add
+  def _on_change(self, *_):
+      if self._timer:
+          GLib.source_remove(self._timer)
+      self._timer = GLib.timeout_add(80, self._apply_change)
+  ← Häufige Events (Slider) erst nach kurzer Pause verarbeiten
+
+--------------------------------------------------------------------------------
+ÜBUNG 20 — Großprojekt:
+Erstelle ein komplett neues Popup: datum-popup.py
+Das Popup soll:
+1. Aktuelles Datum und Uhrzeit groß anzeigen
+2. Alle Muster aus deinen Popup-Dateien verwenden:
+   - Transparenz-Setup
+   - HAS_LAYER_SHELL mit Fallback
+   - Escape und Fokus-Verlust schließt das Popup
+   - run()-Funktion für einen Shell-Befehl (z.B. date +"%A, %d. %B %Y")
+3. Die Uhrzeit soll sich sekündlich aktualisieren (GLib.timeout_add mit True!)
+4. CSS mit mindestens einer .tile und einer Label-Klasse
+5. Shebang und Modul-Docstring
+
+Nutze calendar-popup.py als Vorlage und passe es an!
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — Python Teil 3
+================================================================================
+
+SUBPROCESS:
+  subprocess.check_output("cmd", shell=True, text=True, stderr=DEVNULL).strip()
+  subprocess.run("cmd", shell=True, capture_output=True, text=True)
+    → result.returncode, result.stdout, result.stderr
+  subprocess.Popen([...], stdin=PIPE, stdout=PIPE, text=True)
+    → p.communicate(input="...", timeout=10) → (out, err)
+  subprocess.DEVNULL, subprocess.PIPE
+
+THREADING:
+  threading.Thread(target=func, args=(...,), daemon=True).start()
+  REGEL: Daten im Thread holen, GTK NUR im Haupt-Thread!
+  GLib.idle_add(func, arg1, arg2)     ← einmal, thread-safe
+  GLib.timeout_add(ms, func, arg)     ← nach ms Millisekunden
+    return True  → wiederholen, return False → einmal
+  GLib.source_remove(timer_id)        ← Timer abbrechen
+
+GTK WIDGETS:
+  Gtk.Window, Gtk.Box, Gtk.Grid, Gtk.Button, Gtk.Label
+  Gtk.Entry, Gtk.Scale, Gtk.Switch, Gtk.ScrolledWindow
+  .get_style_context().add_class("name")
+  .connect("signal", callback)
+  .pack_start(w, expand, fill, pad)   .pack_end(...)
+  .grid.attach(w, col, row, w_span, h_span)
+  .show_all()  .hide()  .set_sensitive()  .set_size_request()
+
+GTK SETUP (alle Popups):
+  gi.require_version("Gtk", "3.0")   ← VOR from gi.repository import!
+  screen.get_rgba_visual() + set_visual()  ← Transparenz
+  set_app_paintable(True) + connect("draw", _clear_bg)
+  GtkLayerShell: init_for_window, set_layer(OVERLAY), set_anchor, set_margin
+
+CAIRO (transparenter Hintergrund):
+  def _clear_bg(self, _w, cr):
+      cr.set_source_rgba(0, 0, 0, 0)
+      cr.set_operator(cairo.OPERATOR_SOURCE)
+      cr.paint()
+      cr.set_operator(cairo.OPERATOR_OVER)
+
+URLLIB:
+  with urllib.request.urlopen(url, timeout=5) as r:
+      return json.loads(r.read())
+
+================================================================================
+QUELLEN — Python Teil 3
+================================================================================
+
+GTK3 Python Docs  → https://lazka.github.io/pgi-docs/Gtk-3.0/
+GTK3 Tutorial     → https://python-gtk-3-tutorial.readthedocs.io
+Cairo Python      → https://pycairo.readthedocs.io
+GtkLayerShell     → https://github.com/wmww/gtk-layer-shell
+subprocess Docs   → https://docs.python.org/3/library/subprocess.html
+threading Docs    → https://docs.python.org/3/library/threading.html
+open-meteo API    → https://open-meteo.com/en/docs
+
+================================================================================
+Ende Python-Komplettkurs Teil 3 — Weiter mit Teil 4: Dekoratoren,
+Generatoren, async, Packaging, Fortgeschrittenes
+================================================================================
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

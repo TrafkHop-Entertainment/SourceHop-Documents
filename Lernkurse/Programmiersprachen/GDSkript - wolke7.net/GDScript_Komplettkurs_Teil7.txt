@@ -1,0 +1,1053 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 7 von 9)
+================================================================================
+
+Voraussetzung: Teil 1–6 abgeschlossen. Du hast funktionierende Spielsysteme
+und Multiplayer. Jetzt optimieren wir — weil "funktioniert" und "läuft flüssig"
+zwei verschiedene Dinge sind.
+
+Besonderer Fokus dieses Teils: Multithreading für blockbasierte Welten.
+Chunk-Generierung, Mesh-Building, Noise-Berechnung — all das auf Threads
+auslagern damit das Spiel nicht einfriert während die Welt lädt.
+
+
+################################################################################
+TEIL 7 — PERFORMANCE & MULTITHREADING
+################################################################################
+
+
+================================================================================
+MODUL 29: Der Godot Profiler — Finden was langsam ist
+================================================================================
+
+------------------------------------------------------------------------
+29.1  Profiler öffnen und lesen
+------------------------------------------------------------------------
+
+Bevor du optimierst: MESSEN. Ohne Profiler optimierst du ins Blaue.
+Godots Profiler ist unter Debug → Profiler (während das Spiel läuft).
+
+Was du siehst:
+  Frame Time      → Gesamtzeit pro Frame (Ziel: < 16.6ms für 60 FPS)
+  Physics Time    → Zeit für Physik-Berechnungen
+  Idle Time       → Zeit für _process() aller Nodes
+  Visual Time     → Zeit für Rendering
+
+Im Profiler-Tab:
+  Jede Funktion die aufgerufen wurde, mit Aufrufanzahl und Gesamtzeit.
+  Sortiere nach "Self" (Zeit die die Funktion selbst braucht, ohne Unterfunktionen).
+  Das sind deine Kandidaten zum Optimieren.
+
+FPS-Monitor zur Laufzeit anzeigen:
+  # In einem Label:
+  func _process(_delta: float) -> void:
+      $FPSLabel.text = "FPS: %d | Frame: %.2f ms" % [
+          Engine.get_frames_per_second(),
+          1000.0 / max(Engine.get_frames_per_second(), 1)
+      ]
+
+Performance-Monitoring per Code:
+  # Godots eingebaute Performance-Metriken:
+  var fps := Performance.get_monitor(Performance.TIME_FPS)
+  var frame_time := Performance.get_monitor(Performance.TIME_PROCESS)
+  var physics_time := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+  var draw_calls := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+  var verts := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+  var objects_drawn := Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+  var ram := Performance.get_monitor(Performance.MEMORY_STATIC)
+  var nodes := Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+
+Debug-Overlay aufbauen:
+  extends CanvasLayer
+
+  @onready var label: RichTextLabel = $Label
+
+  func _process(_delta: float) -> void:
+      label.text = (
+          "[b]Performance[/b]\n"
+          + "FPS: %d\n" % Performance.get_monitor(Performance.TIME_FPS)
+          + "Draw Calls: %d\n" % Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+          + "Nodes: %d\n" % Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
+          + "RAM: %.1f MB\n" % (Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0)
+          + "Physics: %.2f ms" % (Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000)
+      )
+
+------------------------------------------------------------------------
+29.2  Häufige Performance-Fallen und ihre Lösung
+------------------------------------------------------------------------
+
+FALLE 1: get_node() in _process()
+  # SCHLECHT — jedes Frame Baum durchsuchen:
+  func _process(_delta: float) -> void:
+      get_node("Spieler/Sprite2D").modulate = Color.RED
+
+  # GUT — einmal in _ready() cachen:
+  @onready var sprite: Sprite2D = $Spieler/Sprite2D
+  func _process(_delta: float) -> void:
+      sprite.modulate = Color.RED
+
+FALLE 2: Zu viele Nodes
+  Jeder Node kostet overhead — auch inaktive.
+  1000 Feind-Nodes die alle idle sind, sind 1000 _process()-Aufrufe.
+  → Object Pool (Modul 19), oder set_process(false) wenn inaktiv.
+
+FALLE 3: String-Operationen in _process()
+  # SCHLECHT — String-Konkatenation ist teuer:
+  func _process(_delta: float) -> void:
+      label.text = "Score: " + str(score) + " | HP: " + str(hp)
+
+  # GUT — nur updaten wenn sich Wert ändert:
+  var letzter_score: int = -1
+  func _process(_delta: float) -> void:
+      if score != letzter_score:
+          label.text = "Score: %d | HP: %d" % [score, hp]
+          letzter_score = score
+
+FALLE 4: Raycast jeden Frame
+  # SCHLECHT:
+  func _process(_delta: float) -> void:
+      var space := get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(...)
+      space.intersect_ray(query)   # Jedes Frame!
+
+  # GUT — nur alle N Frames oder bei Bedarf:
+  func _process(_delta: float) -> void:
+      if Engine.get_process_frames() % 6 == 0:  # 10 Hz statt 60 Hz
+          sichtlinie_pruefen()
+
+FALLE 5: is_instance_valid() zu selten
+  # SCHLECHT — crashes wenn Node schon queue_free'd:
+  if ziel and ziel.hp > 0:
+
+  # GUT:
+  if is_instance_valid(ziel) and ziel.hp > 0:
+
+FALLE 6: Shader mit zu vielen Samples
+  # Im Shader: jede Texture-Sample kostet GPU-Zeit
+  # Überprüfe im RenderDoc oder Godots GPU-Profiler
+  # Lösung: Noise-Texturen vorberechnen statt im Shader generieren
+
+------------------------------------------------------------------------
+29.3  Draw Calls reduzieren
+------------------------------------------------------------------------
+
+Draw Calls sind teuer — jeder Draw Call ist ein Roundtrip zur GPU.
+Ziel: möglichst wenige, möglichst große Batches.
+
+Strategien:
+  MultiMeshInstance3D   → N identische Meshes = 1 Draw Call (Modul 19)
+  Texture Atlases       → Viele Texturen in einem Bild → 1 Texture-Bind
+  Material-Sharing      → Gleiche Materialien = gleicher Batch
+  Occlusion Culling     → Versteckte Objekte nicht rendern
+
+Occlusion Culling aktivieren:
+  Projekteinstellungen → Rendering → Occlusion Culling → aktivieren
+  Dann: OccluderInstance3D Nodes hinzufügen wo Wände sind
+  (Godot baked diese zu einem BVH, der automatisch cullt)
+
+Visibility Ranges (LOD-ähnlich):
+  MeshInstance3D → Visibility Range Begin/End
+  Weit entfernte Objekte: Visibility Range End = 200 → werden nicht gezeichnet
+
+GeometryInstance3D.cast_shadow:
+  Schatten sind teuer. Objekte die keine Schatten werfen müssen:
+  mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+================================================================================
+MODUL 30: Multithreading — der Einstieg
+================================================================================
+
+------------------------------------------------------------------------
+30.1  Warum GDScript Single-Threaded ist (und was das bedeutet)
+------------------------------------------------------------------------
+
+GDScript läuft in einem einzigen Thread — dem Main Thread. Alles was du
+in _process(), _physics_process(), Signalen, RPCs, Tweens schreibst —
+läuft sequenziell. Wenn eine Operation 50ms braucht, friert das Spiel
+für 3 Frames ein.
+
+Das ist bei den meisten Spielen kein Problem. Aber bei:
+  - Minecraft-ähnlichen Chunk-Generierungen (Noise + Mesh-Building: 20-200ms)
+  - Großen A*-Berechnungen für KI
+  - Datei-Lesen/Schreiben (Spielstand, Welt-Speichern)
+  - Netzwerk-Daten parsen
+
+...braucht man Threads.
+
+Godot 4 hat zwei Wege für Multithreading:
+  Thread    → Eigener GDScript-Thread (niedrig-level, flexibel)
+  WorkerThreadPool → Thread-Pool für viele kleine Aufgaben (empfohlen!)
+
+------------------------------------------------------------------------
+30.2  Thread — einfache Verwendung
+------------------------------------------------------------------------
+
+  var mein_thread: Thread
+
+  func _ready() -> void:
+      mein_thread = Thread.new()
+      mein_thread.start(aufwendige_berechnung)
+
+  func aufwendige_berechnung() -> void:
+      # Läuft in separatem Thread — kein Zugriff auf Szenenbaum!
+      var ergebnis := riesige_noise_berechnung()
+      # Zurück zum Main Thread kommunizieren per Callable:
+      call_deferred("berechnung_fertig", ergebnis)
+
+  func berechnung_fertig(ergebnis: Array) -> void:
+      # Jetzt wieder im Main Thread — sicher Nodes zu bearbeiten:
+      tilemap_aufbauen(ergebnis)
+
+  # WICHTIG: Thread immer joinen wenn er fertig ist!
+  func _exit_tree() -> void:
+      if mein_thread and mein_thread.is_started():
+          mein_thread.wait_to_finish()
+
+KRITISCHE REGELN für Threads:
+  ✗ Niemals direkt auf Nodes/SceneTree zugreifen aus einem Thread
+  ✗ Niemals Godot-Rendering-API aus einem Thread aufrufen
+  ✓ Berechnungen auf Arrays, Dictionaries, eigene Datenstrukturen: OK
+  ✓ call_deferred() um sicher in den Main Thread zurückzukehren
+  ✓ Mutex verwenden wenn beide Threads auf dieselben Daten zugreifen
+
+------------------------------------------------------------------------
+30.3  Mutex — Race Conditions vermeiden
+------------------------------------------------------------------------
+
+Wenn Main Thread und Background Thread auf dieselbe Variable zugreifen,
+kann es zu Race Conditions kommen: inkonsistente Daten, Crashes.
+
+  var chunk_queue: Array = []
+  var queue_mutex := Mutex.new()
+
+  # Background Thread fügt hinzu:
+  func chunks_berechnen_thread() -> void:
+      for chunk_pos in zu_berechnende_chunks:
+          var mesh_daten := chunk_mesh_berechnen(chunk_pos)
+          queue_mutex.lock()
+          chunk_queue.append({"pos": chunk_pos, "daten": mesh_daten})
+          queue_mutex.unlock()
+
+  # Main Thread liest aus:
+  func _process(_delta: float) -> void:
+      queue_mutex.lock()
+      while not chunk_queue.is_empty():
+          var fertig := chunk_queue.pop_front()
+          chunk_mesh_anwenden(fertig["pos"], fertig["daten"])
+      queue_mutex.unlock()
+
+Semaphore — für "warte bis Arbeit da ist":
+  var semaphore := Semaphore.new()
+
+  func worker_thread() -> void:
+      while true:
+          semaphore.wait()   # Blockiert bis post() aufgerufen wird
+          arbeit_erledigen()
+
+  func neue_arbeit_hinzufuegen() -> void:
+      # Arbeit in Queue legen...
+      semaphore.post()   # Worker aufwecken
+
+------------------------------------------------------------------------
+30.4  WorkerThreadPool — der bessere Weg für viele Aufgaben
+------------------------------------------------------------------------
+
+WorkerThreadPool verwaltet einen Pool von Threads automatisch.
+Du gibst ihm Aufgaben, er verteilt sie auf verfügbare Threads.
+
+  # Einzelne Aufgabe:
+  func schwere_berechnung_starten(daten: Array) -> void:
+      WorkerThreadPool.add_task(func(): berechnung_ausfuehren(daten))
+
+  # Aufgabe mit Callback wenn fertig:
+  var task_id: int
+
+  func chunk_task_starten(chunk_pos: Vector2i) -> void:
+      task_id = WorkerThreadPool.add_task(
+          func(): return chunk_berechnen(chunk_pos),
+          true,   # high_priority
+          "Chunk %s" % str(chunk_pos)   # Debug-Name
+      )
+
+  func _process(_delta: float) -> void:
+      if task_id != -1 and WorkerThreadPool.is_task_completed(task_id):
+          var ergebnis = WorkerThreadPool.wait_for_task_completion(task_id)
+          task_id = -1
+          chunk_mesh_anwenden(ergebnis)
+
+  # Viele parallele Aufgaben (z.B. N Chunks gleichzeitig):
+  func alle_chunks_berechnen(chunk_liste: Array) -> void:
+      var task_ids: Array[int] = []
+      for chunk_pos in chunk_liste:
+          var id := WorkerThreadPool.add_task(func(): return chunk_berechnen(chunk_pos))
+          task_ids.append(id)
+
+      # Alle Tasks abwarten:
+      for id in task_ids:
+          WorkerThreadPool.wait_for_task_completion(id)
+
+
+================================================================================
+MODUL 31: Voxel-Welten und Chunk-Threading (Minecraft-Klon-Architektur)
+================================================================================
+
+Das ist das Kernmodul für Minecraft-ähnliche Spiele. Wir bauen eine
+vollständige Chunk-basierte Voxel-Welt mit Thread-basierter Generierung.
+
+------------------------------------------------------------------------
+31.1  Datenstruktur für Voxel-Welt
+------------------------------------------------------------------------
+
+  # Konstanten die du einmal festlegst und nie änderst:
+  const CHUNK_SIZE: int = 16      # 16x16x16 Blöcke pro Chunk
+  const CHUNK_HEIGHT: int = 256   # Welt-Höhe
+  const BLOCK_SIZE: float = 1.0   # 1m pro Block
+
+  # Block-Typen als Enum:
+  enum Block {
+      LUFT = 0,
+      GRAS = 1,
+      ERDE = 2,
+      STEIN = 3,
+      SAND = 4,
+      HOLZ = 5,
+      LAUB = 6,
+      WASSER = 7,
+      ORZ_KOHLE = 8,
+      ORZ_EISEN = 9,
+      # ...
+  }
+
+  # Chunk-Daten: flaches Array ist VIEL schneller als 3D-Array
+  # Index-Formel: x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE
+  class_name ChunkData
+  extends RefCounted
+
+  var bloecke: PackedByteArray   # 1 Byte pro Block → max 256 Block-Typen
+  var position: Vector2i         # Chunk-Position in der Welt (X,Z)
+  var ist_generiert: bool = false
+  var ist_dirty: bool = false    # Muss Mesh neu gebaut werden?
+
+  func _init(chunk_pos: Vector2i) -> void:
+      position = chunk_pos
+      bloecke = PackedByteArray()
+      bloecke.resize(CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT)
+      bloecke.fill(Block.LUFT)
+
+  func block_holen(x: int, y: int, z: int) -> int:
+      if x < 0 or x >= CHUNK_SIZE or z < 0 or z >= CHUNK_SIZE or y < 0 or y >= CHUNK_HEIGHT:
+          return Block.LUFT
+      return bloecke[x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE]
+
+  func block_setzen(x: int, y: int, z: int, typ: int) -> void:
+      if x < 0 or x >= CHUNK_SIZE or z < 0 or z >= CHUNK_SIZE or y < 0 or y >= CHUNK_HEIGHT:
+          return
+      bloecke[x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE] = typ
+      ist_dirty = true
+
+------------------------------------------------------------------------
+31.2  Chunk-Generierung (läuft im Thread)
+------------------------------------------------------------------------
+
+  class_name ChunkGenerator
+  extends RefCounted
+
+  var noise_hoehe: FastNoiseLite
+  var noise_hoehlen: FastNoiseLite
+  var noise_biom: FastNoiseLite
+
+  func _init(seed: int) -> void:
+      noise_hoehe = FastNoiseLite.new()
+      noise_hoehe.seed = seed
+      noise_hoehe.noise_type = FastNoiseLite.TYPE_PERLIN
+      noise_hoehe.frequency = 0.003
+      noise_hoehe.fractal_octaves = 6
+      noise_hoehe.fractal_lacunarity = 2.0
+      noise_hoehe.fractal_gain = 0.5
+
+      noise_hoehlen = FastNoiseLite.new()
+      noise_hoehlen.seed = seed + 1
+      noise_hoehlen.noise_type = FastNoiseLite.TYPE_PERLIN
+      noise_hoehlen.frequency = 0.02
+      noise_hoehlen.fractal_octaves = 3
+
+      noise_biom = FastNoiseLite.new()
+      noise_biom.seed = seed + 2
+      noise_biom.frequency = 0.001
+
+  # DIESE FUNKTION LÄUFT IM THREAD — kein SceneTree-Zugriff!
+  func chunk_generieren(chunk_daten: ChunkData) -> void:
+      var chunk_welt_x: int = chunk_daten.position.x * CHUNK_SIZE
+      var chunk_welt_z: int = chunk_daten.position.y * CHUNK_SIZE
+
+      for x in range(CHUNK_SIZE):
+          for z in range(CHUNK_SIZE):
+              var welt_x: float = chunk_welt_x + x
+              var welt_z: float = chunk_welt_z + z
+
+              # Oberflächenhöhe berechnen:
+              var noise_wert: float = noise_hoehe.get_noise_2d(welt_x, welt_z)
+              var hoehe: int = int((noise_wert + 1.0) * 0.5 * 80.0 + 60.0)  # 60-140
+
+              # Biom-Bestimmung:
+              var biom_wert: float = noise_biom.get_noise_2d(welt_x, welt_z)
+
+              for y in range(CHUNK_HEIGHT):
+                  var block: int = Block.LUFT
+
+                  # Unterste Schicht: Bedrock
+                  if y == 0:
+                      block = Block.STEIN  # Bedrock-ähnlich
+
+                  # Unter der Oberfläche:
+                  elif y < hoehe - 4:
+                      # Höhlen-Check:
+                      var hoehle_wert: float = noise_hoehlen.get_noise_3d(welt_x * 0.5, y * 0.5, welt_z * 0.5)
+                      if hoehle_wert > 0.5:
+                          block = Block.LUFT
+                      elif y < hoehe - 20:
+                          # Erzadern:
+                          if randf() < 0.02:
+                              block = Block.ORZ_KOHLE
+                          else:
+                              block = Block.STEIN
+                      else:
+                          block = Block.STEIN
+
+                  # Erde-Schicht:
+                  elif y < hoehe:
+                      block = Block.ERDE if biom_wert > -0.2 else Block.SAND
+
+                  # Oberfläche:
+                  elif y == hoehe:
+                      if biom_wert > 0.3:
+                          block = Block.SAND   # Wüste
+                      else:
+                          block = Block.GRAS
+
+                  chunk_daten.block_setzen(x, y, z, block)
+
+          # Bäume platzieren (vereinfacht):
+          if randf() < 0.02:
+              baum_platzieren(chunk_daten, x, hoehe + 1, z if z < CHUNK_SIZE else CHUNK_SIZE - 1)
+
+      chunk_daten.ist_generiert = true
+
+  func baum_platzieren(chunk: ChunkData, x: int, y: int, z: int) -> void:
+      var hoehe := randi_range(4, 7)
+      # Stamm:
+      for h in range(hoehe):
+          chunk.block_setzen(x, y + h, z, Block.HOLZ)
+      # Laub (3x3x3 oben):
+      for dx in range(-2, 3):
+          for dz in range(-2, 3):
+              for dy in range(-1, 3):
+                  if abs(dx) == 2 and abs(dz) == 2:
+                      continue
+                  chunk.block_setzen(x + dx, y + hoehe + dy, z + dz, Block.LAUB)
+
+------------------------------------------------------------------------
+31.3  Mesh-Building (läuft ebenfalls im Thread)
+------------------------------------------------------------------------
+
+Greedy Meshing wäre optimal, aber fangen wir mit dem einfachen Ansatz an:
+Nur sichtbare Flächen zeichnen (keine Face gegen Luft-Block gerichtete Face).
+
+  class_name ChunkMeshBuilder
+  extends RefCounted
+
+  # Richtungen: +X, -X, +Y, -Y, +Z, -Z
+  const NACHBARN: Array[Vector3i] = [
+      Vector3i(1,0,0), Vector3i(-1,0,0),
+      Vector3i(0,1,0), Vector3i(0,-1,0),
+      Vector3i(0,0,1), Vector3i(0,0,-1)
+  ]
+
+  # Block-Textur-Atlas: Welche UV-Region hat jeder Block auf welcher Seite?
+  # Format: {Block.TYP: {"top": Rect2, "side": Rect2, "bottom": Rect2}}
+  var block_uvs: Dictionary = {}
+  var atlas_groesse: Vector2 = Vector2(16, 16)  # 16x16 Textur-Atlas
+
+  # LÄUFT IM THREAD — gibt ArrayMesh zurück (keine Node-Erstellung!)
+  func mesh_erstellen(chunk: ChunkData, nachbar_chunks: Dictionary) -> ArrayMesh:
+      var arrays := []
+      arrays.resize(Mesh.ARRAY_MAX)
+
+      var vertices: PackedVector3Array = PackedVector3Array()
+      var normals: PackedVector3Array = PackedVector3Array()
+      var uvs: PackedVector2Array = PackedVector2Array()
+      var indices: PackedInt32Array = PackedInt32Array()
+
+      var vertex_zaehler: int = 0
+
+      for x in range(CHUNK_SIZE):
+          for y in range(CHUNK_HEIGHT):
+              for z in range(CHUNK_SIZE):
+                  var block: int = chunk.block_holen(x, y, z)
+                  if block == Block.LUFT:
+                      continue
+
+                  # Jede Seite prüfen:
+                  for i in range(6):
+                      var nachbar_offset: Vector3i = NACHBARN[i]
+                      var nx: int = x + nachbar_offset.x
+                      var ny: int = y + nachbar_offset.y
+                      var nz: int = z + nachbar_offset.z
+
+                      # Nachbar-Block holen (auch aus Nachbar-Chunks):
+                      var nachbar_block: int = nachbar_block_holen(
+                          chunk, nachbar_chunks, nx, ny, nz
+                      )
+
+                      # Nur zeichnen wenn Nachbar Luft (oder transparent) ist:
+                      if nachbar_block != Block.LUFT:
+                          continue
+
+                      # Face hinzufügen:
+                      var pos := Vector3(x, y, z)
+                      face_hinzufuegen(
+                          vertices, normals, uvs, indices,
+                          pos, i, block, vertex_zaehler
+                      )
+                      vertex_zaehler += 4
+
+      if vertices.is_empty():
+          return null   # Leerer Chunk
+
+      arrays[Mesh.ARRAY_VERTEX] = vertices
+      arrays[Mesh.ARRAY_NORMAL] = normals
+      arrays[Mesh.ARRAY_TEX_UV] = uvs
+      arrays[Mesh.ARRAY_INDEX] = indices
+
+      var mesh := ArrayMesh.new()
+      mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+      return mesh
+
+  func nachbar_block_holen(chunk: ChunkData, nachbarn: Dictionary, x: int, y: int, z: int) -> int:
+      # Innerhalb des Chunks:
+      if x >= 0 and x < CHUNK_SIZE and z >= 0 and z < CHUNK_SIZE:
+          return chunk.block_holen(x, y, z)
+
+      # Im Nachbar-Chunk nachschlagen:
+      var offset := Vector2i(0, 0)
+      var local_x := x
+      var local_z := z
+
+      if x < 0:
+          offset.x = -1
+          local_x = x + CHUNK_SIZE
+      elif x >= CHUNK_SIZE:
+          offset.x = 1
+          local_x = x - CHUNK_SIZE
+
+      if z < 0:
+          offset.y = -1
+          local_z = z + CHUNK_SIZE
+      elif z >= CHUNK_SIZE:
+          offset.y = 1
+          local_z = z - CHUNK_SIZE
+
+      var nachbar_key: Vector2i = chunk.position + offset
+      if nachbarn.has(nachbar_key):
+          return nachbarn[nachbar_key].block_holen(local_x, y, local_z)
+
+      return Block.LUFT   # Chunk nicht geladen = Luft
+
+  func face_hinzufuegen(verts: PackedVector3Array, norms: PackedVector3Array,
+      uvs_arr: PackedVector2Array, idxs: PackedInt32Array,
+      pos: Vector3, seite: int, block: int, start_idx: int) -> void:
+
+      # Quad-Vertices für jede Seite (vereinfacht):
+      var face_verts: Array[Vector3]
+      var normal: Vector3
+
+      match seite:
+          0:  # +X
+              face_verts = [pos+Vector3(1,0,0), pos+Vector3(1,1,0), pos+Vector3(1,1,1), pos+Vector3(1,0,1)]
+              normal = Vector3.RIGHT
+          1:  # -X
+              face_verts = [pos+Vector3(0,0,1), pos+Vector3(0,1,1), pos+Vector3(0,1,0), pos+Vector3(0,0,0)]
+              normal = Vector3.LEFT
+          2:  # +Y (Top)
+              face_verts = [pos+Vector3(0,1,0), pos+Vector3(0,1,1), pos+Vector3(1,1,1), pos+Vector3(1,1,0)]
+              normal = Vector3.UP
+          3:  # -Y (Bottom)
+              face_verts = [pos+Vector3(0,0,1), pos+Vector3(0,0,0), pos+Vector3(1,0,0), pos+Vector3(1,0,1)]
+              normal = Vector3.DOWN
+          4:  # +Z
+              face_verts = [pos+Vector3(1,0,1), pos+Vector3(1,1,1), pos+Vector3(0,1,1), pos+Vector3(0,0,1)]
+              normal = Vector3.BACK
+          5:  # -Z
+              face_verts = [pos+Vector3(0,0,0), pos+Vector3(0,1,0), pos+Vector3(1,1,0), pos+Vector3(1,0,0)]
+              normal = Vector3.FORWARD
+
+      for v in face_verts:
+          verts.append(v)
+          norms.append(normal)
+
+      # UV aus Textur-Atlas:
+      var uv_region: Rect2 = block_uv_holen(block, seite)
+      uvs_arr.append(uv_region.position)
+      uvs_arr.append(uv_region.position + Vector2(0, uv_region.size.y))
+      uvs_arr.append(uv_region.position + uv_region.size)
+      uvs_arr.append(uv_region.position + Vector2(uv_region.size.x, 0))
+
+      # Zwei Dreiecke (Quad):
+      idxs.append(start_idx)
+      idxs.append(start_idx + 1)
+      idxs.append(start_idx + 2)
+      idxs.append(start_idx)
+      idxs.append(start_idx + 2)
+      idxs.append(start_idx + 3)
+
+  func block_uv_holen(block: int, seite: int) -> Rect2:
+      # Atlas ist 16x16 Tiles, jedes Tile 1/16 der Textur groß:
+      var tile_groesse: float = 1.0 / 16.0
+      # Beispiel-Mapping:
+      match block:
+          Block.GRAS:
+              if seite == 2:  # Top
+                  return Rect2(0, 0, tile_groesse, tile_groesse)
+              elif seite == 3:  # Bottom = Erde
+                  return Rect2(2 * tile_groesse, 0, tile_groesse, tile_groesse)
+              else:  # Seiten = Gras-Seite
+                  return Rect2(tile_groesse, 0, tile_groesse, tile_groesse)
+          Block.ERDE:
+              return Rect2(2 * tile_groesse, 0, tile_groesse, tile_groesse)
+          Block.STEIN:
+              return Rect2(3 * tile_groesse, 0, tile_groesse, tile_groesse)
+          _:
+              return Rect2(0, 0, tile_groesse, tile_groesse)
+
+------------------------------------------------------------------------
+31.4  Der Welt-Manager — alles zusammen
+------------------------------------------------------------------------
+
+  class_name WeltManager
+  extends Node3D
+
+  const SICHTWEITE: int = 8        # 8 Chunks in jede Richtung
+  const MAX_THREADS: int = 4       # Wie viele Chunks gleichzeitig generieren?
+
+  var alle_chunks: Dictionary = {}    # Vector2i → ChunkData
+  var chunk_nodes: Dictionary = {}    # Vector2i → MeshInstance3D + CollisionShape
+  var generierungs_queue: Array = []  # Zu generierende Chunk-Positionen
+  var mesh_queue: Array = []          # Zu messende Chunks (fertig generiert)
+  var aktive_tasks: Dictionary = {}   # Vector2i → task_id
+
+  var spieler_chunk: Vector2i = Vector2i.ZERO
+  var generator: ChunkGenerator
+  var mesh_builder: ChunkMeshBuilder
+
+  var mutex_gen_queue := Mutex.new()
+  var mutex_mesh_queue := Mutex.new()
+
+  @export var block_material: Material
+  var welt_seed: int = 42
+
+  func _ready() -> void:
+      generator = ChunkGenerator.new(welt_seed)
+      mesh_builder = ChunkMeshBuilder.new()
+
+  func _process(_delta: float) -> void:
+      var spieler: Node3D = get_tree().get_first_node_in_group("spieler")
+      if not spieler:
+          return
+
+      var neuer_spieler_chunk := Vector2i(
+          int(floor(spieler.global_position.x / CHUNK_SIZE)),
+          int(floor(spieler.global_position.z / CHUNK_SIZE))
+      )
+
+      if neuer_spieler_chunk != spieler_chunk:
+          spieler_chunk = neuer_spieler_chunk
+          chunks_aktualisieren()
+
+      fertige_meshes_anwenden()
+      neue_generierungen_starten()
+
+  func chunks_aktualisieren() -> void:
+      # Welche Chunks sollen sichtbar sein:
+      var soll_chunks: Dictionary = {}
+      for dx in range(-SICHTWEITE, SICHTWEITE + 1):
+          for dz in range(-SICHTWEITE, SICHTWEITE + 1):
+              var pos := spieler_chunk + Vector2i(dx, dz)
+              soll_chunks[pos] = true
+              if not alle_chunks.has(pos):
+                  mutex_gen_queue.lock()
+                  if pos not in generierungs_queue:
+                      # Nach Entfernung sortieren (nächste zuerst):
+                      generierungs_queue.append(pos)
+                      generierungs_queue.sort_custom(func(a, b):
+                          return a.distance_squared_to(spieler_chunk) < b.distance_squared_to(spieler_chunk)
+                      )
+                  mutex_gen_queue.unlock()
+
+      # Chunks außerhalb entladen:
+      var zu_entladen: Array = []
+      for pos in chunk_nodes.keys():
+          if not soll_chunks.has(pos):
+              zu_entladen.append(pos)
+      for pos in zu_entladen:
+          chunk_node_entladen(pos)
+
+  func neue_generierungen_starten() -> void:
+      # Leere Task-Slots füllen:
+      while aktive_tasks.size() < MAX_THREADS:
+          mutex_gen_queue.lock()
+          if generierungs_queue.is_empty():
+              mutex_gen_queue.unlock()
+              break
+          var naechster: Vector2i = generierungs_queue.pop_front()
+          mutex_gen_queue.unlock()
+
+          if alle_chunks.has(naechster):
+              continue   # Schon generiert
+
+          # Neuen ChunkData erstellen:
+          var chunk_daten := ChunkData.new(naechster)
+          alle_chunks[naechster] = chunk_daten
+
+          # Generierung im Thread starten:
+          var task_id := WorkerThreadPool.add_task(
+              func(): generator.chunk_generieren(chunk_daten); mesh_task_hinzufuegen(chunk_daten),
+              false,
+              "Gen_%s" % str(naechster)
+          )
+          aktive_tasks[naechster] = task_id
+
+  func mesh_task_hinzufuegen(chunk_daten: ChunkData) -> void:
+      mutex_mesh_queue.lock()
+      mesh_queue.append(chunk_daten)
+      mutex_mesh_queue.unlock()
+      # Task-ID aus aktiven entfernen:
+      call_deferred("task_fertig", chunk_daten.position)
+
+  func task_fertig(pos: Vector2i) -> void:
+      aktive_tasks.erase(pos)
+
+  func fertige_meshes_anwenden() -> void:
+      # Maximal 2 Meshes pro Frame anwenden (um Frame-Drop zu vermeiden):
+      var angewendet: int = 0
+      mutex_mesh_queue.lock()
+      while not mesh_queue.is_empty() and angewendet < 2:
+          var chunk_daten: ChunkData = mesh_queue.pop_front()
+          mutex_mesh_queue.unlock()
+          chunk_mesh_aufbauen(chunk_daten)
+          angewendet += 1
+          mutex_mesh_queue.lock()
+      mutex_mesh_queue.unlock()
+
+  func chunk_mesh_aufbauen(chunk_daten: ChunkData) -> void:
+      var nachbar_chunks: Dictionary = {}
+      for offset in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+          var nachbar_pos: Vector2i = chunk_daten.position + offset
+          if alle_chunks.has(nachbar_pos):
+              nachbar_chunks[nachbar_pos] = alle_chunks[nachbar_pos]
+
+      # Mesh-Building läuft im MAIN THREAD (ArrayMesh erstellen ist OK)
+      # Für extreme Performance: auch das in Thread auslagern und nur apply() im Main Thread
+      var mesh: ArrayMesh = mesh_builder.mesh_erstellen(chunk_daten, nachbar_chunks)
+      if not mesh:
+          return
+
+      # Node erstellen (MUSS im Main Thread sein):
+      var chunk_node := StaticBody3D.new()
+      var mesh_instance := MeshInstance3D.new()
+      mesh_instance.mesh = mesh
+      mesh_instance.material_override = block_material
+      chunk_node.add_child(mesh_instance)
+
+      # Kollision aus Mesh generieren:
+      var collision := CollisionShape3D.new()
+      var shape := mesh.create_trimesh_shape()
+      collision.shape = shape
+      chunk_node.add_child(collision)
+
+      chunk_node.position = Vector3(
+          chunk_daten.position.x * CHUNK_SIZE,
+          0,
+          chunk_daten.position.y * CHUNK_SIZE
+      )
+      add_child(chunk_node)
+      chunk_nodes[chunk_daten.position] = chunk_node
+
+  func chunk_node_entladen(pos: Vector2i) -> void:
+      if chunk_nodes.has(pos):
+          chunk_nodes[pos].queue_free()
+          chunk_nodes.erase(pos)
+      # ChunkData behalten für späteres Reload (optional: auch löschen)
+
+------------------------------------------------------------------------
+31.5  Block platzieren und entfernen
+------------------------------------------------------------------------
+
+  func block_an_welt_position_setzen(welt_pos: Vector3, block_typ: int) -> void:
+      var block_pos := Vector3i(
+          int(floor(welt_pos.x)),
+          int(floor(welt_pos.y)),
+          int(floor(welt_pos.z))
+      )
+      var chunk_pos := Vector2i(
+          int(floor(float(block_pos.x) / CHUNK_SIZE)),
+          int(floor(float(block_pos.z) / CHUNK_SIZE))
+      )
+      var local_x: int = block_pos.x - chunk_pos.x * CHUNK_SIZE
+      var local_z: int = block_pos.z - chunk_pos.y * CHUNK_SIZE
+
+      if alle_chunks.has(chunk_pos):
+          alle_chunks[chunk_pos].block_setzen(local_x, block_pos.y, local_z, block_typ)
+          alle_chunks[chunk_pos].ist_dirty = true
+          # Mesh neu aufbauen:
+          chunk_mesh_aufbauen(alle_chunks[chunk_pos])
+          # Auch angrenzende Chunks updaten (falls am Rand):
+          if local_x == 0: chunk_mesh_aufbauen_wenn_vorhanden(chunk_pos + Vector2i(-1, 0))
+          if local_x == CHUNK_SIZE - 1: chunk_mesh_aufbauen_wenn_vorhanden(chunk_pos + Vector2i(1, 0))
+          if local_z == 0: chunk_mesh_aufbauen_wenn_vorhanden(chunk_pos + Vector2i(0, -1))
+          if local_z == CHUNK_SIZE - 1: chunk_mesh_aufbauen_wenn_vorhanden(chunk_pos + Vector2i(0, 1))
+
+  func chunk_mesh_aufbauen_wenn_vorhanden(pos: Vector2i) -> void:
+      if alle_chunks.has(pos) and chunk_nodes.has(pos):
+          chunk_nodes[pos].queue_free()
+          chunk_nodes.erase(pos)
+          chunk_mesh_aufbauen(alle_chunks[pos])
+
+  # Raycast um Block zu finden auf den der Spieler zeigt:
+  func getroffener_block_und_nachbar(kamera: Camera3D) -> Dictionary:
+      var space := get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(
+          kamera.global_position,
+          kamera.global_position + (-kamera.global_transform.basis.z) * 6.0
+      )
+      var treffer := space.intersect_ray(query)
+      if treffer.is_empty():
+          return {}
+
+      var treffer_pos: Vector3 = treffer["position"]
+      var normale: Vector3 = treffer["normal"]
+      # Block-Position: etwas ins Innere gehen
+      var block_welt := treffer_pos - normale * 0.5
+      # Nachbar-Block (wo neuer Block hin kommt): außen
+      var nachbar_welt := treffer_pos + normale * 0.5
+      return {"block": block_welt, "nachbar": nachbar_welt, "normale": normale}
+
+------------------------------------------------------------------------
+31.6  Welt speichern und laden (Chunks)
+------------------------------------------------------------------------
+
+  func chunk_speichern(chunk_daten: ChunkData) -> void:
+      var pfad: String = "user://welt/chunk_%d_%d.bin" % [chunk_daten.position.x, chunk_daten.position.y]
+      DirAccess.make_dir_recursive_absolute("user://welt/")
+      var datei := FileAccess.open(pfad, FileAccess.WRITE)
+      if datei:
+          datei.store_buffer(chunk_daten.bloecke)
+          datei.close()
+
+  func chunk_laden(pos: Vector2i) -> ChunkData:
+      var pfad: String = "user://welt/chunk_%d_%d.bin" % [pos.x, pos.y]
+      if not FileAccess.file_exists(pfad):
+          return null
+      var datei := FileAccess.open(pfad, FileAccess.READ)
+      if not datei:
+          return null
+      var chunk := ChunkData.new(pos)
+      chunk.bloecke = datei.get_buffer(CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT)
+      chunk.ist_generiert = true
+      datei.close()
+      return chunk
+
+  # Integration in chunk_generieren: erst aus Datei laden, dann generieren:
+  func chunk_generieren_oder_laden(pos: Vector2i) -> void:
+      var geladen := chunk_laden(pos)
+      if geladen:
+          alle_chunks[pos] = geladen
+          mesh_task_hinzufuegen(geladen)
+      else:
+          # Neu generieren (wie oben)
+          var chunk_daten := ChunkData.new(pos)
+          alle_chunks[pos] = chunk_daten
+          WorkerThreadPool.add_task(func():
+              generator.chunk_generieren(chunk_daten)
+              mesh_task_hinzufuegen(chunk_daten)
+          )
+
+--------------------------------------------------------------------------------
+ÜBUNG 31:
+1. Implementiere ChunkData mit PackedByteArray und block_holen/block_setzen.
+2. Baue ChunkGenerator mit FastNoiseLite: Oberfläche, Erde, Stein, Höhlen.
+3. Implementiere den einfachen Mesh-Builder (alle sichtbaren Faces).
+4. Baue den WeltManager: Chunks in/out laden basierend auf Spieler-Position.
+   Nutze WorkerThreadPool für Generierung.
+5. Implementiere Block-Platzieren/Entfernen per Raycast + Mesh-Rebuild.
+6. Bonus: Speichere/lade modifizierte Chunks in user://welt/.
+   Nur veränderte Chunks speichern (ist_dirty-Flag).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 32: Weitere Performance-Techniken
+================================================================================
+
+------------------------------------------------------------------------
+32.1  GDScript vs. GDExtension — wann lohnt der Wechsel?
+------------------------------------------------------------------------
+
+GDScript ist für Spielelogik schnell genug. Für extreme Performance
+(Physik-Simulation, prozedurale Geometrie, Audio-DSP):
+GDExtension = C++ direkt in Godot.
+
+Entscheidungshilfe:
+  GDScript reicht für:   Spiellogik, KI, UI, Spielsysteme, 99% der Spiele
+  GDExtension lohnt:     Voxel-Engine-Kern, Audio-DSP, ML-Inferenz,
+                          Physik-Simulationen >10k Objekte
+
+Aber zuerst: ProfileN! Oft ist GDScript schnell genug wenn richtig geschrieben.
+
+------------------------------------------------------------------------
+32.2  Occlusion Culling und Portal-System
+------------------------------------------------------------------------
+
+Für Indoor-Umgebungen (Dungeons, Gebäude) können Portale extreme
+Performance-Verbesserungen bringen.
+
+Godots Occlusion System:
+  1. OccluderInstance3D zu Wänden/Böden/Decken hinzufügen
+  2. Projekteinstellungen → Rendering → Occlusion Culling aktivieren
+  3. Godot baked automatisch ein BVH (Bounding Volume Hierarchy)
+  4. Objekte hinter Occludern werden nicht gerendert
+
+Per Code (dynamische Occluder):
+  var occluder_instance := OccluderInstance3D.new()
+  var occluder := BoxOccluder3D.new()
+  occluder.size = Vector3(16, 8, 0.5)   # Wand-Größe
+  occluder_instance.occluder = occluder
+  add_child(occluder_instance)
+
+------------------------------------------------------------------------
+32.3  Physics Server direkt ansprechen
+------------------------------------------------------------------------
+
+Für extreme Physik-Performance kannst du PhysicsServer3D direkt nutzen
+statt Nodes — keine Node-Overhead, direkte API:
+
+  # Eigenen Physik-Body ohne Node erstellen:
+  var body_rid := PhysicsServer3D.body_create()
+  PhysicsServer3D.body_set_mode(body_rid, PhysicsServer3D.BODY_MODE_RIGID)
+  PhysicsServer3D.body_set_space(body_rid, get_world_3d().space)
+
+  var form_rid := PhysicsServer3D.sphere_shape_create()
+  PhysicsServer3D.shape_set_data(form_rid, 0.5)
+  PhysicsServer3D.body_add_shape(body_rid, form_rid)
+
+  var transform := Transform3D()
+  transform.origin = Vector3(0, 10, 0)
+  PhysicsServer3D.body_set_state(body_rid, PhysicsServer3D.BODY_STATE_TRANSFORM, transform)
+
+  # Impuls geben:
+  PhysicsServer3D.body_apply_impulse(body_rid, Vector3(5, 0, 0))
+
+  # Am Ende aufräumen:
+  PhysicsServer3D.free_rid(body_rid)
+  PhysicsServer3D.free_rid(form_rid)
+
+Nützlich für: 10.000+ Physik-Objekte (z.B. Partikel-Physik, Voxel-Debris).
+
+------------------------------------------------------------------------
+32.4  Shader Precompilation
+------------------------------------------------------------------------
+
+Shader werden beim ersten Benutzen kompiliert → Ruckler.
+Lösung: Shader vorab kompilieren.
+
+  func shader_vorladen() -> void:
+      # Alle Materials kurz sichtbar machen (versteckt) → Shader kompiliert:
+      for material_pfad in zu_kompilierende_materialien:
+          var mat: Material = load(material_pfad)
+          var test_mesh := MeshInstance3D.new()
+          test_mesh.visible = false
+          add_child(test_mesh)
+          test_mesh.material_override = mat
+          await get_tree().process_frame   # Kompilierung triggern
+          test_mesh.queue_free()
+
+  # Oder: RenderingServer.get_default_clear_color() kurz ändern um alle
+  # sichtbaren Shader zu triggern (noch einfacher für existierende Szenen).
+
+------------------------------------------------------------------------
+32.5  Memory Management — keine Leaks
+------------------------------------------------------------------------
+
+  # Reference-Typen (extends RefCounted):
+  # Werden automatisch gelöscht wenn keine Referenz mehr existiert.
+  var meine_ref := MeineKlasse.new()   # RefCounted → automatisch
+  meine_ref = null   # Zähler auf 0 → garbage collected
+
+  # Node-Typen:
+  node.queue_free()   # Immer! Nicht free()
+
+  # Resource-Leaks vermeiden:
+  # Große Ressourcen die nicht mehr gebraucht werden:
+  meine_grosse_textur = null   # Referenz-Zähler sinkt → wird freigegeben
+
+  # Zyklische Referenzen vermeiden:
+  # Wenn A eine Referenz auf B hat UND B eine Referenz auf A → niemals freigegeben!
+  # Lösung: WeakRef
+  var schwache_referenz := weakref(anderer_node)
+  var node: Node = schwache_referenz.get_ref()   # null wenn Node schon weg
+  if node:
+      node.etwas_tun()
+
+--------------------------------------------------------------------------------
+ÜBUNG 32:
+1. Aktiviere Occlusion Culling in einem Indoor-Level. Miss FPS vorher/nachher.
+2. Erstelle 500 RigidBody3D-Nodes und miss FPS.
+   Versuche dasselbe mit PhysicsServer3D direkt. Vergleiche.
+3. Baue einen Performance-Profiler-Overlay der Frame Time, Draw Calls,
+   Node-Anzahl und RAM-Verbrauch in Echtzeit anzeigt.
+4. Profil deinen Voxel-WeltManager aus Modul 31:
+   Was ist der Flaschenhals — Generierung, Mesh-Build oder Anwenden?
+5. Bonus: Implementiere WeakRef für den Kamera-Referenz-Zugriff
+   (Kamera kann zerstört werden → kein Crash).
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 7
+################################################################################
+
+PROFILING:
+  Performance.get_monitor(Performance.TIME_FPS)
+  Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+  Performance.get_monitor(Performance.MEMORY_STATIC)
+  Debug → Profiler → "Self"-Zeit = echter Flaschenhals
+
+THREADING:
+  Thread.new() / thread.start(func) / thread.wait_to_finish()
+  WorkerThreadPool.add_task(func) → task_id
+  WorkerThreadPool.is_task_completed(id) / wait_for_task_completion(id)
+  Mutex.lock() / unlock() → shared data schützen
+  call_deferred("methode", arg) → sicher in Main Thread
+
+REGELN FÜR THREADS:
+  ✗ Kein Zugriff auf Nodes/SceneTree aus Threads
+  ✗ Kein Rendering aus Threads
+  ✓ Arrays, Dictionaries, eigene RefCounted-Klassen: OK
+  ✓ PackedArray-Typen: threadsafe zum Lesen
+
+VOXEL-ARCHITEKTUR:
+  ChunkData    → PackedByteArray, 1 Byte/Block, flat-array index
+  ChunkGen     → läuft im Thread (FastNoiseLite, keine Nodes)
+  MeshBuilder  → läuft im Thread (ArrayMesh bauen, nicht hinzufügen)
+  WeltManager  → Main Thread: Mesh zu SceneTree hinzufügen
+  WorkerThreadPool mit MAX_THREADS=4, max 2 Meshes/Frame anwenden
+
+MEMORY:
+  RefCounted → automatisch bereinigt
+  Node → immer queue_free()
+  weakref(node) / ref.get_ref() → keine zyklischen Referenzen
+
+================================================================================
+ENDE TEIL 7 — Weiter mit Teil 8: Simulation & Physik-Tiefe
+  (Ragdoll, Aerodynamik, Wettersystem, Splitscreen, Advanced Physics)
+================================================================================

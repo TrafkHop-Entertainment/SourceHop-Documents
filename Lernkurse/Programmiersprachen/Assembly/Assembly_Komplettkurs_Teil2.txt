@@ -1,0 +1,1426 @@
+================================================================================
+ASSEMBLY KOMPLETTKURS — TEIL 2 von 4
+Stack · Funktionen · Calling Conventions · Rekursion · C-Interop · Debugging
+================================================================================
+
+Voraussetzung: Du beherrschst Teil 1 (Register, MOV, Arithmetik, Syscalls).
+In diesem Teil lernst du wie echte Programme strukturiert sind:
+Funktionen, Parameterübergabe, lokale Variablen, und wie du Assembly
+mit C kombinierst — das ist der Schlüssel zu realen Projekten.
+
+================================================================================
+MODUL 9: Der Stack — das Herz der Laufzeitumgebung
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Was ist der Stack
+------------------------------------------------------------------------
+
+Der Stack ist ein LIFO-Speicherbereich (Last In, First Out).
+Er wächst auf x86-64 NACH UNTEN (zu niedrigeren Adressen hin).
+
+rsp (Stack Pointer) zeigt immer auf das oberste (letzte) Element.
+"Oben" auf dem Stack = niedrigste Adresse.
+
+  Speicher:                       rsp zeigt auf:
+  ┌──────────────┐ 0x7FFF0000     (Stack-Anfang — hohe Adresse)
+  │              │ 0x7FFEFFFF
+  │              │ 0x7FFEFFFE
+  │   [leer]     │ ...
+  │              │
+  ├──────────────┤ 0x7FFEFFF8  ← rsp nach erstem push (rsp -= 8, dann speichern)
+  │     42       │               (das "oberste" Element — niedrigste belegte Adresse)
+  └──────────────┘
+
+push rax macht:
+  1. rsp -= 8          (Stack wächst nach unten)
+  2. [rsp] = rax       (Wert speichern)
+
+pop rax macht:
+  1. rax = [rsp]       (Wert laden)
+  2. rsp += 8          (Stack schrumpft)
+
+------------------------------------------------------------------------
+9.2  PUSH und POP
+------------------------------------------------------------------------
+
+  push rax             ; rsp -= 8, [rsp] = rax
+  push rbx             ; rsp -= 8, [rsp] = rbx
+  push 42              ; rsp -= 8, [rsp] = 42 (Direktwert, 64-Bit)
+  push qword [mem]     ; rsp -= 8, [rsp] = [mem]
+
+  pop  rax             ; rax = [rsp], rsp += 8
+  pop  rbx             ; rbx = [rsp], rsp += 8
+
+  ; push/pop existieren nur für 64-Bit und 16-Bit (nicht 32-Bit!):
+  push ax              ; rsp -= 2, [rsp] = ax  (16-Bit)
+  pop  ax              ; ax = [rsp], rsp += 2
+
+  ; push/pop für 32-Bit gibt es in 64-Bit-Modus NICHT.
+
+  PUSHA / POPA — Push/Pop All (nur 16/32-Bit-Modus, nicht in 64-Bit verwenden!)
+
+  PUSHFQ / POPFQ — Flags auf Stack:
+  pushfq               ; rsp -= 8, [rsp] = rflags
+  popfq                ; rflags = [rsp], rsp += 8
+
+------------------------------------------------------------------------
+9.3  Stack Alignment — die 16-Byte-Regel
+------------------------------------------------------------------------
+
+Das ist eine der häufigsten Fehlerquellen für Anfänger!
+
+Die System V AMD64 ABI verlangt:
+  rsp MUSS 16-Byte-aligned sein BEVOR ein call-Befehl ausgeführt wird.
+  (nach dem call ist rsp = vorher - 8, also 8-Byte-misaligned)
+
+Warum? SIMD-Instruktionen (SSE/AVX) erfordern 16-Byte-Alignment.
+Wenn du gegen nicht-alignten Speicher loadest, gibt es einen Crash.
+
+Konkret:
+  Beim Programmstart ist rsp bereits 16-Byte-aligned (OS garantiert das).
+  Wenn du eine Funktion aufrufst (call), pushed call die Rücksprungadresse
+  (8 Bytes) auf den Stack → rsp wird misaligned.
+  Am Anfang einer Funktion: rsp % 16 == 8 (nach dem call durch den Aufrufer).
+
+  Lösung: Im Funktions-Prolog push rbp (8 Bytes) → wieder 16-Byte-aligned.
+  Oder: sub rsp, 8 wenn kein rbp push nötig.
+  Oder: sub rsp, N wobei N so gewählt wird dass rsp mod 16 == 0 bleibt.
+
+  Schnelle Prüfung: Wenn du (gerade Anzahl × 8) Bytes auf den Stack legst,
+  ist Alignment OK. Wenn ungerade Anzahl, musst du ausgleichen.
+
+  Beispiel:
+    _start:                     ; rsp = X (16-aligned, vom OS)
+        push rbp                ; rsp = X - 8 (8-aligned)
+        mov  rbp, rsp           ; Frame-Pointer setzen
+        sub  rsp, 16            ; 16 Bytes für lokale Variablen (16-aligned wieder!)
+        ; ... Code ...
+        leave                   ; = mov rsp, rbp + pop rbp
+        ret
+
+------------------------------------------------------------------------
+9.4  Den Stack direkt benutzen
+------------------------------------------------------------------------
+
+Du kannst direkt auf Stack-Inhalte zugreifen ohne push/pop:
+
+  ; rsp zeigt auf aktuellen Stack-Top
+  mov rax, [rsp]       ; erstes Element (Top) lesen
+  mov rax, [rsp + 8]   ; zweites Element lesen
+  mov rax, [rsp + 16]  ; drittes Element lesen
+
+  ; Das ist nützlich z.B. für Funktionsparameter auf dem Stack (> 6 Argumente)
+
+  ; Stack für temporäre Werte reservieren:
+  sub  rsp, 32         ; 32 Bytes reservieren (lokale Variablen)
+  mov  qword [rsp], 0  ; erste lokale Variable initialisieren
+  mov  qword [rsp+8], 0
+  ; ...
+  add  rsp, 32         ; aufräumen (IMMER symmetrisch zum sub!)
+
+------------------------------------------------------------------------
+9.5  Typische Stack-Fallen
+------------------------------------------------------------------------
+
+  Falle 1: Stack nicht aufgeräumt
+    sub  rsp, 16
+    ; ... vergisst add rsp, 16 vor ret
+    ret              ; springt zur FALSCHEN Adresse! (nimmt die 16 Bytes als Adresse)
+
+  Falle 2: Misalignment vor call
+    push rbx         ; rsp nun 8-Byte-misaligned
+    call printf      ; printf braucht 16-Byte-Alignment → Crash!
+    Lösung: push rbx + push rax (2×8 = 16 Bytes → aligned)
+    oder: sub rsp, 8 vor dem call (padding)
+
+  Falle 3: Push/Pop immer paarweise
+    push rax
+    push rbx
+    pop  rax         ; FALSCH: rax bekommt rbxs Wert (LIFO!)
+    pop  rbx         ; FALSCH: rbx bekommt raxs Wert
+    Richtig:
+    pop  rbx
+    pop  rax
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Was ist der Wert von rsp und was ist auf dem Stack nach diesen Befehlen?
+  (Annahme: rsp startet bei 0x7FFF0000)
+
+    push rax         ; rax = 0x1111111111111111
+    push rbx         ; rbx = 0x2222222222222222
+    push rcx         ; rcx = 0x3333333333333333
+    pop  rdx         ; rdx = ?
+    pop  rsi         ; rsi = ?
+    push 0xFF        ; 
+    pop  rdi         ; rdi = ?
+    pop  r8          ; r8  = ?
+
+Zeichne den Stack nach jedem Schritt auf.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Funktionen in Assembly
+================================================================================
+
+------------------------------------------------------------------------
+10.1  CALL und RET — wie Funktionsaufrufe funktionieren
+------------------------------------------------------------------------
+
+In C schreibst du:  int ergebnis = addiere(5, 3);
+Assembly macht das so:
+
+  CALL:
+    1. Speichert die Adresse des NÄCHSTEN Befehls (Rücksprungadresse) auf dem Stack
+    2. Springt zum Funktionslabel
+
+  RET:
+    1. Liest die Rücksprungadresse vom Stack (pop rip, intern)
+    2. Springt dorthin
+
+  Beispiel:
+
+    section .text
+    global _start
+
+    _start:
+        mov  rdi, 5         ; erstes Argument
+        mov  rsi, 3         ; zweites Argument
+        call addiere        ; Sprung zu "addiere", Rücksprungadresse auf Stack
+        ; rax enthält jetzt das Ergebnis (8)
+        mov  rdi, rax
+        mov  rax, 60
+        syscall
+
+    ; Funktion addiere(a, b) → rax = a + b
+    addiere:
+        mov  rax, rdi       ; rax = a
+        add  rax, rsi       ; rax += b
+        ret                 ; Sprung zurück zum Aufrufer
+
+------------------------------------------------------------------------
+10.2  Funktionsprolog und -epilog — Stack Frame aufbauen
+------------------------------------------------------------------------
+
+Ein "Stack Frame" ist der Bereich auf dem Stack der zu einer Funktion gehört.
+Er enthält: Rücksprungadresse, gesicherte Register, lokale Variablen.
+
+Klassischer Prolog:
+
+  funktion:
+      push rbp            ; alten Frame-Pointer sichern
+      mov  rbp, rsp       ; rbp = aktueller Stack-Pointer (Frame-Basis)
+      sub  rsp, 32        ; 32 Bytes für lokale Variablen reservieren
+
+  Klassischer Epilog:
+
+      leave               ; entspricht: mov rsp, rbp + pop rbp
+      ret
+
+  Oder manuell (equivalentes Ergebnis):
+
+      mov  rsp, rbp       ; Stack-Pointer wiederherstellen
+      pop  rbp            ; alten Frame-Pointer wiederherstellen
+      ret
+
+  Mit rbp kannst du lokale Variablen per Offset adressieren:
+    [rbp - 8]   → erste lokale Variable
+    [rbp - 16]  → zweite lokale Variable
+    [rbp + 16]  → 7. Argument (wenn > 6 Argumente übergeben)
+
+  Ohne Frame-Pointer (moderner Stil, -fomit-frame-pointer in gcc):
+    Vorteil: ein Register mehr frei (rbp kann normal benutzt werden)
+    Nachteil: Debugging schwieriger (kein sauberer Stack-Trace)
+
+    funktion:
+        sub  rsp, 40        ; lokale Variablen + padding
+        ; lokale Variablen: [rsp], [rsp+8], [rsp+16], ...
+        ; ...
+        add  rsp, 40
+        ret
+
+------------------------------------------------------------------------
+10.3  Lokale Variablen auf dem Stack
+------------------------------------------------------------------------
+
+  ; C-Äquivalent:
+  ; long beispiel() {
+  ;     long x = 10;
+  ;     long y = 20;
+  ;     return x + y;
+  ; }
+
+  beispiel:
+      push rbp
+      mov  rbp, rsp
+      sub  rsp, 16         ; Platz für x (8 Bytes) und y (8 Bytes)
+
+      mov  qword [rbp - 8],  10   ; x = 10
+      mov  qword [rbp - 16], 20   ; y = 20
+
+      mov  rax, [rbp - 8]         ; rax = x
+      add  rax, [rbp - 16]        ; rax += y  → rax = 30
+
+      leave
+      ret
+
+------------------------------------------------------------------------
+10.4  Mehrere Rückgabewerte
+------------------------------------------------------------------------
+
+  ; rax: erster Rückgabewert
+  ; rdx: zweiter Rückgabewert (wenn nötig)
+
+  ; Beispiel: Teile 17 durch 5, gib Quotient und Rest zurück
+  dividiere_17_durch_5:
+      mov  rax, 17
+      xor  rdx, rdx
+      mov  rcx, 5
+      div  rcx
+      ; rax = Quotient = 3
+      ; rdx = Rest = 2
+      ret    ; beide Werte bleiben in rax und rdx
+
+------------------------------------------------------------------------
+10.5  Rekursion — Fakultät als Beispiel
+------------------------------------------------------------------------
+
+  ; C: long fakultaet(long n) { return n <= 1 ? 1 : n * fakultaet(n-1); }
+
+  section .text
+  global fakultaet
+
+  fakultaet:
+      cmp  rdi, 1
+      jle  .basis_fall
+
+      ; Rekursiver Fall: n * fakultaet(n-1)
+      push rdi             ; n sichern (rdi wird durch den rekursiven call überschrieben)
+      dec  rdi             ; rdi = n-1
+      call fakultaet       ; rax = fakultaet(n-1)
+      pop  rdi             ; n wiederherstellen
+      imul rax, rdi        ; rax = n * fakultaet(n-1)
+      ret
+
+  .basis_fall:
+      mov  rax, 1          ; fakultaet(0) = fakultaet(1) = 1
+      ret
+
+  ; Aufruf:
+  _start:
+      mov  rdi, 10         ; n = 10
+      call fakultaet       ; rax = 3628800
+      ; ...
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Implementiere eine Funktion "max3" die drei Argumente (rdi, rsi, rdx) nimmt
+und das Maximum in rax zurückgibt.
+
+Und: Implementiere "fibonacci" rekursiv:
+  fib(0) = 0, fib(1) = 1, fib(n) = fib(n-1) + fib(n-2)
+
+Denke daran: rdi wird beim rekursiven call überschrieben — sichern!
+Tipp für fibonacci: du brauchst Platz für zwei temporäre Werte auf dem Stack.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: System V AMD64 ABI — Die vollständigen Calling Conventions
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Was ist eine ABI
+------------------------------------------------------------------------
+
+ABI = Application Binary Interface. Das ist der Vertrag zwischen:
+  - Deinem Code
+  - dem Compiler
+  - dem Betriebssystem
+  - Libraries
+
+Ohne einen gemeinsamen Standard könnten Programme/Libraries nicht
+zusammenarbeiten. Die ABI legt fest:
+  - Wie werden Argumente übergeben?
+  - Wo steht der Rückgabewert?
+  - Welche Register darf eine Funktion verändern?
+  - Wie ist der Stack aufgebaut?
+
+Auf Linux (und macOS) für x86-64: System V AMD64 ABI.
+Auf Windows: Microsoft x64 Calling Convention (ANDERE Regeln!).
+
+------------------------------------------------------------------------
+11.2  Argument-Übergabe — Reihenfolge und Typen
+------------------------------------------------------------------------
+
+Integer und Pointer-Argumente (in dieser Reihenfolge):
+  1. Argument: rdi
+  2. Argument: rsi
+  3. Argument: rdx
+  4. Argument: rcx
+  5. Argument: r8
+  6. Argument: r9
+  7. Argument und mehr: auf dem Stack (rechts nach links gepusht)
+
+Floating-Point Argumente:
+  xmm0 – xmm7 (in Reihenfolge, gemischt mit Integer-Argumenten)
+
+Struct-Argumente: komplex, abhängig von Größe und Inhalt.
+  Kleine Structs (≤ 2 × 64-Bit): in Register aufgeteilt.
+  Größere Structs: Zeiger auf Stack-Kopie.
+
+Mehr als 6 Integer-Argumente auf dem Stack:
+  ; 7. und 8. Argument liegen auf dem Stack:
+  ; Beim Aufruf: [rsp+8] = 7. Arg, [rsp+16] = 8. Arg
+  ; (rsp+0 = Rücksprungadresse nach dem call)
+  ; Im Prolog mit rbp: [rbp+16] = 7. Arg, [rbp+24] = 8. Arg
+
+------------------------------------------------------------------------
+11.3  Rückgabewerte
+------------------------------------------------------------------------
+
+  Einzelner Integer/Pointer ≤ 64-Bit:  rax
+  Zwei Integer/Pointer ≤ 64-Bit:       rax + rdx
+  Float/Double:                         xmm0
+  Großer Struct:                        Aufrufer stellt Speicher bereit, Adresse in rdi
+                                         (das erste Argument wird verdrängt!)
+
+------------------------------------------------------------------------
+11.4  Caller-saved vs. Callee-saved Register
+------------------------------------------------------------------------
+
+Das ist KRITISCH. Wenn du eine Funktion aufrufst, darf diese bestimmte
+Register verändern — die "Caller-saved" (auch: Scratch) Register.
+Andere Register MUSS die aufgerufene Funktion ERHALTEN — "Callee-saved".
+
+  Caller-saved (können von der Funktion verändert werden, du musst sichern):
+    rax, rcx, rdx, rsi, rdi, r8, r9, r10, r11
+    xmm0 – xmm15
+    (alle Argument-Register + Rückgaberegister)
+
+  Callee-saved (Funktion MUSS diese wiederherstellen):
+    rbx, rbp, r12, r13, r14, r15
+    (wenn du diese benutzt, push am Anfang, pop am Ende)
+
+  Konsequenz für dich als Aufrufer:
+    Wenn du nach einem call noch rdi brauchst, musst DU rdi vorher sichern.
+    Wenn du nach einem call noch rbx brauchst, ist rbx sicher (Callee sichert es).
+
+  Beispiel:
+
+    ; Schlechter Code:
+    mov  rdi, wichtiger_wert
+    call irgendeine_funktion     ; irgendeine_funktion darf rdi ändern!
+    add  rdi, 1                  ; BUG: rdi wurde vielleicht überschrieben!
+
+    ; Guter Code:
+    mov  rdi, wichtiger_wert
+    push rdi                     ; sichern
+    call irgendeine_funktion
+    pop  rdi                     ; wiederherstellen
+    add  rdi, 1                  ; OK
+
+    ; Noch besser: wichtigen Wert in Callee-saved Register:
+    mov  r12, wichtiger_wert     ; r12 ist callee-saved, sicher durch call
+    mov  rdi, r12
+    call irgendeine_funktion
+    add  r12, 1                  ; OK, r12 ist unverändert
+
+------------------------------------------------------------------------
+11.5  Vollständiges Beispiel: C-Funktion in Assembly
+------------------------------------------------------------------------
+
+  ; C-Äquivalent:
+  ; long berechne(long a, long b, long c) {
+  ;     long temp = a * b;
+  ;     return temp - c;
+  ; }
+
+  berechne:
+      ; Argumente: rdi = a, rsi = b, rdx = c
+      ; Rückgabe: rax
+      ; Wir brauchen rbx? Nein. Wir brauchen keinen callee-saved Register.
+
+      push rbp
+      mov  rbp, rsp
+      ; Kein sub rsp nötig (keine lokalen Variablen auf Stack)
+
+      imul rdi, rsi        ; rdi = a * b (temp)
+      mov  rax, rdi        ; rax = temp
+      sub  rax, rdx        ; rax = temp - c
+
+      pop  rbp
+      ret
+
+------------------------------------------------------------------------
+11.6  Stack Frame vollständig mit lokalen Variablen
+------------------------------------------------------------------------
+
+  ; C:
+  ; long komplexe_funktion(long x, long y) {
+  ;     long local_a = x + 1;
+  ;     long local_b = y * 2;
+  ;     long local_c = local_a + local_b;
+  ;     return local_c;
+  ; }
+
+  komplexe_funktion:
+      ; Argumente: rdi = x, rsi = y
+
+      push rbp
+      mov  rbp, rsp
+      sub  rsp, 32         ; 3 lokale Variablen × 8 Bytes + 8 Bytes Padding = 32
+
+      ; local_a = x + 1
+      mov  rax, rdi
+      inc  rax
+      mov  [rbp - 8], rax  ; local_a speichern
+
+      ; local_b = y * 2
+      mov  rax, rsi
+      add  rax, rax        ; × 2
+      mov  [rbp - 16], rax ; local_b speichern
+
+      ; local_c = local_a + local_b
+      mov  rax, [rbp - 8]
+      add  rax, [rbp - 16]
+      mov  [rbp - 24], rax ; local_c speichern
+
+      ; return local_c
+      mov  rax, [rbp - 24]
+
+      leave
+      ret
+
+------------------------------------------------------------------------
+11.7  Windows x64 ABI — die Unterschiede
+------------------------------------------------------------------------
+
+Wenn du je Code für Windows schreiben willst, aufpassen:
+
+  Windows x64 Argument-Register: rcx, rdx, r8, r9 (NICHT rdi/rsi!)
+  Floating-Point: xmm0, xmm1, xmm2, xmm3
+
+  Shadow Space: Windows verlangt dass der Aufrufer 32 Bytes "Shadow Space"
+  auf dem Stack reserviert BEVOR dem call — auch wenn die Funktion
+  weniger als 4 Argumente hat! Das ist bei Linux NICHT der Fall.
+
+  Callee-saved: rbx, rbp, rdi, rsi, r12-r15, xmm6-xmm15
+  (Windows sichert auch rdi und rsi — auf Linux sind sie Caller-saved!)
+
+  Also: Linux-Code läuft NICHT unmodifiziert auf Windows und umgekehrt.
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+Schreibe eine Funktion "string_laenge" die einen Pointer (rdi) auf einen
+null-terminierten String nimmt und die Länge in rax zurückgibt (ohne das Null-Byte).
+Das ist strlen in Assembly.
+
+Und: Schreibe eine Funktion "string_kopieren" (strcpy):
+  rdi = Ziel-Pointer, rsi = Quell-Pointer
+  Kopiert jeden Byte bis und mit dem Null-Byte.
+  Gibt rdi (Ziel) in rax zurück (wie C's strcpy).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Rekursion und fortgeschrittene Algorithmen
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Fibonacci — iterativ vs. rekursiv
+------------------------------------------------------------------------
+
+  ; Rekursiv (langsam: O(2^n) Aufrufe):
+  fib_rekursiv:
+      cmp  rdi, 1
+      jle  .basis          ; fib(0)=0, fib(1)=1
+      push r12             ; callee-saved! (r12 wird benutzt)
+      push r13
+      push rbp             ; alignment
+      mov  r12, rdi        ; n sichern
+      dec  rdi
+      call fib_rekursiv    ; fib(n-1)
+      mov  r13, rax        ; Ergebnis sichern
+      mov  rdi, r12
+      sub  rdi, 2
+      call fib_rekursiv    ; fib(n-2)
+      add  rax, r13        ; fib(n-1) + fib(n-2)
+      pop  rbp
+      pop  r13
+      pop  r12
+      ret
+  .basis:
+      mov  rax, rdi        ; fib(0)=0, fib(1)=1 (rdi enthält n)
+      ret
+
+  ; Iterativ (effizient: O(n)):
+  fib_iterativ:
+      ; rdi = n
+      ; Sonderfall n=0 oder n=1:
+      cmp  rdi, 1
+      jle  .basis
+
+      mov  rax, 0          ; prev = fib(0)
+      mov  rbx, 1          ; curr = fib(1)
+      mov  rcx, 2          ; i = 2
+  .loop:
+      cmp  rcx, rdi
+      jg   .fertig
+      ; next = prev + curr
+      mov  rdx, rax
+      add  rdx, rbx
+      mov  rax, rbx        ; prev = curr
+      mov  rbx, rdx        ; curr = next
+      inc  rcx
+      jmp  .loop
+  .fertig:
+      mov  rax, rbx        ; Rückgabe: curr
+      ret
+  .basis:
+      mov  rax, rdi        ; fib(0)=0, fib(1)=1
+      ret
+
+------------------------------------------------------------------------
+12.2  Quicksort in Assembly
+------------------------------------------------------------------------
+
+  ; Vollständiges Quicksort für ein Array von int64:
+  ; rdi = Array-Adresse, rsi = linker Index, rdx = rechter Index
+
+  quicksort:
+      cmp  rsi, rdx
+      jge  .fertig         ; Basis: 0 oder 1 Element
+
+      push rbp
+      mov  rbp, rsp
+      push r12             ; Callee-saved Register sichern
+      push r13
+      push r14
+      push r15
+      sub  rsp, 8          ; Stack alignment
+
+      mov  r12, rdi        ; arr
+      mov  r13, rsi        ; lo
+      mov  r14, rdx        ; hi
+
+      ; pivot = arr[hi]
+      mov  r15, [r12 + r14*8]
+
+      ; partition:
+      mov  rax, r13        ; i = lo - 1
+      dec  rax
+
+      mov  rcx, r13        ; j = lo
+  .partition_loop:
+      cmp  rcx, r14
+      jge  .partition_done
+      cmp  [r12 + rcx*8], r15
+      jg   .no_swap        ; arr[j] > pivot, kein Tausch
+      inc  rax             ; i++
+      ; swap arr[i] und arr[j]:
+      mov  rbx, [r12 + rax*8]
+      mov  rdx, [r12 + rcx*8]
+      mov  [r12 + rax*8], rdx
+      mov  [r12 + rcx*8], rbx
+  .no_swap:
+      inc  rcx
+      jmp  .partition_loop
+
+  .partition_done:
+      ; swap arr[i+1] und arr[hi]:
+      inc  rax             ; pivot_idx = i + 1
+      mov  rbx, [r12 + rax*8]
+      mov  rdx, [r12 + r14*8]
+      mov  [r12 + rax*8], rdx
+      mov  [r12 + r14*8], rbx
+
+      ; Rekursion links: quicksort(arr, lo, pivot_idx - 1)
+      mov  rdi, r12
+      mov  rsi, r13
+      mov  rdx, rax
+      dec  rdx
+      call quicksort
+
+      ; Rekursion rechts: quicksort(arr, pivot_idx + 1, hi)
+      mov  rdi, r12
+      mov  rsi, rax
+      inc  rsi
+      mov  rdx, r14
+      call quicksort
+
+      add  rsp, 8
+      pop  r15
+      pop  r14
+      pop  r13
+      pop  r12
+      pop  rbp
+  .fertig:
+      ret
+
+------------------------------------------------------------------------
+12.3  Türme von Hanoi
+------------------------------------------------------------------------
+
+  ; C: void hanoi(int n, char von, char nach, char hilf)
+  ; rdi=n, esi=von, edx=nach, ecx=hilf (als ASCII-Zeichen)
+
+  section .data
+      hanoi_msg1  db  "Move disk from ", 0
+      hanoi_msg2  db  " to ", 0
+
+  hanoi:
+      test rdi, rdi
+      jz   .fertig
+
+      push r12             ; n
+      push r13             ; von
+      push r14             ; nach
+      push r15             ; hilf
+      push rbp
+
+      mov  r12, rdi
+      movzx r13, esi
+      movzx r14, edx
+      movzx r15, ecx
+
+      ; hanoi(n-1, von, hilf, nach)
+      dec  rdi
+      mov  esi, r13d       ; von
+      mov  edx, r15d       ; hilf  (Ziel jetzt hilf)
+      mov  ecx, r14d       ; nach  (Hilf jetzt nach)
+      call hanoi
+
+      ; Ausgabe: "Move disk from [von] to [nach]"
+      ; (hier vereinfacht — nutze write-Syscalls wie in Modul 7)
+
+      ; hanoi(n-1, hilf, nach, von)
+      mov  rdi, r12
+      dec  rdi
+      mov  esi, r15d       ; hilf
+      mov  edx, r14d       ; nach
+      mov  ecx, r13d       ; von
+      call hanoi
+
+      pop  rbp
+      pop  r15
+      pop  r14
+      pop  r13
+      pop  r12
+  .fertig:
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+Implementiere binäre Suche in Assembly:
+  ; rdi = Array-Adresse (sortiertes int64-Array)
+  ; rsi = Array-Länge
+  ; rdx = gesuchter Wert
+  ; Rückgabe: rax = Index (oder -1 wenn nicht gefunden)
+
+  binsearch:
+      xor  rax, rax        ; links = 0
+      mov  rcx, rsi
+      dec  rcx             ; rechts = len - 1
+
+  .loop:
+      cmp  rax, rcx
+      jg   .not_found
+
+      ; mitte = (links + rechts) / 2
+      mov  rbx, rax
+      add  rbx, rcx
+      shr  rbx, 1
+
+      cmp  [rdi + rbx*8], rdx
+      je   .found
+      jl   .gehe_rechts    ; arr[mid] < target → suche rechts
+      ; arr[mid] > target → suche links:
+      mov  rcx, rbx
+      dec  rcx
+      jmp  .loop
+
+  .gehe_rechts:
+      mov  rax, rbx
+      inc  rax
+      jmp  .loop
+
+  .found:
+      mov  rax, rbx
+      ret
+
+  .not_found:
+      mov  rax, -1
+      ret
+
+Teste mit: arr = {2, 5, 8, 12, 16, 23, 38, 56, 72, 91}, suche nach 23 → Index 5.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: NASM Makros und wiederverwendbarer Code
+================================================================================
+
+------------------------------------------------------------------------
+13.1  %define — einfache Textsubstitution
+------------------------------------------------------------------------
+
+  %define STDOUT  1
+  %define STDIN   0
+  %define STDERR  2
+
+  %define SYS_WRITE  1
+  %define SYS_READ   0
+  %define SYS_EXIT   60
+
+  ; Benutzung:
+  mov rax, SYS_WRITE
+  mov rdi, STDOUT
+  syscall
+
+  %define NULL    0
+  %define TRUE    1
+  %define FALSE   0
+
+  ; Auch Ausdrücke möglich:
+  %define PAGE_SIZE  4096
+  %define ZWEI_PAGES  (PAGE_SIZE * 2)   ; 8192
+
+  ; Mit Argumenten:
+  %define min(a,b)  ((a) < (b) ? (a) : (b))   ; Achtung: das ist C-Syntax!
+  ; In NASM nur für Konstanten zur Compilezeit, nicht für Laufzeitlogik.
+
+------------------------------------------------------------------------
+13.2  %macro — Makros mit Argumenten
+------------------------------------------------------------------------
+
+  ; Makro: schreibt einen String auf stdout
+  ; Benutzung: print_str msg, laenge
+  %macro print_str 2
+      mov  rax, SYS_WRITE
+      mov  rdi, STDOUT
+      mov  rsi, %1        ; erster Parameter = Adresse
+      mov  rdx, %2        ; zweiter Parameter = Länge
+      syscall
+  %endmacro
+
+  ; Benutzung:
+  section .data
+      begruessung  db  "Hallo!", 10
+      begruessung_len equ $ - begruessung
+
+  section .text
+  _start:
+      print_str begruessung, begruessung_len
+
+  ; Makro: exit mit Code
+  %macro exit 1
+      mov  rax, SYS_EXIT
+      mov  rdi, %1
+      syscall
+  %endmacro
+
+  exit 0
+
+------------------------------------------------------------------------
+13.3  Makros mit lokalen Labels
+------------------------------------------------------------------------
+
+  ; Problem: wenn ein Makro Labels enthält und zweimal benutzt wird,
+  ; gibt es doppelte Label-Definitionen → Fehler!
+
+  ; Lösung: %% für lokale Labels im Makro:
+
+  %macro schiebe_wenn_groesser 2
+      cmp  %1, %2
+      jle  %%skip        ; %% macht dieses Label einmalig pro Makro-Instanz
+      mov  %1, %2
+  %%skip:
+  %endmacro
+
+  ; Benutzung (erzeugt bei jeder Verwendung unique Labels):
+  schiebe_wenn_groesser rax, 100
+  schiebe_wenn_groesser rbx, 200
+
+------------------------------------------------------------------------
+13.4  %include — Code aufteilen
+------------------------------------------------------------------------
+
+  ; In macros.inc:
+  ;   %define SYS_WRITE 1
+  ;   %macro print_str 2
+  ;   ...
+  ;   %endmacro
+
+  ; In main.asm:
+  %include "macros.inc"
+  %include "stringfunktionen.inc"
+
+  ; NASM sucht die Datei:
+  ; 1. Im aktuellen Verzeichnis
+  ; 2. In Verzeichnissen die mit -I angegeben wurden:
+  ;    nasm -I./include/ -f elf64 main.asm -o main.o
+
+------------------------------------------------------------------------
+13.5  Konstanten und EQU
+------------------------------------------------------------------------
+
+  ; EQU: Symbolische Konstante (kein Speicher verbraucht!)
+  MAX_GROESSE  equ  1024
+  PUFFER_BITS  equ  10
+  PUFFER_GROESSE  equ  (1 << PUFFER_BITS)   ; 1024
+
+  ; Unterschied zu db:
+  ; MAX_GROESSE equ 1024   → kein Speicher, wird zur Compilezeit ersetzt
+  ; zahl       dq  1024    → 8 Bytes Speicher, Laufzeitwert
+
+  ; % Konstanten (NASM-spezifisch):
+  %assign COUNTER 0          ; kann später verändert werden (selten nötig)
+  %assign COUNTER COUNTER+1
+
+------------------------------------------------------------------------
+13.6  Mehrere Dateien und Bibliotheken
+------------------------------------------------------------------------
+
+  ; mathe.asm — Bibliothek:
+  section .text
+  global fakult      ; exportieren!
+  global fibonacci
+
+  fakult:
+      ; ...
+      ret
+
+  fibonacci:
+      ; ...
+      ret
+
+  ; main.asm — Hauptprogramm:
+  extern fakult      ; importieren!
+  extern fibonacci
+
+  section .text
+  global _start
+  _start:
+      mov rdi, 5
+      call fakult
+      ; ...
+
+  ; Build:
+  ;   nasm -f elf64 mathe.asm -o mathe.o
+  ;   nasm -f elf64 main.asm -o main.o
+  ;   ld -o programm main.o mathe.o
+
+  ; Mit gcc linken (für C-Library-Zugriff):
+  ;   gcc -no-pie -o programm main.o mathe.o
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+Erstelle eine "stringlib.asm" mit den Funktionen:
+  - strlen(rdi) → rax    (Länge ohne Null-Byte)
+  - strcmp(rdi, rsi) → rax   (0 wenn gleich, <0 / >0 sonst)
+  - strcpy(rdi, rsi) → rax   (kopiert, gibt Ziel zurück)
+  - strcat(rdi, rsi) → rax   (hängt an, gibt Ziel zurück)
+
+Erstelle dazu eine "stringlib.inc" mit %macro-Wrappern für bequeme Benutzung.
+Und einen Test in "test_stringlib.asm" der alle vier Funktionen testet.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: C und Assembly mischen
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Assembly-Funktionen von C aufrufen
+------------------------------------------------------------------------
+
+  ; In assembly_funktion.asm:
+  section .text
+  global schnelle_multiplikation   ; muss global sein!
+
+  ; long schnelle_multiplikation(long a, long b, long faktor);
+  ; rdi=a, rsi=b, rdx=faktor → rax
+  schnelle_multiplikation:
+      imul rdi, rsi        ; a * b
+      imul rdi, rdx        ; * faktor
+      mov  rax, rdi
+      ret
+
+  ; In main.c:
+  ;   extern long schnelle_multiplikation(long a, long b, long faktor);
+  ;   int main() {
+  ;       long result = schnelle_multiplikation(3, 4, 5);  // = 60
+  ;       printf("%ld\n", result);
+  ;   }
+
+  ; Build:
+  ;   nasm -f elf64 assembly_funktion.asm -o assembly_funktion.o
+  ;   gcc -o programm main.c assembly_funktion.o
+
+------------------------------------------------------------------------
+14.2  C-Funktionen von Assembly aufrufen
+------------------------------------------------------------------------
+
+  ; C-Standardbibliothek nutzen:
+
+  extern printf
+  extern malloc
+  extern free
+  extern memcpy
+
+  section .data
+      format_str  db  "Ergebnis: %ld\n", 0
+
+  section .text
+  global main      ; main statt _start wenn gcc/glibc benutzt wird!
+
+  main:
+      push rbp
+      mov  rbp, rsp
+      sub  rsp, 16  ; alignment
+
+      ; printf("Ergebnis: %ld\n", 42)
+      ; rdi = format-String, rsi = Wert
+      lea  rdi, [rel format_str]
+      mov  rsi, 42
+      xor  eax, eax   ; keine variadic float-Argumente
+      call printf
+
+      ; malloc(1024)
+      mov  rdi, 1024
+      call malloc
+      ; rax = Pointer (oder NULL bei Fehler)
+      mov  r12, rax   ; sichern (r12 ist callee-saved)
+
+      ; free(ptr)
+      mov  rdi, r12
+      call free
+
+      ; return 0
+      xor  eax, eax
+      leave
+      ret
+
+  ; Build:
+  ;   nasm -f elf64 main.asm -o main.o
+  ;   gcc -no-pie -o programm main.o     (verlinkt automatisch libc)
+
+  ; WICHTIG: "main" statt "_start" verwenden wenn gcc/glibc genutzt wird.
+  ; "_start" ist der Einstiegspunkt OHNE C-Runtime. "main" läuft MIT ihr.
+
+------------------------------------------------------------------------
+14.3  Inline Assembly in C (GCC-Syntax)
+------------------------------------------------------------------------
+
+  GCC erlaubt Assembly direkt in C-Code mit asm():
+
+  ; Einfach — keine Operanden:
+  asm("nop");
+  asm("cpuid");
+
+  ; Mit Operanden (GCC extended asm):
+  int x = 5, y = 3, result;
+  asm("add %2, %1"
+      : "=r" (result)      ; Output: result → irgendein Register
+      : "r" (x), "r" (y)); ; Input: x und y
+
+  ; Vollständiges Format:
+  asm volatile (
+      "instruktionen"
+      : outputs              ; Output-Operanden: "=r"(var), "=m"(var)
+      : inputs               ; Input-Operanden:  "r"(var), "m"(var), "i"(wert)
+      : clobbers             ; Veränderte Dinge:  "rax", "rcx", "cc", "memory"
+  );
+
+  ; Constraint-Buchstaben:
+  ; r  → beliebiges Register
+  ; m  → Speicheroperand
+  ; i  → Direktwert (Immediate, Compilezeit-Konstante)
+  ; a  → rax
+  ; b  → rbx
+  ; c  → rcx
+  ; d  → rdx
+  ; S  → rsi
+  ; D  → rdi
+  ; =  → Output (Schreiben)
+  ; +  → Read-Write
+  ; &  → Early clobber (Output darf nicht mit Input-Reg übereinstimmen)
+
+  ; Praktisches Beispiel — byte swap (bswap):
+  uint64_t swap_endian(uint64_t val) {
+      uint64_t result;
+      asm("bswap %0"
+          : "=r" (result)
+          : "0"  (val));    ; "0" = gleicher Operand wie Output 0
+      return result;
+  }
+
+  ; Beispiel — rdtsc (Timestamp Counter lesen):
+  uint64_t rdtsc() {
+      uint32_t lo, hi;
+      asm volatile ("rdtsc"
+          : "=a" (lo), "=d" (hi));
+      return ((uint64_t)hi << 32) | lo;
+  }
+
+  ; "volatile" verhindert dass der Compiler die asm-Anweisung wegoptimiert
+  ; oder verschiebt. Immer benutzen wenn der asm Seiteneffekte hat.
+
+------------------------------------------------------------------------
+14.4  Position Independent Code (PIC) — für shared Libraries
+------------------------------------------------------------------------
+
+  Wenn du eine .so Datei (Shared Library) baust, muss der Code
+  positionsunabhängig sein — er kann an jede Adresse geladen werden.
+
+  ; Nicht-PIC (Direkte Adressierung, nur für executables):
+  mov  rax, [meine_variable]   ; absolute Adresse
+
+  ; PIC (RIP-relative Adressierung):
+  mov  rax, [rel meine_variable]  ; Adresse relativ zu rip
+
+  ; In NASM am Anfang der Datei:
+  default rel              ; macht alle Labels automatisch RIP-relative
+
+  ; Für externe Symbole in PIC:
+  ; Der Global Offset Table (GOT) enthält Laufzeit-Adressen externer Symbole.
+  ; Wird normalerweise vom Linker und Loader gehandhabt.
+
+  ; Build als shared library:
+  ;   nasm -f elf64 lib.asm -o lib.o
+  ;   gcc -shared -o lib.so lib.o
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+Erstelle ein gemischtes C/Assembly-Projekt:
+
+1. matrix_mult.asm: Eine 2×2 Matrix-Multiplikation als Assembly-Funktion.
+   Signatur (C): void mat_mul_2x2(long *C, long *A, long *B);
+   C = A × B, alle Matrizen als long[4] (row-major: C[0]=C[0][0], C[1]=C[0][1], etc.)
+
+2. main.c: Benutzt die Funktion, gibt Ergebnis aus.
+   Test: A = [[1,2],[3,4]], B = [[5,6],[7,8]]
+   Erwartetes Ergebnis: C = [[19,22],[43,50]]
+
+Tipp: A[i][j] bei 2×2 = A[i*2+j]. Benutze nur rdi, rsi, rdx für Pointer.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Debugging mit GDB
+================================================================================
+
+------------------------------------------------------------------------
+15.1  GDB Grundbefehle für Assembly
+------------------------------------------------------------------------
+
+  GDB starten:
+    gdb ./mein_programm
+
+  Grundlegende Befehle:
+    run              → Programm starten (oder 'r')
+    quit             → GDB beenden (oder 'q')
+
+  Breakpoints:
+    break _start             → Haltepunkt bei _start
+    break *0x4000B0          → Haltepunkt bei absoluter Adresse
+    break meine_funktion     → Haltepunkt bei Funktion
+    break *meine_funktion+4  → Haltepunkt 4 Bytes nach Funktionsanfang
+    info breakpoints         → Liste aller Breakpoints
+    delete 1                 → Breakpoint 1 löschen
+    delete                   → alle Breakpoints löschen
+
+  Ausführung kontrollieren:
+    next   / n   → Nächste Zeile (übergeht Funktionsaufrufe)
+    step   / s   → Nächste Zeile (betritt Funktionsaufrufe)
+    nexti  / ni  → Nächste INSTRUKTION (für Assembly!)
+    stepi  / si  → Nächste INSTRUKTION (betritt calls)
+    continue / c → Bis zum nächsten Breakpoint weiterlaufen
+    finish       → Bis Ende der aktuellen Funktion laufen
+
+  Register anzeigen:
+    info registers           → alle Register
+    info registers rax rbx  → nur rax und rbx
+    print $rax               → Wert von rax ausgeben
+    print/x $rax             → in Hex
+    print/d $rax             → dezimal (signed)
+    print/u $rax             → dezimal (unsigned)
+    print/t $rax             → binär
+
+  Speicher anzeigen (x = examine):
+    x/8xq $rsp               → 8 Qwords (64-Bit) in Hex ab rsp
+    x/16xb $rsi              → 16 Bytes in Hex ab rsi
+    x/s $rdi                 → String an Adresse in rdi
+    x/10i $rip               → 10 Instruktionen ab rip (disassemble)
+    x/4xg &meine_variable    → 4 Qwords ab Adresse von meine_variable
+
+    Format-Buchstaben: x=hex, d=dezimal, u=unsigned, o=oktal, t=binär, s=string
+    Größen-Buchstaben: b=byte, h=halfword(2), w=word(4), g=giant(8)
+
+  Assembler anzeigen:
+    disassemble              → aktuelle Funktion disassemblieren
+    disassemble _start       → Funktion _start disassemblieren
+    disassemble /r _start    → mit rohen Bytes
+    set disassembly-flavor intel  → Intel-Syntax (statt AT&T!)
+
+  Stack anzeigen:
+    backtrace / bt           → Stack-Trace
+    frame 0                  → aktuellen Frame anzeigen
+    info frame               → Details des aktuellen Frames
+
+------------------------------------------------------------------------
+15.2  GDB initialisieren — .gdbinit
+------------------------------------------------------------------------
+
+  Erstelle ~/.gdbinit für eine bessere Standard-Konfiguration:
+
+    set disassembly-flavor intel
+    set output-radix 16
+    set pagination off
+
+    # Hilfsfunktion: alle wichtigen Infos auf einmal
+    define context
+        echo \n=== REGISTERS ===\n
+        info registers rax rbx rcx rdx rsi rdi rsp rbp r8 r9 r10 r11 r12 r13 r14 r15 rip eflags
+        echo \n=== STACK (top 8 entries) ===\n
+        x/8xg $rsp
+        echo \n=== NEXT INSTRUCTIONS ===\n
+        x/5i $rip
+    end
+
+    # Kürzel: 'ctx' um den Kontext zu sehen
+    define ctx
+        context
+    end
+
+  Jetzt kannst du "ctx" in GDB eingeben um alles auf einmal zu sehen.
+
+------------------------------------------------------------------------
+15.3  PWNDBG und PEDA — verbesserte Oberflächen
+------------------------------------------------------------------------
+
+  Für Debugging, besonders Security-relevantes, sind Plugins sinnvoll:
+
+  PWNDBG (empfohlen):
+    git clone https://github.com/pwndbg/pwndbg
+    cd pwndbg && ./setup.sh
+    → Zeigt automatisch Register, Stack, Code nach jedem Schritt
+
+  PEDA:
+    git clone https://github.com/longld/peda.git
+    echo "source ~/peda/peda.py" >> ~/.gdbinit
+
+  Mit PWNDBG/PEDA siehst du nach jedem `ni` oder `si`:
+    - Register (mit Highlighting was sich geändert hat)
+    - Stack
+    - Disassembly
+    All das ohne extra Befehle eingeben zu müssen.
+
+------------------------------------------------------------------------
+15.4  Typische Debugging-Session
+------------------------------------------------------------------------
+
+  $ nasm -f elf64 -g -F dwarf mein_prog.asm -o mein_prog.o
+    (-g = Debug-Info, -F dwarf = DWARF-Format für GDB)
+  $ ld -o mein_prog mein_prog.o
+  $ gdb mein_prog
+
+  (gdb) set disassembly-flavor intel
+  (gdb) break _start
+  (gdb) run
+  → Programm hält bei _start
+
+  (gdb) info registers
+  → alle Register sehen
+
+  (gdb) ni
+  → eine Instruktion weiter
+
+  (gdb) x/10i $rip
+  → nächste 10 Instruktionen
+
+  (gdb) watch [meine_variable]
+  → Hält an wenn meine_variable sich ändert (Watchpoint)
+
+  (gdb) p/x $rax
+  → rax in Hex anzeigen
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+Schreibe ein Programm mit einem absichtlichen Bug:
+  Summiere die Elemente eines Arrays, aber beginne den Index bei 1 statt 0.
+  (Das erste Element wird übersprungen.)
+
+Benutze GDB um den Bug zu finden:
+1. Setze Breakpoint am Schleifenanfang
+2. Sieh dir rcx (Index) und rax (Summe) nach jeder Iteration an
+3. Sieh dir [arr + rcx*8] an um zu bestätigen welcher Wert addiert wird
+4. Finde und fixe den Bug
+
+Das ist das grundlegende Debugging-Muster das du immer wieder brauchst.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 16: Fehlerbehandlung und robuster Code
+================================================================================
+
+------------------------------------------------------------------------
+16.1  Syscall-Fehler prüfen
+------------------------------------------------------------------------
+
+  ; Jeder Syscall kann fehlschlagen — rax ist dann negativ (-errno)
+
+  ; write-Fehler abfangen:
+  mov  rax, 1
+  mov  rdi, 1
+  mov  rsi, buffer
+  mov  rdx, length
+  syscall
+
+  cmp  rax, 0
+  jl   write_fehler       ; rax < 0 → Fehler
+
+  ; open-Fehler abfangen:
+  mov  rax, 2
+  mov  rdi, dateiname
+  mov  rsi, 0             ; O_RDONLY
+  xor  rdx, rdx
+  syscall
+
+  cmp  rax, 0
+  jl   open_fehler        ; rax negativ → Fehler (z.B. ENOENT = -2)
+  mov  r12, rax           ; fd sichern
+
+  ; Fehlercode ausgeben (für Debug):
+  ; rax enthält -errno. neg rax → positiver errno-Wert.
+  ; ENOENT (No such file)  =  2
+  ; EACCES (Permission)    =  13
+  ; EEXIST (File exists)   =  17
+  ; EINVAL (Invalid arg)   =  22
+
+------------------------------------------------------------------------
+16.2  assert-Makro für Assembly
+------------------------------------------------------------------------
+
+  %macro asm_assert 2
+      ; %1 = Bedingung (als cmp/test-Ergebnis)
+      ; %2 = Fehlermeldung (String-Label)
+      jnz  %%ok
+      ; Assertion fehlgeschlagen — Nachricht ausgeben und abbrechen
+      mov  rax, 1
+      mov  rdi, 2          ; stderr
+      mov  rsi, %2
+      mov  rdx, %2 %+ _len
+      syscall
+      mov  rax, 60
+      mov  rdi, 1          ; Exit-Code 1 = Fehler
+      syscall
+  %%ok:
+  %endmacro
+
+  ; Benutzung:
+  section .data
+      err_null   db  "ASSERTION FAILED: Pointer ist NULL!", 10
+      err_null_len equ $ - err_null
+
+  ; ...
+  test  rdi, rdi           ; Pointer = 0?
+  asm_assert ze, err_null  ; ZF = 1 wenn NULL → Fehler (eigentlich jz für den Jump)
+
+------------------------------------------------------------------------
+16.3  Stack Overflow Detection
+------------------------------------------------------------------------
+
+  ; Rudimentäre Erkennung: rsp auf Gültigkeit prüfen
+
+  %define MIN_STACK_ADDR  0x7FFF00000000   ; ungefähres Minimum
+
+  check_stack:
+      cmp  rsp, MIN_STACK_ADDR
+      jl   stack_overflow_handler     ; Wenn rsp zu klein: Problem!
+      ret
+
+  stack_overflow_handler:
+      ; Mindest-Ausgabe ohne Stack (da kaputt):
+      mov  rax, 1
+      mov  rdi, 2          ; stderr
+      mov  rsi, stack_err_msg
+      mov  rdx, stack_err_len
+      syscall
+      mov  rax, 60
+      mov  rdi, 139        ; Exit-Code 139 = SIGSEGV-äquivalent
+      syscall
+
+  section .data
+      stack_err_msg db "STACK OVERFLOW DETECTED!", 10
+      stack_err_len equ $ - stack_err_msg
+
+------------------------------------------------------------------------
+16.4  Defensive Programmierung in Assembly
+------------------------------------------------------------------------
+
+  1. NULL-Checks vor jedem Speicherzugriff:
+     test rdi, rdi
+     jz   fehler
+
+  2. Bounds-Checking bei Array-Zugriffen:
+     cmp  rcx, max_index
+     jae  out_of_bounds    ; unsigned comparison (jae = >= als unsigned)
+
+  3. Division durch Null verhindern:
+     test rbx, rbx
+     jz   division_durch_null
+
+  4. Integer Overflow prüfen:
+     add  rax, rbx
+     jo   overflow_detected  ; OF-Flag: signed overflow
+     jc   overflow_detected  ; CF-Flag: unsigned overflow
+
+  5. Return-Werte immer prüfen:
+     call malloc_funktion
+     test rax, rax
+     jz   malloc_failed
+
+--------------------------------------------------------------------------------
+ÜBUNG 16 (Abschlussprojekt Teil 2):
+Implementiere eine robuste "sicheres_lesen"-Funktion:
+  ; Liest maximal N Bytes von stdin
+  ; Gibt tatsächliche Bytes-Anzahl zurück (ohne Newline)
+  ; Wenn Lese-Fehler: gibt -1 zurück
+  ; Stellt sicher dass der Puffer null-terminiert wird
+
+  safe_read:
+      ; rdi = Puffer-Adresse
+      ; rsi = Puffer-Größe (max Bytes inkl. Null-Terminator)
+      ; → rax = Anzahl gelesener Bytes (ohne \n), oder -1 bei Fehler
+
+  Und dann: Komplettes Mini-Programm das:
+  1. "Gib eine Zahl ein: " ausgibt
+  2. Eingabe liest (mit safe_read)
+  3. Mit atoi konvertiert
+  4. Die Zahl quadriert
+  5. "Das Quadrat ist: [N]" ausgibt
+
+Alle Fehler (Lesefehler, ungültige Eingabe) müssen abgefangen werden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+ENDE TEIL 2
+================================================================================
+
+Weiter in Teil 3:
+  Modul 17: String-Operationen mit SIMD (SSE/SSE2)
+  Modul 18: Arrays und Pointer — Fortgeschritten
+  Modul 19: Strukturen und Linked Lists in Assembly
+  Modul 20: Floating-Point — SSE/x87, Double-Präzision
+  Modul 21: SIMD-Grundlagen — Vektoroperationen mit SSE/AVX
+  Modul 22: Speicherverwaltung — eigener Heap in Assembly
+  Modul 23: Multithreading-Grundlagen in Assembly
+  Modul 24: Interrupts und Signal Handling
+
+================================================================================

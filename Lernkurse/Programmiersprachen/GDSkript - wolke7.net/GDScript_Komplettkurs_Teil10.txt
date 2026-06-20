@@ -1,0 +1,1218 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 10 von 10)
+================================================================================
+
+Drei Themen die zu gut sind um sie wegzulassen:
+
+  COMPUTE SHADER    -- GPU-Berechnungen fuer Physik, Licht, Voxel, Partikel
+  AUDIO-SYSTEM      -- Bus-Routing, Effekte, Raumakustik, Raytraced Audio
+  ACCESSIBILITY     -- Dein Spiel fuer alle spielbar machen
+
+Diese drei Themen haben eines gemeinsam: die meisten Indie-Entwickler
+ignorieren sie -- und merken spaeter wie viel sie verpassen. Compute Shader
+loesen Probleme die mit GDScript schlicht nicht performant loesbar sind.
+Gutes Audio verwandelt ein mittelmaeiges Spiel in ein immersives. Und
+Accessibility ist nicht nur nett gemeint -- es verdoppelt deine Zielgruppe.
+
+
+################################################################################
+TEIL 10 -- COMPUTE SHADER, AUDIO UND ACCESSIBILITY
+################################################################################
+
+
+================================================================================
+MODUL 44: Compute Shader -- Die GPU rechnen lassen
+================================================================================
+
+------------------------------------------------------------------------
+44.1  Was Compute Shader sind und wann du sie brauchst
+------------------------------------------------------------------------
+
+Ein normaler Shader laeuft fuer jeden Pixel oder jeden Vertex einmal.
+Ein Compute Shader laeuft fuer beliebige Daten -- er hat keinen festen
+Zweck. Du gibst ihm Daten rein, er gibt dir Daten zurueck, und das
+passiert massiv parallel auf tausenden GPU-Kernen gleichzeitig.
+
+Typische Anwendungen in Spielen:
+  - Voxel-Beleuchtung (Licht breitet sich durch Voxel-Welt aus)
+  - Partikel-Simulation (Millionen Partikel, GPU berechnet alle)
+  - Physik auf der GPU (Cloth, Fluid, Wellen-Simulation)
+  - Prozedurale Generierung (Noise-Maps, Terrain auf GPU)
+  - Pfadfindung fuer viele Agenten gleichzeitig
+
+Wann reicht GDScript noch?
+  < 10.000 Operationen pro Frame -> GDScript + WorkerThreadPool
+  10.000 - 1.000.000             -> Compute Shader
+  > 1.000.000                    -> Compute Shader + Streaming
+
+------------------------------------------------------------------------
+44.2  Godot Compute Shader -- Grundaufbau
+------------------------------------------------------------------------
+
+In Godot 4 laufen Compute Shader ueber den RenderingDevice -- eine
+low-level GPU-API. Das ist nicht ganz trivial, aber komplett in GDScript
+machbar ohne C++.
+
+Shader-Datei (.glsl):
+  # res://shaders/mein_compute.glsl
+  #[compute]
+  #version 450
+
+  layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+  // Input/Output Buffer:
+  layout(set = 0, binding = 0, std430) restrict buffer InputBuffer {
+      float daten[];
+  } input_buf;
+
+  layout(set = 0, binding = 1, std430) restrict buffer OutputBuffer {
+      float ergebnis[];
+  } output_buf;
+
+  // Uniform (konstante Daten vom CPU):
+  layout(push_constant, std430) uniform PushConstant {
+      uint anzahl;
+      float multiplikator;
+  } pc;
+
+  void main() {
+      uint idx = gl_GlobalInvocationID.x;
+      if (idx >= pc.anzahl) return;
+
+      output_buf.ergebnis[idx] = input_buf.daten[idx] * pc.multiplikator;
+  }
+
+  # local_size_x = 64: Eine Workgroup hat 64 Threads.
+  # gl_GlobalInvocationID.x: Der globale Thread-Index (0 bis N-1).
+  # Du dispatched ceil(N / 64) Workgroups fuer N Elemente.
+
+------------------------------------------------------------------------
+44.3  Compute Shader in GDScript aufrufen
+------------------------------------------------------------------------
+
+  extends Node
+
+  var rd: RenderingDevice
+  var shader: RID
+  var pipeline: RID
+  var input_buffer: RID
+  var output_buffer: RID
+  var uniform_set: RID
+
+  func _ready() -> void:
+      rd = RenderingServer.get_rendering_device()
+      shader_laden()
+
+  func shader_laden() -> void:
+      var shader_datei := load("res://shaders/mein_compute.glsl") as RDShaderFile
+      var shader_spirv: RDShaderSPIRV = shader_datei.get_spirv()
+      shader   = rd.shader_create_from_spirv(shader_spirv)
+      pipeline = rd.compute_pipeline_create(shader)
+
+  func compute_ausfuehren(eingabe_daten: PackedFloat32Array) -> PackedFloat32Array:
+      var groesse: int = eingabe_daten.size()
+      var bytes_pro_float: int = 4
+
+      # Input-Buffer auf GPU hochladen:
+      var input_bytes: PackedByteArray = eingabe_daten.to_byte_array()
+      input_buffer = rd.storage_buffer_create(groesse * bytes_pro_float, input_bytes)
+
+      # Output-Buffer (leer, GPU schreibt rein):
+      var output_bytes := PackedByteArray()
+      output_bytes.resize(groesse * bytes_pro_float)
+      output_buffer = rd.storage_buffer_create(groesse * bytes_pro_float, output_bytes)
+
+      # Uniform Set (verbindet Buffer mit Shader-Bindings):
+      var uniforms: Array[RDUniform] = []
+      var u_input := RDUniform.new()
+      u_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+      u_input.binding       = 0
+      u_input.add_id(input_buffer)
+      uniforms.append(u_input)
+
+      var u_output := RDUniform.new()
+      u_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+      u_output.binding       = 1
+      u_output.add_id(output_buffer)
+      uniforms.append(u_output)
+
+      uniform_set = rd.uniform_set_create(uniforms, shader, 0)
+
+      # Compute List ausfuehren:
+      var compute_list: int = rd.compute_list_begin()
+      rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
+      rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+
+      # Push Constants (kleine konstante Daten):
+      var push_data := PackedFloat32Array([float(groesse), 2.5])
+      rd.compute_list_set_push_constant(compute_list, push_data.to_byte_array(), push_data.size() * 4)
+
+      # Dispatch: ceil(groesse / 64) Workgroups
+      var workgroups: int = ceili(float(groesse) / 64.0)
+      rd.compute_list_dispatch(compute_list, workgroups, 1, 1)
+      rd.compute_list_end()
+
+      # GPU-Arbeit synchronisieren und Ergebnis lesen:
+      rd.submit()
+      rd.sync()
+
+      var ergebnis_bytes: PackedByteArray = rd.buffer_get_data(output_buffer)
+
+      # Aufraeumen:
+      rd.free_rid(uniform_set)
+      rd.free_rid(input_buffer)
+      rd.free_rid(output_buffer)
+
+      return ergebnis_bytes.to_float32_array()
+
+------------------------------------------------------------------------
+44.4  Voxel-Licht-Propagation via Compute Shader
+------------------------------------------------------------------------
+
+Das ist einer der haertesten Performance-Brocken in Voxel-Spielen:
+Licht soll sich durch die Welt ausbreiten (wie in Minecraft).
+Mit GDScript: zu langsam. Mit Compute: machbar.
+
+Konzept: Flood Fill auf der GPU
+  1. Lichtquellen setzen (Fackeln, Lava, Glowstone)
+  2. Compute Shader breitet Licht iterativ aus (6 Nachbarn pro Voxel)
+  3. Mehrere Passes bis Licht voll propagiert
+  4. Ergebnis-Buffer wird als Textur an den Chunk-Shader uebergeben
+
+Shader (stark vereinfacht):
+  # res://shaders/voxel_light.glsl
+  #[compute]
+  #version 450
+
+  layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+  layout(set = 0, binding = 0, std430) restrict buffer VoxelBuffer {
+      uint voxel[];       // Bit 0-7: Block-Typ, Bit 8-11: Licht-Level
+  } voxels;
+
+  layout(push_constant, std430) uniform PC {
+      uint chunk_x;
+      uint chunk_y;
+      uint chunk_z;
+      uint chunk_size;
+  } pc;
+
+  uint idx(uint x, uint y, uint z) {
+      return x + y * pc.chunk_size + z * pc.chunk_size * pc.chunk_size;
+  }
+
+  bool ist_durchlaessig(uint block_typ) {
+      return block_typ == 0u || block_typ == 7u;  // Luft oder Wasser
+  }
+
+  void main() {
+      uint x = gl_GlobalInvocationID.x;
+      uint y = gl_GlobalInvocationID.y;
+      uint z = gl_GlobalInvocationID.z;
+      if (x >= pc.chunk_size || y >= pc.chunk_size || z >= pc.chunk_size) return;
+
+      uint i = idx(x, y, z);
+      uint block = voxels.voxel[i] & 0xFFu;
+      uint licht  = (voxels.voxel[i] >> 8u) & 0xFu;
+
+      if (!ist_durchlaessig(block)) return;
+
+      // Nachbar-Licht minus 1 nehmen (Abschwachung):
+      uint max_nachbar_licht = 0u;
+      // +X Nachbar:
+      if (x + 1u < pc.chunk_size) {
+          uint nl = (voxels.voxel[idx(x+1u, y, z)] >> 8u) & 0xFu;
+          if (nl > 0u) max_nachbar_licht = max(max_nachbar_licht, nl - 1u);
+      }
+      // -X, +Y, -Y, +Z, -Z analog...
+      // (Kuerzung -- alle 6 Richtungen werden geprueft)
+
+      if (max_nachbar_licht > licht) {
+          voxels.voxel[i] = (voxels.voxel[i] & 0xFFFFF0FFu) | (max_nachbar_licht << 8u);
+      }
+  }
+
+GDScript-Aufruf (mehrere Passes):
+  func licht_propagieren(chunk_voxel_data: PackedByteArray, passes: int = 15) -> PackedByteArray:
+      # Buffer hochladen...
+      # (setup wie in 44.3)
+
+      for pass_nr in range(passes):
+          var compute_list := rd.compute_list_begin()
+          rd.compute_list_bind_compute_pipeline(compute_list, licht_pipeline)
+          rd.compute_list_bind_uniform_set(compute_list, voxel_uniform, 0)
+          rd.compute_list_dispatch(compute_list, 2, 2, 2)   # 8x8x8 * 2^3 = 16^3 Chunk
+          rd.compute_list_end()
+          rd.submit()
+          rd.sync()
+
+      return rd.buffer_get_data(voxel_buffer)
+
+------------------------------------------------------------------------
+44.5  GPU-Partikel-Simulation
+------------------------------------------------------------------------
+
+Godots GPUParticles3D hat einen eingebauten Compute-Shader der die
+Partikel-Physik auf der GPU ausfuehrt. Das laeuft fuer 100.000+ Partikel
+ohne CPU-Aufwand.
+
+  extends GPUParticles3D
+
+  func feuer_konfigurieren() -> void:
+      var mat := ParticleProcessMaterial.new()
+
+      mat.direction               = Vector3(0, 1, 0)
+      mat.spread                  = 15.0
+      mat.initial_velocity_min    = 2.0
+      mat.initial_velocity_max    = 5.0
+      mat.gravity                 = Vector3(0, -1, 0)
+      mat.damping_min             = 5.0
+      mat.damping_max             = 10.0
+
+      # Groesse ueber Lebenszeit (gross -> klein):
+      var groesse_kurve := Curve.new()
+      groesse_kurve.add_point(Vector2(0, 1))
+      groesse_kurve.add_point(Vector2(1, 0))
+      mat.scale_curve = groesse_kurve
+
+      # Farbe ueber Lebenszeit (weiss -> orange -> schwarz):
+      var gradient := Gradient.new()
+      gradient.set_color(0, Color(1, 1, 0.8))
+      gradient.add_point(0.3, Color(1, 0.4, 0))
+      gradient.add_point(0.8, Color(0.2, 0.1, 0))
+      gradient.add_point(1.0, Color(0, 0, 0, 0))
+      mat.color_ramp = GradientTexture1D.new()
+      (mat.color_ramp as GradientTexture1D).gradient = gradient
+
+      # Turbulenz (GPU-seitig berechnet!):
+      mat.turbulence_enabled         = true
+      mat.turbulence_noise_strength  = 2.0
+      mat.turbulence_noise_scale     = 3.0
+
+      process_material = mat
+      amount           = 50000   # 50k Partikel -- kein Problem fuer GPU
+      lifetime         = 1.5
+      emitting         = true
+
+Eigener Partikel-Compute fuer komplexere Physik (Kollision mit Terrain):
+  # In einem custom ParticleProcessMaterial kannst du eigene
+  # GLSL-Code-Snippets injizieren (Godot 4.2+):
+  mat.set_shader_parameter("kollisions_hoehemap", hoehemap_texture)
+  # Im custom particle shader dann Terrain-Kollision berechnen.
+
+------------------------------------------------------------------------
+44.6  Persistent Compute Buffer -- Frame-uebergreifende Daten
+------------------------------------------------------------------------
+
+Statt jeden Frame den Buffer neu zu erstellen (teuer!):
+Einmal erstellen, jedes Frame wiederverwenden.
+
+  extends Node
+
+  var rd: RenderingDevice
+  var persistent_buffer: RID
+  var pipeline: RID
+  var shader: RID
+
+  const BUFFER_GROESSE: int = 1024 * 1024   # 1M Floats = 4MB
+
+  func _ready() -> void:
+      rd = RenderingServer.get_rendering_device()
+      _shader_und_pipeline_erstellen()
+
+      # Buffer einmal erstellen:
+      var init_daten := PackedByteArray()
+      init_daten.resize(BUFFER_GROESSE * 4)
+      persistent_buffer = rd.storage_buffer_create(BUFFER_GROESSE * 4, init_daten)
+      print("Persistenter Buffer erstellt: ", BUFFER_GROESSE * 4, " Bytes")
+
+  func _process(_delta: float) -> void:
+      # Jeden Frame: Pipeline mit bestehendem Buffer ausfuehren
+      var compute_list := rd.compute_list_begin()
+      rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
+      # Uniform Set mit persistentem Buffer binden...
+      rd.compute_list_dispatch(compute_list, ceili(BUFFER_GROESSE / 64.0), 1, 1)
+      rd.compute_list_end()
+      # KEIN sync() -- asynchron, GPU und CPU laufen parallel!
+      rd.submit()
+
+  func daten_lesen() -> PackedFloat32Array:
+      # Nur wenn wirklich noetig:
+      rd.sync()
+      return rd.buffer_get_data(persistent_buffer).to_float32_array()
+
+  func _exit_tree() -> void:
+      rd.free_rid(persistent_buffer)
+      rd.free_rid(pipeline)
+      rd.free_rid(shader)
+
+--------------------------------------------------------------------------------
+UEBUNG 44:
+1. Schreibe einen simplen Compute Shader der ein Float-Array verdoppelt.
+   Rufe ihn aus GDScript auf, verifiziere das Ergebnis.
+2. Erweitere ihn zu einer Noise-Berechnung: GPU berechnet 256x256 Noise-Werte.
+   Uebertrage das Ergebnis als Texture2D an einen MeshInstance3D-Shader.
+3. Implementiere einen persistenten Partikel-Buffer (10k Partikel,
+   GPU aktualisiert Position + Geschwindigkeit jedes Frame).
+4. Baue Voxel-Licht-Propagation fuer einen 16x16x16 Chunk.
+   Setze eine Lichtquelle in der Mitte und lass Licht 15 Passes propagieren.
+   Visualisiere das Licht-Level als Farbe pro Voxel.
+5. Bonus: Vergleiche Performance:
+   Noise-Berechnung in GDScript vs WorkerThreadPool vs Compute Shader.
+   Miss Millisekunden pro Frame fuer je 256x256 Punkte.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 45: Audio -- Effekte, Bus-Routing und Raumakustik
+================================================================================
+
+------------------------------------------------------------------------
+45.1  Godots Audio-Bus-System
+------------------------------------------------------------------------
+
+Godot hat ein professionelles Audio-Bus-System aehnlich wie eine DAW.
+Jeder Sound geht durch einen Bus, Busse koennen Effekte haben und
+in andere Busse geroutet werden.
+
+Standard-Busse:
+  Master     <- alle anderen laufen hier rein
+  Musik      <- nur Musik-Streams
+  SFX        <- Spieler-Aktionen, Waffen
+  Umgebung   <- Voegel, Wind, Wasser
+  UI         <- Menu-Sounds, Notifications
+  Stimmen    <- Dialog, Charaktere
+
+Audio-Bus-Layout erstellen (im Editor):
+  Projekt -> Audio-Bus-Editor oeffnen
+  -> Neue Busse hinzufuegen -> Send-Ziel setzen
+
+Per Code auf Busse zugreifen:
+  # Bus-Index holen:
+  var musik_bus: int  = AudioServer.get_bus_index("Musik")
+  var sfx_bus: int    = AudioServer.get_bus_index("SFX")
+
+  # Lautstaerke (in Dezibel):
+  AudioServer.set_bus_volume_db(musik_bus, linear_to_db(0.7))
+
+  # Bus stummschalten:
+  AudioServer.set_bus_mute(sfx_bus, true)
+
+  # Solo:
+  AudioServer.set_bus_solo(musik_bus, true)
+
+  # Effekte aktivieren/deaktivieren:
+  AudioServer.set_bus_effect_enabled(musik_bus, 0, true)   # Effekt-Index 0
+
+AudioStreamPlayer den richtigen Bus zuweisen:
+  var player := AudioStreamPlayer.new()
+  player.stream = mein_sound
+  player.bus    = "SFX"   # Bus-Name als String
+  add_child(player)
+  player.play()
+
+------------------------------------------------------------------------
+45.2  Audio-Effekte per Code steuern
+------------------------------------------------------------------------
+
+Alle Effekte koennen im Editor hinzugefuegt UND per Code gesteuert werden.
+
+REVERB (Hall):
+  # Bus-Effekt holen und aendern:
+  var reverb := AudioServer.get_bus_effect(musik_bus, 0) as AudioEffectReverb
+  reverb.room_size   = 0.9     # 0-1, groesserer Raum = laengerer Hall
+  reverb.damping     = 0.5     # Hoehenabsorption
+  reverb.wet         = 0.4     # Anteil Hall-Signal
+  reverb.dry         = 0.6     # Anteil Direkt-Signal
+  reverb.predelay_msec = 20.0  # Millisekunden Verzoegerung vor Hall
+
+  # Dynamischer Reverb-Wechsel (draussen -> Hoehle):
+  func in_hoehle_eintreten() -> void:
+      var tween := create_tween()
+      tween.tween_method(func(v: float): reverb.room_size = v, 0.2, 0.95, 1.0)
+      tween.parallel().tween_method(func(v: float): reverb.wet = v, 0.1, 0.7, 1.0)
+
+EQUALIZER:
+  var eq := AudioServer.get_bus_effect(sfx_bus, 1) as AudioEffectEQ
+  # AudioEffectEQ10 hat 10 Baender:
+  eq.set_band_gain_db(0, -6.0)   # 32 Hz runter (weniger Bass)
+  eq.set_band_gain_db(9, 3.0)    # 16 kHz rauf (mehr Klarheit)
+
+  # Unterwasser-Effekt (Hochfrequenzen abschneiden):
+  func unterwasser_an() -> void:
+      var tween := create_tween()
+      for i in range(5, 10):   # Obere Haelfte der Baender
+          tween.parallel().tween_method(
+              func(v: float): eq.set_band_gain_db(i, v),
+              eq.get_band_gain_db(i), -40.0, 0.5
+          )
+      AudioServer.set_bus_volume_db(sfx_bus, linear_to_db(0.4))
+
+  func unterwasser_aus() -> void:
+      var tween := create_tween()
+      for i in range(5, 10):
+          tween.parallel().tween_method(
+              func(v: float): eq.set_band_gain_db(i, v),
+              eq.get_band_gain_db(i), 0.0, 0.5
+          )
+      AudioServer.set_bus_volume_db(sfx_bus, linear_to_db(1.0))
+
+CHORUS (Verdopplungseffekt, z.B. fuer magische Sounds):
+  var chorus := AudioServer.get_bus_effect(magie_bus, 0) as AudioEffectChorus
+  chorus.voice_count  = 3
+  chorus.voice_1_delay_ms  = 20.0
+  chorus.voice_1_depth_ms  = 3.0
+  chorus.voice_1_pan       = -0.7
+  chorus.voice_2_delay_ms  = 35.0
+  chorus.voice_2_pan       =  0.7
+
+PITCH-SHIFTER (Tonhoehe aendern ohne Tempo zu aendern):
+  var pitch := AudioServer.get_bus_effect(stimmen_bus, 0) as AudioEffectPitchShift
+  pitch.pitch_scale = 0.7   # Tiefer (< 1.0), hoeher (> 1.0)
+  # Fuer verzerrte Radio-Stimme, Monster-Stimmen, etc.
+
+KOMPRESSOR (Dynamik glaetten):
+  var comp := AudioServer.get_bus_effect(musik_bus, 0) as AudioEffectCompressor
+  comp.threshold  = -20.0   # dB, unter dem Threshold: keine Wirkung
+  comp.ratio      = 4.0     # 4:1 Kompression
+  comp.attack_us  = 20.0    # Mikrosekunden bis Kompressor einsetzt
+  comp.release_ms = 250.0   # Millisekunden bis Kompressor loeslaesst
+  comp.gain       = 6.0     # Make-up Gain nach der Kompression
+
+------------------------------------------------------------------------
+45.3  3D-Audio und Raumakustik
+------------------------------------------------------------------------
+
+AudioStreamPlayer2D/3D haben eingebaute Abstandsabschwaechung.
+Fuer echte Raumakustik brauchen wir mehr.
+
+  # AudioStreamPlayer3D konfigurieren:
+  @onready var player: AudioStreamPlayer3D = $AudioStreamPlayer3D
+
+  func _ready() -> void:
+      player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_LOGARITHMIC
+      player.unit_size        = 1.0     # 1m = Referenzabstand
+      player.max_db           = 0.0     # Maximale Lautstaerke
+      player.max_distance     = 50.0    # Ab hier kein Sound mehr
+      player.panning_strength = 1.0     # Stereo-Breite
+
+Hoehlen-Hallsystem (basierend auf Raycast):
+  extends AudioStreamPlayer3D
+
+  var reverb_effekt: AudioEffectReverb
+  var reverb_bus: int
+
+  func _ready() -> void:
+      reverb_bus    = AudioServer.get_bus_index("Umgebung")
+      reverb_effekt = AudioServer.get_bus_effect(reverb_bus, 0) as AudioEffectReverb
+
+  func _physics_process(_delta: float) -> void:
+      if Engine.get_physics_frames() % 10 != 0:
+          return   # Nur alle 10 Frames pruefen
+      raum_analysieren()
+
+  func raum_analysieren() -> void:
+      var space := get_world_3d().direct_space_state
+      var richtungen := [
+          Vector3.RIGHT, Vector3.LEFT, Vector3.UP,
+          Vector3.FORWARD, Vector3.BACK
+      ]
+
+      var gesamt_abstand: float = 0.0
+      var treffer_anzahl: int = 0
+
+      for richtung in richtungen:
+          var query := PhysicsRayQueryParameters3D.create(
+              global_position,
+              global_position + richtung * 30.0,
+              0b00000100   # Nur Geometrie, keine Spieler
+          )
+          var treffer := space.intersect_ray(query)
+          if treffer:
+              gesamt_abstand += global_position.distance_to(treffer["position"])
+              treffer_anzahl += 1
+
+      if treffer_anzahl == 0:
+          # Keine Waende: draussen, kaum Hall
+          reverb_effekt.room_size = 0.1
+          reverb_effekt.wet       = 0.05
+          return
+
+      var durchschnitt := gesamt_abstand / treffer_anzahl
+      # Kleiner Raum (kurze Abstaende) = kurzer knackiger Hall
+      # Grosser Raum (lange Abstaende) = langer weicher Hall
+      var raum_groesse: float = clamp(durchschnitt / 30.0, 0.0, 1.0)
+      reverb_effekt.room_size = lerp(0.2, 0.95, raum_groesse)
+      reverb_effekt.wet       = lerp(0.05, 0.6, raum_groesse)
+      reverb_effekt.damping   = lerp(0.3, 0.7, raum_groesse)
+
+------------------------------------------------------------------------
+45.4  Raytraced Audio -- akustische Simulation
+------------------------------------------------------------------------
+
+Echtes Raytraced Audio (wie in Steam Audio oder Microsoft Acoustics)
+ist ein eigenes Forschungsfeld. Was wir in Godot realistisch bauen
+koennen: mehrfache Reflexionen per Raycast simulieren.
+
+Das Prinzip:
+  1. Von der Schallquelle Strahlen in viele Richtungen schicken
+  2. Strahlen reflektieren von Waenden (mit Energie-Verlust)
+  3. Wenn ein Strahl den Listener trifft (Haerchen): Reflexion zaehlt
+  4. Anzahl + Verzoegerung der Reflexionen ergeben den Hallcharakter
+
+  class_name AudioRaytracer
+  extends Node3D
+
+  @export var strahlen_anzahl: int = 64
+  @export var max_reflexionen: int = 4
+  @export var reflexions_verlust: float = 0.6   # Pro Reflexion: 40% Energie weg
+  @export var listener: Node3D
+
+  # Reflexions-Daten die an den Reverb-Effekt uebergeben werden:
+  var reflexionen: Array[Dictionary] = []
+
+  func akustik_berechnen() -> void:
+      reflexionen.clear()
+
+      var space := get_world_3d().direct_space_state
+
+      for i in range(strahlen_anzahl):
+          # Gleichmaessig verteilte Richtungen (Fibonacci-Sphere):
+          var theta: float = acos(1.0 - 2.0 * (i + 0.5) / strahlen_anzahl)
+          var phi:   float = PI * (1.0 + sqrt(5.0)) * i
+          var richtung := Vector3(
+              sin(theta) * cos(phi),
+              cos(theta),
+              sin(theta) * sin(phi)
+          )
+
+          strahl_verfolgen(space, global_position, richtung, 1.0, 0, 0.0)
+
+  func strahl_verfolgen(space: PhysicsDirectSpaceState3D, ursprung: Vector3,
+      richtung: Vector3, energie: float, tiefe: int, verzoegerung_ms: float) -> void:
+
+      if tiefe >= max_reflexionen or energie < 0.05:
+          return
+
+      var query := PhysicsRayQueryParameters3D.create(
+          ursprung,
+          ursprung + richtung * 100.0
+      )
+      var treffer := space.intersect_ray(query)
+      if not treffer:
+          return
+
+      var trefferpunkt: Vector3 = treffer["position"]
+      var abstand: float        = ursprung.distance_to(trefferpunkt)
+      var neue_verzoegerung:float = verzoegerung_ms + (abstand / 343.0) * 1000.0  # ms
+
+      # Pruefe ob der Strahl den Listener "trifft" (Naehrungs-Check):
+      var listener_abstand: float = trefferpunkt.distance_to(listener.global_position)
+      if listener_abstand < 2.0:
+          # Reflexion gefunden!
+          reflexionen.append({
+              "energie":      energie,
+              "verzoegerung": neue_verzoegerung,
+              "tiefe":        tiefe
+          })
+
+      # Weiter reflektieren:
+      var normale: Vector3 = treffer["normal"]
+      var reflektiert: Vector3 = richtung.bounce(normale)
+      strahl_verfolgen(space, trefferpunkt + normale * 0.01, reflektiert,
+          energie * reflexions_verlust, tiefe + 1, neue_verzoegerung)
+
+  func reflexionen_auf_audio_anwenden() -> void:
+      if reflexionen.is_empty():
+          return
+
+      var reverb_bus := AudioServer.get_bus_index("Umgebung")
+      var reverb := AudioServer.get_bus_effect(reverb_bus, 0) as AudioEffectReverb
+
+      # Durchschnittliche Verzoegerung der Erstreflexionen:
+      var erste_reflexionen := reflexionen.filter(func(r): return r["tiefe"] == 0)
+      if erste_reflexionen.is_empty():
+          return
+
+      var avg_delay: float = 0.0
+      var total_energie: float = 0.0
+      for r in erste_reflexionen:
+          avg_delay    += r["verzoegerung"] * r["energie"]
+          total_energie += r["energie"]
+
+      avg_delay /= max(total_energie, 0.001)
+
+      # Predelay = Laufzeit bis erste Reflexion:
+      reverb.predelay_msec = clamp(avg_delay, 0.0, 300.0)
+      # Room Size aus Gesamtanzahl Reflexionen:
+      reverb.room_size     = clamp(float(reflexionen.size()) / 20.0, 0.1, 0.98)
+      reverb.wet           = clamp(total_energie / strahlen_anzahl * 5.0, 0.0, 0.8)
+
+  func _physics_process(_delta: float) -> void:
+      if Engine.get_physics_frames() % 30 != 0:
+          return   # Alle 30 Frames neu berechnen
+      akustik_berechnen()
+      reflexionen_auf_audio_anwenden()
+
+------------------------------------------------------------------------
+45.5  Prozeduraler Sound und AudioStreamGenerator
+------------------------------------------------------------------------
+
+Godot kann Audio-Samples in Echtzeit generieren -- ohne Audiodateien.
+
+  extends AudioStreamPlayer
+
+  var generator: AudioStreamGeneratorPlayback
+
+  func _ready() -> void:
+      var gen_stream := AudioStreamGenerator.new()
+      gen_stream.mix_rate  = 44100.0
+      gen_stream.buffer_length = 0.1   # 100ms Buffer
+      stream = gen_stream
+      play()
+      generator = get_stream_playback() as AudioStreamGeneratorPlayback
+
+  # Prozeduraler Sinus-Ton (Synthesizer):
+  var phase: float = 0.0
+  var frequenz: float = 440.0   # Hz
+
+  func _process(_delta: float) -> void:
+      # Buffer befuellen (so viele Frames wie Platz ist):
+      var frames_verfuegbar: int = generator.get_frames_available()
+      for i in range(frames_verfuegbar):
+          var wert: float = sin(phase * TAU) * 0.3
+          generator.push_frame(Vector2(wert, wert))   # Stereo
+          phase = fmod(phase + frequenz / 44100.0, 1.0)
+
+  # Noise-basierter Wind-Sound:
+  var noise := FastNoiseLite.new()
+  var noise_phase: float = 0.0
+
+  func wind_sound_befuellen() -> void:
+      for i in range(generator.get_frames_available()):
+          var rauschen: float = noise.get_noise_1d(noise_phase) * 0.15
+          generator.push_frame(Vector2(rauschen, rauschen))
+          noise_phase += 0.001 * wind_geschwindigkeit   # Schnellerer Wind = hoehere Frequenz
+
+------------------------------------------------------------------------
+45.6  Musik-System mit dynamischem Layering
+------------------------------------------------------------------------
+
+  class_name MusikManager
+  extends Node
+
+  # Musik hat mehrere Layer die gleichzeitig laufen (alle synchron!):
+  # z.B. Erkunding = nur Melodie
+  #      Kampf     = Melodie + Drums + Bass
+  #      Boss      = alles + Orchester
+  var layer: Array[AudioStreamPlayer] = []
+  var ziel_lautstaerken: Array[float]  = []
+
+  const LAYER_NAMES: Array[String] = ["Bass", "Melodie", "Drums", "Strings", "Choir"]
+
+  func _ready() -> void:
+      for name in LAYER_NAMES:
+          var player := AudioStreamPlayer.new()
+          player.bus = "Musik"
+          add_child(player)
+          layer.append(player)
+          ziel_lautstaerken.append(0.0)
+
+  func musik_laden(pfad_prefix: String) -> void:
+      # Erwartet: pfad_prefix + "_bass.ogg", "_melodie.ogg", etc.
+      # ALLE muessen exakt gleich lang sein und synchron starten!
+      for i in range(LAYER_NAMES.size()):
+          var pfad := pfad_prefix + "_" + LAYER_NAMES[i].to_lower() + ".ogg"
+          if ResourceLoader.exists(pfad):
+              layer[i].stream = load(pfad)
+              layer[i].volume_db = -80.0   # Alle stummgeschaltet starten
+
+      # Alle gleichzeitig starten (synchron!):
+      for l in layer:
+          if l.stream:
+              l.play()
+
+  func spannung_setzen(wert: float) -> void:
+      # wert: 0.0=ruhig, 1.0=voller Kampf
+      ziel_lautstaerken[0] = 1.0                      # Bass: immer an
+      ziel_lautstaerken[1] = 1.0                      # Melodie: immer an
+      ziel_lautstaerken[2] = smoothstep(0.2, 0.6, wert)  # Drums: ab 20% Spannung
+      ziel_lautstaerken[3] = smoothstep(0.5, 0.8, wert)  # Strings: ab 50%
+      ziel_lautstaerken[4] = smoothstep(0.8, 1.0, wert)  # Choir: nur bei Boss
+
+  func _process(delta: float) -> void:
+      for i in range(layer.size()):
+          var ziel_db: float = linear_to_db(ziel_lautstaerken[i]) if ziel_lautstaerken[i] > 0 else -80.0
+          layer[i].volume_db = lerp(layer[i].volume_db, ziel_db, delta * 2.0)
+
+  # Aus dem Spiel aufrufen:
+  # MusikManager.spannung_setzen(0.0)  # Erkunden
+  # MusikManager.spannung_setzen(0.7)  # Kampf
+  # MusikManager.spannung_setzen(1.0)  # Boss
+
+--------------------------------------------------------------------------------
+UEBUNG 45:
+1. Richte 4 Audio-Busse ein (Musik, SFX, Stimmen, Umgebung) mit sinnvollen
+   Effekten (Reverb auf Umgebung, Kompressor auf Musik).
+2. Implementiere den Raum-Analyser: Raycast in 5 Richtungen, Reverb-Parameter
+   dynamisch anpassen. Teste in Innenraum vs. Aussenbereich.
+3. Baue den AudioRaytracer fuer Mehrfach-Reflexionen (64 Strahlen, 4 Bounces).
+   Teste in einem Raum mit verschiedenen Formen.
+4. Erstelle einen prozeduralen Wind-Sound mit AudioStreamGenerator der
+   mit der Windstaerke aus Modul 35 gekoppelt ist.
+5. Bonus: Baues das dynamische Musik-Layering-System.
+   Lade 3 synchrone Audio-Layer und fade sie basierend auf Spieler-Naehe
+   zu einem Feind ein/aus.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 46: Accessibility -- Dein Spiel fuer alle spielbar machen
+================================================================================
+
+Laut WHO hat ca. 15% der Weltbevoelkerung eine Form von Behinderung.
+Dazu kommen situative Einschraenkungen: jemand spielt mit einer Hand,
+in hellem Sonnenlicht, oder im Bus. Gute Accessibility hilft ALLEN.
+
+------------------------------------------------------------------------
+46.1  Visuelle Accessibility
+------------------------------------------------------------------------
+
+FARBBLINDHEIT:
+  Etwa 8% aller Maenner und 0.5% der Frauen sind farbenblind.
+  Die haeufigsten Formen: Rot-Gruen-Blindheit (Deuteranopie/Protanopie).
+
+  Nie NUR Farbe als einziges Signal benutzen:
+    SCHLECHT: Roter Balken = Schaden, Gruener Balken = Heilung
+    GUT:      Roter Balken mit X-Symbol, gruener Balken mit Herz-Symbol
+
+  Farbblindheit-Filter per Shader (als Post-Processing-Effekt):
+    # res://shaders/farbblindheit_filter.gdshader
+    shader_type canvas_item;
+
+    uniform int modus = 0;  # 0=Normal, 1=Protanopie, 2=Deuteranopie, 3=Tritanopie
+
+    void fragment() {
+        vec3 col = texture(TEXTURE, UV).rgb;
+        if (modus == 1) {
+            // Protanopie (Rotblindheit) Simulation:
+            col = vec3(
+                col.r * 0.567 + col.g * 0.433,
+                col.r * 0.558 + col.g * 0.442,
+                col.b * 0.242 + col.b * 0.758
+            );
+        }
+        // ... Deuteranopie, Tritanopie analog
+        COLOR = vec4(col, 1.0);
+    }
+
+  In GDScript anwenden:
+    func farbblindheit_modus_setzen(modus: int) -> void:
+        var overlay := $FarbblindheitOverlay   # ColorRect mit Shader
+        var mat := overlay.material as ShaderMaterial
+        mat.set_shader_parameter("modus", modus)
+        overlay.visible = modus != 0
+
+KONTRAST UND LESBARKEIT:
+  # Alle Texte skalierbar machen:
+  var schrift_groesse_multiplikator: float = 1.0:
+      set(wert):
+          schrift_groesse_multiplikator = clamp(wert, 0.5, 2.0)
+          schrift_groessen_anwenden()
+
+  func schrift_groessen_anwenden() -> void:
+      for label in get_tree().get_nodes_in_group("skalierbare_texte"):
+          var basis := label.get_meta("basis_schriftgroesse", 16)
+          label.add_theme_font_size_override("font_size", int(basis * schrift_groesse_multiplikator))
+
+  # Hochkontrast-Modus:
+  func hochkontrast_an() -> void:
+      var stylesheet := preload("res://themes/hochkontrast.tres") as Theme
+      get_tree().root.theme = stylesheet
+      # Hochkontrast-Theme: schwarzer Hintergrund, weisser Text,
+      # gelbe Hervorhebungen, dicke Raender
+
+BEWEGUNG UND BLINKEN:
+  # Manche Spieler haben Photosensitivitaet (Epilepsie):
+  var animationen_reduzieren: bool = false:
+      set(wert):
+          animationen_reduzieren = wert
+          _bewegungs_einstellung_anwenden()
+
+  func _bewegungs_einstellung_anwenden() -> void:
+      # Partikel reduzieren/ausschalten:
+      for partikel in get_tree().get_nodes_in_group("optionale_partikel"):
+          partikel.emitting = not animationen_reduzieren
+      # Screen-Shake deaktivieren:
+      kamera_shake_erlaubt = not animationen_reduzieren
+      # Schnelle Blink-Animationen verlangsamen:
+      for anim in get_tree().get_nodes_in_group("blink_animationen"):
+          anim.speed_scale = 0.2 if animationen_reduzieren else 1.0
+
+UNTERTITEL:
+  # Untertitel-System:
+  extends CanvasLayer
+
+  var untertitel_aktiv: bool = true
+  @onready var label: RichTextLabel = $Label
+  @onready var hintergrund: Panel   = $Hintergrund
+
+  signal untertitel_angezeigt(sprecher: String, text: String)
+
+  func untertitel_zeigen(sprecher: String, text: String, dauer: float) -> void:
+      if not untertitel_aktiv:
+          return
+      label.text = "[b]%s:[/b] %s" % [sprecher, text]
+      hintergrund.visible = true
+      label.visible = true
+      untertitel_angezeigt.emit(sprecher, text)
+      await get_tree().create_timer(dauer).timeout
+      label.visible       = false
+      hintergrund.visible = false
+
+  # Konfigurierbar:
+  @export var schrift_groesse: int = 18:
+      set(wert):
+          schrift_groesse = vert
+          label.add_theme_font_size_override("font_size", schrift_groesse)
+  @export var hintergrund_opazitaet: float = 0.7
+
+------------------------------------------------------------------------
+46.2  Motorische Accessibility
+------------------------------------------------------------------------
+
+Nicht alle Spieler koennen beide Haende benutzen oder praezise sein.
+
+BUTTON-REMAPPING (wir haben das in Modul 6 angeschnitten, jetzt vollstaendig):
+  # Jede Aktion remappbar machen:
+  extends Resource
+  class_name Keybindings
+
+  var bindungen: Dictionary = {}   # action_name -> Array[InputEvent]
+
+  func laden() -> void:
+      var config := ConfigFile.new()
+      if config.load("user://keybindings.cfg") != OK:
+          return   # Standard-Bindungen aus InputMap benutzen
+
+      for aktion in config.get_sections():
+          var events: Array[InputEvent] = []
+          for event_data in config.get_section_keys(aktion):
+              var ev_str: String = config.get_value(aktion, event_data)
+              events.append(event_string_zu_event(ev_str))
+          bindungen[aktion] = events
+          InputMap.action_erase_events(aktion)
+          for ev in events:
+              InputMap.action_add_event(aktion, ev)
+
+  func speichern() -> void:
+      var config := ConfigFile.new()
+      for aktion in bindungen:
+          for i in range(bindungen[aktion].size()):
+              config.set_value(aktion, "event_%d" % i,
+                  event_zu_string(bindungen[aktion][i]))
+      config.save("user://keybindings.cfg")
+
+  func taste_neu_belegen(aktion: String, neues_event: InputEvent) -> void:
+      InputMap.action_erase_events(aktion)
+      InputMap.action_add_event(aktion, neues_event)
+      if not bindungen.has(aktion):
+          bindungen[aktion] = []
+      bindungen[aktion] = [neues_event]
+      speichern()
+
+  func event_zu_string(event: InputEvent) -> String:
+      if event is InputEventKey:
+          return "key:%d" % (event as InputEventKey).keycode
+      if event is InputEventJoypadButton:
+          return "joy:%d" % (event as InputEventJoypadButton).button_index
+      if event is InputEventMouseButton:
+          return "mouse:%d" % (event as InputEventMouseButton).button_index
+      return ""
+
+EIN-HAND-MODUS:
+  func ein_hand_modus_aktivieren(linkshaendig: bool) -> void:
+      # Alle Aktionen auf eine Haelfte der Tastatur legen:
+      if linkshaendig:
+          InputMap.action_erase_events("move_right")
+          InputMap.action_add_event("move_right", _taste(KEY_D))
+          InputMap.action_add_event("move_right", _taste(KEY_E))   # Alternative
+          # ... alle anderen Aktionen
+      else:
+          # Numpad als Steuerung
+          InputMap.action_add_event("move_left",  _taste(KEY_KP_4))
+          InputMap.action_add_event("move_right", _taste(KEY_KP_6))
+          InputMap.action_add_event("jump",       _taste(KEY_KP_8))
+
+  func _taste(keycode: Key) -> InputEventKey:
+      var ev := InputEventKey.new()
+      ev.keycode = keycode
+      return ev
+
+TOGGLE-STATT-HALTEN:
+  # Manche Spieler koennen Tasten nicht dauerhaft halten
+  var toggle_sprint: bool = false   # false=Halten, true=Toggle
+  var sprint_aktiv: bool = false
+
+  func _unhandled_input(event: InputEvent) -> void:
+      if event.is_action_pressed("sprint"):
+          if toggle_sprint:
+              sprint_aktiv = not sprint_aktiv
+          else:
+              sprint_aktiv = true
+      if event.is_action_released("sprint") and not toggle_sprint:
+          sprint_aktiv = false
+
+AIMASSIST:
+  func ziel_finden_mit_assist(kamera_richtung: Vector3, staerke: float = 0.3) -> Vector3:
+      var naechstes_ziel: Node3D = null
+      var kleinster_winkel: float = deg_to_rad(20.0)   # Max 20 Grad Deviation
+
+      for feind in get_tree().get_nodes_in_group("feinde"):
+          var richtung_zu_feind := global_position.direction_to(feind.global_position)
+          var winkel := kamera_richtung.angle_to(richtung_zu_feind)
+          if winkel < kleinster_winkel:
+              kleinster_winkel = winkel
+              naechstes_ziel  = feind
+
+      if naechstes_ziel:
+          # Sanft zur Ziel-Richtung ziehen:
+          var ziel_richtung := global_position.direction_to(naechstes_ziel.global_position)
+          return kamera_richtung.lerp(ziel_richtung, staerke).normalized()
+      return kamera_richtung
+
+------------------------------------------------------------------------
+46.3  Kognitive Accessibility
+------------------------------------------------------------------------
+
+  SCHWIERIGKEITSGRAD-SYSTEM:
+    class_name SchwierigkeitsDaten
+    extends Resource
+
+    @export var name:                  String = "Normal"
+    @export var feind_hp_multiplikator: float = 1.0
+    @export var feind_schaden_multi:   float = 1.0
+    @export var spieler_schaden_multi: float = 1.0
+    @export var respawn_zeit:          float = 5.0
+    @export var hinweise_aktiv:        bool  = true
+    @export var zielsystem_staerke:    float = 0.0   # 0 = kein Assist
+    @export var unzerstoerbar:         bool  = false  # Spieler stirbt nicht
+
+    static func leicht() -> SchwierigkeitsDaten:
+        var d := SchwierigkeitsDaten.new()
+        d.name                    = "Leicht"
+        d.feind_hp_multiplikator  = 0.6
+        d.feind_schaden_multi     = 0.5
+        d.spieler_schaden_multi   = 1.5
+        d.zielsystem_staerke      = 0.5
+        d.hinweise_aktiv          = true
+        return d
+
+    static func benutzerdefiniert(hp: float, schaden: float) -> SchwierigkeitsDaten:
+        var d := SchwierigkeitsDaten.new()
+        d.name                   = "Benutzerdefiniert"
+        d.feind_hp_multiplikator = hp
+        d.feind_schaden_multi    = schaden
+        return d
+
+  HINWEIS-SYSTEM:
+    class_name HinweisSystem
+    extends CanvasLayer
+
+    var hinweise_aktiv: bool = true
+    var gezeigt:        Array[String] = []   # Verhindert Wiederholung
+
+    func hinweis_zeigen(id: String, text: String, dauer: float = 5.0) -> void:
+        if not hinweise_aktiv or id in gezeigt:
+            return
+        gezeigt.append(id)
+
+        var popup := $HinweisPopup
+        popup.text    = text
+        popup.visible = true
+        var tween := create_tween()
+        tween.tween_property(popup, "modulate:a", 1.0, 0.3)
+        tween.tween_interval(dauer)
+        tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+        tween.tween_callback(func(): popup.visible = false)
+
+    func hinweis_zuruecksetzen() -> void:
+        gezeigt.clear()   # Fuer New-Game oder Menue-Rueckkehr
+
+------------------------------------------------------------------------
+46.4  Vollstaendiges Accessibility-Settings-Menu
+------------------------------------------------------------------------
+
+  extends Control
+
+  @onready var farbblind_dropdown:     OptionButton = $Farbe/Dropdown
+  @onready var kontrast_check:         CheckButton  = $Kontrast/Check
+  @onready var schrift_slider:         HSlider      = $Schrift/Slider
+  @onready var untertitel_check:       CheckButton  = $Untertitel/Check
+  @onready var bewegung_check:         CheckButton  = $Bewegung/Check
+  @onready var toggle_sprint_check:    CheckButton  = $ToggleSprint/Check
+  @onready var aim_assist_slider:      HSlider      = $AimAssist/Slider
+  @onready var schwierig_container:    VBoxContainer = $Schwierigkeit
+
+  func _ready() -> void:
+      farbblind_dropdown.add_item("Normal")
+      farbblind_dropdown.add_item("Protanopie (Rot)")
+      farbblind_dropdown.add_item("Deuteranopie (Gruen)")
+      farbblind_dropdown.add_item("Tritanopie (Blau)")
+      einstellungen_laden()
+
+      farbblind_dropdown.item_selected.connect(func(i):
+          AccessibilityManager.farbblindheit_modus_setzen(i))
+      kontrast_check.toggled.connect(func(v):
+          AccessibilityManager.hochkontrast = v)
+      schrift_slider.value_changed.connect(func(v):
+          AccessibilityManager.schrift_groesse_multiplikator = v)
+      untertitel_check.toggled.connect(func(v):
+          UntertitelSystem.untertitel_aktiv = v)
+      bewegung_check.toggled.connect(func(v):
+          AccessibilityManager.animationen_reduzieren = v)
+      toggle_sprint_check.toggled.connect(func(v):
+          spieler.toggle_sprint = v)
+      aim_assist_slider.value_changed.connect(func(v):
+          spieler.aim_assist_staerke = v)
+
+  func einstellungen_laden() -> void:
+      var config := ConfigFile.new()
+      config.load("user://accessibility.cfg")
+      farbblind_dropdown.selected  = config.get_value("visuell", "farbblind", 0)
+      kontrast_check.button_pressed = config.get_value("visuell", "kontrast", false)
+      schrift_slider.value          = config.get_value("visuell", "schrift",   1.0)
+      untertitel_check.button_pressed = config.get_value("audio",  "untertitel", true)
+      bewegung_check.button_pressed   = config.get_value("visuell", "bewegung", false)
+      toggle_sprint_check.button_pressed = config.get_value("motorisch", "toggle_sprint", false)
+      aim_assist_slider.value         = config.get_value("motorisch", "aim_assist", 0.0)
+
+  func einstellungen_speichern() -> void:
+      var config := ConfigFile.new()
+      config.set_value("visuell",   "farbblind",    farbblind_dropdown.selected)
+      config.set_value("visuell",   "kontrast",     kontrast_check.button_pressed)
+      config.set_value("visuell",   "schrift",      schrift_slider.value)
+      config.set_value("audio",     "untertitel",   untertitel_check.button_pressed)
+      config.set_value("visuell",   "bewegung",     bewegung_check.button_pressed)
+      config.set_value("motorisch", "toggle_sprint", toggle_sprint_check.button_pressed)
+      config.set_value("motorisch", "aim_assist",   aim_assist_slider.value)
+      config.save("user://accessibility.cfg")
+
+------------------------------------------------------------------------
+46.5  Accessibility als Core-Addon
+------------------------------------------------------------------------
+
+  # AccessibilityManager.gd (ins Core-Addon -- JEDES Spiel profitiert)
+  extends Node
+
+  signal einstellung_geaendert(kategorie: String, name: String, wert: Variant)
+
+  # Visuell:
+  var farbblindheit_modus:         int   = 0:   set(v): farbblindheit_modus = v;         _anwenden("visuell", "farbblind", v)
+  var hochkontrast:                bool  = false: set(v): hochkontrast = v;               _anwenden("visuell", "kontrast", v)
+  var schrift_groesse_multiplikator: float = 1.0: set(v): schrift_groesse_multiplikator = v; _anwenden("visuell", "schrift", v)
+  var animationen_reduzieren:      bool  = false: set(v): animationen_reduzieren = v;     _anwenden("visuell", "bewegung", v)
+
+  # Audio:
+  var untertitel_aktiv:  bool  = true
+  var audio_beschreibungen: bool = false   # Fuer Sehbehinderte: Aktionen vorlesen
+
+  # Motorisch:
+  var toggle_sprint:     bool  = false
+  var toggle_zielen:     bool  = false
+  var aim_assist:        float = 0.0
+  var eingabe_verzoegerung_ms: int = 0   # Fuer Spieler mit langsamerer Reaktion
+
+  func _anwenden(kat: String, name: String, wert: Variant) -> void:
+      einstellung_geaendert.emit(kat, name, wert)
+      # Alle registrierten Systeme informieren:
+      get_tree().call_group("accessibility_empfaenger", "_accessibility_update", kat, name, wert)
+
+  func alles_laden() -> void:
+      var config := ConfigFile.new()
+      if config.load("user://accessibility.cfg") != OK:
+          return
+      farbblindheit_modus          = config.get_value("visuell",   "farbblind",   0)
+      hochkontrast                 = config.get_value("visuell",   "kontrast",    false)
+      schrift_groesse_multiplikator = config.get_value("visuell",   "schrift",     1.0)
+      animationen_reduzieren       = config.get_value("visuell",   "bewegung",    false)
+      untertitel_aktiv             = config.get_value("audio",     "untertitel",  true)
+      toggle_sprint                = config.get_value("motorisch", "toggle",      false)
+      aim_assist                   = config.get_value("motorisch", "aim_assist",  0.0)
+
+--------------------------------------------------------------------------------
+UEBUNG 46:
+1. Implementiere den Farbblindheit-Filter-Shader fuer alle 3 Typen.
+   Erstelle einen Toggle im Pause-Menu.
+2. Baue das Schrift-Skalierungs-System: alle Labels in der Gruppe
+   "skalierbare_texte", Slider im Menu skaliert alle gleichzeitig.
+3. Implementiere vollstaendiges Button-Remapping:
+   Spieler klickt "Neue Taste", drueckt Taste -> wird gespeichert.
+   Beim naechsten Start wiederhergestellt.
+4. Baue das Schwierigkeitsgrad-System mit einer Custom-Option
+   (Spieler stellt HP und Schaden separat ein).
+5. Fuege alles ins Core-Addon: AccessibilityManager als Autoload,
+   Accessibility-Settings-UI als Scene, beides sofort nutzbar in
+   jedem neuen Projekt.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 10
+################################################################################
+
+COMPUTE SHADER:
+  RenderingServer.get_rendering_device()   -> RenderingDevice
+  rd.shader_create_from_spirv(spirv)       -> RID
+  rd.compute_pipeline_create(shader)       -> RID
+  rd.storage_buffer_create(size, bytes)    -> RID
+  RDUniform + rd.uniform_set_create()      -> RID
+  rd.compute_list_begin/dispatch/end()
+  rd.submit() + rd.sync()                  -> GPU wartet
+  rd.buffer_get_data(rid).to_float32_array()
+
+VOXEL-LICHT:
+  Flood Fill auf GPU: mehrere Passes
+  Bit-Packing: Block-Typ in unteren Bits, Licht in oberen
+  Persistent Buffer: einmal erstellen, jeden Frame wiederverwenden
+
+AUDIO BUSSE:
+  AudioServer.get_bus_index("Name")
+  AudioServer.set_bus_volume_db(idx, db)
+  AudioServer.get_bus_effect(idx, effect_idx) as AudioEffectReverb/EQ/...
+  player.bus = "SFX"
+
+RAUMAKUSTIK:
+  Raycast in 5-6 Richtungen -> Abstand -> room_size + wet + predelay
+  AudioRaytracer: Fibonacci-Sphere Strahlen, bounce() fuer Reflexion
+  Verzoegerung = abstand / 343.0 * 1000.0 ms
+
+PROZEDURALER SOUND:
+  AudioStreamGenerator + AudioStreamGeneratorPlayback
+  generator.push_frame(Vector2(l, r))
+  Sinus: sin(phase * TAU), phase += freq / mix_rate
+
+ACCESSIBILITY:
+  Farbblindheit: Post-Process-Shader (Protanopie/Deuteranopie/Tritanopie)
+  Kontrast: Theme wechseln
+  Schrift: theme_font_size_override + Gruppe "skalierbare_texte"
+  Bewegung: animationen_reduzieren Bool, Partikel aus, kein Shake
+  Toggle statt Halten: sprint_aktiv = not sprint_aktiv
+  Aim Assist: direction.lerp(ziel_direction, staerke)
+  Keybindings: ConfigFile + InputMap zur Laufzeit aendern
+  Alle Einstellungen: user://accessibility.cfg
+
+================================================================================
+ENDE TEIL 10 -- GDSCRIPT KOMPLETTKURS VOLLSTAENDIG ABGESCHLOSSEN
+
+Alle 10 Teile zusammen:
+  Teil 1-2:  Grundlagen, Bewegung, Physik, Input, Animationen
+  Teil 3-4:  Spielsysteme, Daten, KI, Cutscenes, Modularer Code
+  Teil 5-6:  Multiplayer (Listen-Server bis dedizierter Server + Steam)
+  Teil 7:    Performance, Multithreading, Voxel-Architektur
+  Teil 8:    Simulation (Ragdoll, Aerodynamik, Wetter, Splitscreen)
+  Teil 9:    Werkzeuge (Level-Editor, Menues, Plugins, Export)
+  Teil 10:   Compute Shader, Audio, Accessibility
+
+Als naechstes: Der separate Godot Shader Kurs.
+================================================================================

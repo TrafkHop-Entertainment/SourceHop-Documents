@@ -1,0 +1,1202 @@
+================================================================================
+GODOT SHADER KOMPLETTKURS — GODOT 4 EDITION (Teil 3 von 4)
+================================================================================
+
+
+################################################################################
+TEIL 3 — 3D-SHADER
+################################################################################
+
+
+================================================================================
+MODUL 11: Spatial Shader — der 3D-Shader in Godot
+================================================================================
+
+Der spatial-Shader ist Godots 3D-Shader-Typ. Er unterscheidet sich grundlegend
+vom canvas_item-Shader: Statt COLOR zu setzen, schreibst du in spezielle
+PBR-Ausgabe-Variablen. Godot erledigt die Beleuchtung dann für dich.
+
+------------------------------------------------------------------------
+11.1  Grundstruktur des Spatial Shaders
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  // Render Modes (andere als bei canvas_item!):
+  render_mode unshaded;           // Keine Beleuchtung — nur ALBEDO zählt
+  render_mode cull_disabled;      // Beide Seiten rendern (kein Back-Face Culling)
+  render_mode cull_front;         // Nur Rückseite rendern
+  render_mode depth_draw_always;  // Immer in Depth-Buffer schreiben
+  render_mode depth_draw_never;   // Nie in Depth-Buffer schreiben (für Glas)
+  render_mode blend_mix;          // Standard Alpha-Blending
+  render_mode blend_add;          // Additives Blending
+  render_mode vertex_lighting;    // Beleuchtung im Vertex Shader (schneller, grober)
+  render_mode specular_disabled;  // Kein Specular-Highlight
+  render_mode ambient_light_disabled; // Kein Ambient Light
+  render_mode fog_disabled;       // Kein Nebel
+
+  void vertex() {
+      // Vertex-Positionen manipulieren
+      // Ausgabe: VERTEX (vec3), NORMAL (vec3), UV, UV2, etc.
+  }
+
+  void fragment() {
+      // PBR-Parameter setzen:
+      ALBEDO = vec3(1.0, 0.0, 0.0);  // Grundfarbe (KEIN vec4 — Alpha separat!)
+      ALPHA = 1.0;                    // Transparenz (nur mit blend_mix!)
+      METALLIC = 0.0;                 // 0 = nicht-metallisch, 1 = vollständig Metall
+      ROUGHNESS = 0.5;                // 0 = spiegelglatt, 1 = vollständig rau
+      EMISSION = vec3(0.0);           // Selbstleuchtend (RGB-Farbe * Intensität)
+      NORMAL_MAP = vec3(0.5, 0.5, 1.0);  // Normal Map (tangent space)
+      AO = 1.0;                       // Ambient Occlusion (0 = verdunkelt, 1 = normal)
+      AO_LIGHT_AFFECT = 0.0;          // Wie stark AO direktes Licht beeinflusst
+      SPECULAR = 0.5;                 // Specular-Intensität (nicht Metallic-Workflow)
+      CLEARCOAT = 0.0;                // Klarlack-Effekt (0-1)
+      CLEARCOAT_ROUGHNESS = 0.0;      // Rauheit des Klarlacks
+      RIM = 0.0;                      // Rim-Licht Intensität
+      RIM_TINT = 0.5;                 // Wie viel Grundfarbe im Rim
+      BACKLIGHT = vec3(0.0);          // Rückseiten-Beleuchtung (für Blätter, Haut)
+      DEPTH = 0.0;                    // Custom Depth (für parallax)
+      // SSS_STRENGTH = 0.0;          // Subsurface Scattering (Haut)
+  }
+
+  // Optional: light() — custom Beleuchtungsberechnung
+  void light() {
+      // DIFFUSE_LIGHT, SPECULAR_LIGHT, ATTENUATION, LIGHT_COLOR, LIGHT, VIEW, NORMAL, etc.
+  }
+
+Du musst NICHT alle Variablen setzen. Nicht gesetzte Variablen benutzen
+Godots Standardwerte (ROUGHNESS = 1.0, METALLIC = 0.0, etc.).
+
+------------------------------------------------------------------------
+11.2  Wichtige Built-in Variablen im Spatial Fragment Shader
+------------------------------------------------------------------------
+
+EINGABE-VARIABLEN (lesen):
+  UV          vec2    Erste UV-Koordinaten (0-1)
+  UV2         vec2    Zweite UV-Koordinaten (für Lightmaps)
+  NORMAL      vec3    Oberflächen-Normal (world space)
+  TANGENT     vec3    Tangent-Vektor
+  BINORMAL    vec3    Binormal/Bitangent-Vektor
+  VIEW        vec3    Richtung zur Kamera (normalisiert, von Oberfläche)
+  FRAGCOORD   vec4    Pixel-Position im Bildschirm
+  TIME        float   Zeit in Sekunden
+  FRONT_FACING bool   true wenn Vorderseite gerendert wird
+
+POSITIONS-VARIABLEN:
+  VERTEX       vec3   (im vertex() Shader — position des Vertex, modifizierbar)
+  CAMERA_POSITION vec3  Position der Kamera (world space)
+
+AUSGABE-VARIABLEN (schreiben):
+  ALBEDO       vec3   Grundfarbe (0-1)
+  ALPHA        float  Transparenz (0-1, nur mit blend-Render-Mode)
+  METALLIC     float  Metallgrad (0-1)
+  ROUGHNESS    float  Rauheit (0-1)
+  EMISSION     vec3   Selbstleuchten (kann > 1.0 sein für Bloom!)
+  NORMAL_MAP   vec3   Normal Map (tangent space)
+  AO           float  Ambient Occlusion
+  SPECULAR     float  Specular-Stärke
+
+------------------------------------------------------------------------
+11.3  Einfachster Spatial Shader — farbiges Material
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode unshaded;  // Kein Licht — nur Farbe
+
+  uniform vec4 farbe : source_color = vec4(1.0, 0.5, 0.0, 1.0);
+
+  void fragment() {
+      ALBEDO = farbe.rgb;
+  }
+
+MIT BELEUCHTUNG:
+  shader_type spatial;
+  // render_mode nicht gesetzt = Standard-PBR-Beleuchtung aktiv
+
+  uniform vec4 albedo_farbe : source_color = vec4(0.8, 0.2, 0.2, 1.0);
+  uniform float roughness_wert : hint_range(0.0, 1.0) = 0.5;
+  uniform float metallic_wert : hint_range(0.0, 1.0) = 0.0;
+
+  void fragment() {
+      ALBEDO = albedo_farbe.rgb;
+      ROUGHNESS = roughness_wert;
+      METALLIC = metallic_wert;
+  }
+
+------------------------------------------------------------------------
+11.4  Texturen im Spatial Shader
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform sampler2D albedo_tex : source_color, hint_default_white;
+  uniform sampler2D normal_map_tex : hint_normal;
+  uniform sampler2D orm_tex : hint_default_white;  // Occlusion/Roughness/Metallic
+  uniform sampler2D emission_tex : source_color, hint_default_black;
+
+  void fragment() {
+      vec2 uv = UV;
+
+      // Albedo (Grundfarbe):
+      ALBEDO = texture(albedo_tex, uv).rgb;
+
+      // Normal Map:
+      NORMAL_MAP = texture(normal_map_tex, uv).rgb;
+
+      // ORM-Textur (Kanal-Packing):
+      vec3 orm = texture(orm_tex, uv).rgb;
+      AO = orm.r;          // Rot-Kanal = Ambient Occlusion
+      ROUGHNESS = orm.g;   // Grün-Kanal = Roughness
+      METALLIC = orm.b;    // Blau-Kanal = Metallic
+
+      // Emission:
+      EMISSION = texture(emission_tex, uv).rgb;
+  }
+
+Das ist bereits ein vollständiges PBR-Material. Mit vier Texturen deckst
+du alle wichtigen PBR-Parameter ab.
+
+------------------------------------------------------------------------
+11.5  UV-Tiling und Offset
+------------------------------------------------------------------------
+
+Für große Flächen (Böden, Wände) muss die Textur oft gekachelt werden:
+
+  shader_type spatial;
+
+  uniform vec2 uv_tiling = vec2(4.0, 4.0);   // 4x4 Kacheln
+  uniform vec2 uv_offset = vec2(0.0, 0.0);
+  uniform sampler2D albedo_tex : source_color, hint_default_white;
+
+  void fragment() {
+      vec2 uv = UV * uv_tiling + uv_offset;
+      ALBEDO = texture(albedo_tex, uv).rgb;
+  }
+
+FÜR VERTEX SHADER (effizienter, da nur einmal pro Vertex statt pro Pixel):
+  varying vec2 custom_uv;
+
+  void vertex() {
+      custom_uv = UV * uv_tiling + uv_offset;
+  }
+
+  void fragment() {
+      ALBEDO = texture(albedo_tex, custom_uv).rgb;
+  }
+
+------------------------------------------------------------------------
+11.6  Alpha und Transparenz im Spatial Shader
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode blend_mix, depth_draw_opaque;
+  // depth_draw_opaque: trotz Transparenz in Depth-Buffer schreiben
+  // (verhindert Z-Fighting bei halbtransparenten Objekten)
+
+  uniform sampler2D albedo_tex : source_color;
+  uniform float alpha_schwelle = 0.1;
+
+  void fragment() {
+      vec4 tex = texture(albedo_tex, UV);
+      ALBEDO = tex.rgb;
+      ALPHA = tex.a;
+
+      // Alpha-Cutout (harte Transparenz, kein Blending):
+      // if (tex.a < alpha_schwelle) discard;
+  }
+
+ALPHA SCISSOR (schneller als Alpha Blending, kein Sorting nötig):
+  shader_type spatial;
+  render_mode depth_prepass_alpha;
+
+  uniform sampler2D albedo_tex : source_color;
+
+  void fragment() {
+      vec4 tex = texture(albedo_tex, UV);
+      ALBEDO = tex.rgb;
+      ALPHA = tex.a;
+      ALPHA_SCISSOR_THRESHOLD = 0.5;  // Unter 0.5 → komplett transparent
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+1. Baue ein "Lava"-Material:
+     - Albedo: Rot-Orange Farbgradient basierend auf einer Noise-Textur
+     - Emission: Dieselbe Noise-Textur, aber helle Bereiche leuchten Orange/Gelb
+     - ROUGHNESS = 0.8, METALLIC = 0.0
+     - Testszene: Eine MeshInstance3D (Plane oder Sphere) mit diesem Material
+2. Erstelle ein "Glas"-Material:
+     - render_mode blend_mix
+     - ALBEDO = vec3(0.8, 0.9, 1.0), ALPHA = 0.3
+     - ROUGHNESS = 0.05, METALLIC = 0.0, SPECULAR = 1.0
+3. Baue ein "Moos"-Material mit UV-Tiling (8x8) und Normal Map.
+4. Kombiniere zwei Texturen per Lerp basierend auf UV.y (oben = Gras, unten = Erde).
+5. Bonus: Lese BaseMaterial3D → "Konvertieren zu ShaderMaterial" auf einer
+   Kugel und erkläre den generierten Code. Ergänze einen animierten TIME-basierten
+   Effekt (z.B. Emission die pulsiert).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Beleuchtung und PBR — Physically Based Rendering
+================================================================================
+
+PBR ist der Standard in modernen 3D-Engines. Godot 4 nutzt ein vollständiges
+PBR-Workflow. Hier verstehst du die Physik dahinter — und wie du sie steuerst.
+
+------------------------------------------------------------------------
+12.1  Was ist PBR?
+------------------------------------------------------------------------
+
+PBR (Physically Based Rendering) simuliert wie Licht wirklich mit
+Materialien interagiert, basierend auf Physikgesetzen:
+
+  ENERGIEERHALTUNG:     Ein Objekt kann nicht mehr Licht reflektieren als
+                        es empfängt. (Keine magisch hellen Oberflächen.)
+  FRESNEL-EFFEKT:       Alle Oberflächen reflektieren mehr bei flachen
+                        Betrachtungswinkeln. (Wasser sieht von der Seite
+                        spiegelnd aus, von oben transparent.)
+  MIKROFACETTEN-MODELL: Rauheit beschreibt, wie "chaotisch" die
+                        Mikro-Oberfläche eines Materials ist.
+
+Das PBR-Workflow hat zwei Parametersets. Godot nutzt das Metallic/Roughness:
+  ALBEDO     = Grundfarbe (für nicht-Metall: die Reflexionsfarbe)
+  METALLIC   = Metallgrad (0 = Plastik/Stein/Holz, 1 = Gold/Stahl)
+  ROUGHNESS  = Rauheit (0 = Spiegel, 1 = Kreide)
+
+------------------------------------------------------------------------
+12.2  METALLIC im Detail
+------------------------------------------------------------------------
+
+Der Metallic-Parameter hat fundamentalen Einfluss auf die Darstellung:
+
+BEI METALLIC = 0 (Nicht-Metall / "Dielectric"):
+  - ALBEDO = Farbe der diffusen Reflexion (wie Farbe auf Papier)
+  - Specular-Highlight ist IMMER weiß (unabhängig von ALBEDO)
+  - Specular-Intensität folgt dem Fresnel-Effekt
+
+BEI METALLIC = 1 (Metall / "Conductor"):
+  - ALBEDO = Farbe der Specular-Reflexion (Gold = gelb, Kupfer = orange)
+  - KEIN diffuses Licht — Metalle absorbieren alle diffusen Photonen
+  - Reflexion ist gefärbt (Gold reflektiert gelbliches Licht)
+
+IN DER PRAXIS: Fast alles ist entweder 0.0 oder 1.0.
+Werte dazwischen sind physikalisch nicht korrekt (außer bei
+Übergangszonen, z.B. rostiges Metall mit Maske).
+
+------------------------------------------------------------------------
+12.3  ROUGHNESS im Detail
+------------------------------------------------------------------------
+
+ROUGHNESS = 0.0: Spiegeloberfläche
+  → Scharfe, kleine Specular-Highlights
+  → Klare Reflexionen (braucht Environment Map / Reflections)
+
+ROUGHNESS = 0.5: Matte Oberfläche, aber mit etwas Glanz
+  → Weiche, ausgedehnte Specular-Highlights
+
+ROUGHNESS = 1.0: Vollständig diffuse Oberfläche
+  → Fast kein Specular-Highlight sichtbar
+  → Kreidig, pudrig
+
+REFERENZ-WERTE:
+  Spiegel:    0.0    Gold (poliert): 0.1-0.2
+  Glas:       0.02   Aluminium roh:  0.5
+  Plastik:    0.3    Stein:          0.7-0.9
+  Holz:       0.6    Kreide:         1.0
+
+------------------------------------------------------------------------
+12.4  EMISSION — selbstleuchtendes Material
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform vec3 emission_farbe : source_color = vec3(0.0, 0.8, 1.0);
+  uniform float emission_staerke = 2.0;  // Kann > 1.0 für Bloom!
+
+  void fragment() {
+      ALBEDO = vec3(0.1, 0.1, 0.1);  // Sehr dunkel (das Objekt "leuchtet ja selbst")
+      ROUGHNESS = 0.8;
+      EMISSION = emission_farbe * emission_staerke;
+  }
+
+EMISSION mit Bloom in Godot 4:
+  - Im WorldEnvironment → Glow aktivieren
+  - Emission-Werte > 1.0 werden dann als Bloom-Quelle behandelt
+  - Das erzeugt echtes "Leucht"-Gefühl ohne separaten Bloom-Pass
+
+ANIMIERTES GLÜHEN:
+  void fragment() {
+      float puls = sin(TIME * 3.0) * 0.5 + 0.5;
+      ALBEDO = vec3(0.05);
+      EMISSION = emission_farbe * (0.5 + puls * emission_staerke);
+  }
+
+------------------------------------------------------------------------
+12.5  AO — Ambient Occlusion
+------------------------------------------------------------------------
+
+AO verdunkelt Bereiche, die wenig Umgebungslicht empfangen (Ecken, Risse):
+
+  uniform sampler2D ao_texture : hint_default_white;
+  uniform float ao_intensitaet : hint_range(0.0, 1.0) = 1.0;
+
+  void fragment() {
+      float ao = texture(ao_texture, UV).r;
+      AO = ao;
+      AO_LIGHT_AFFECT = ao_intensitaet;
+      // AO_LIGHT_AFFECT: 0 = AO beeinflusst nur Ambient Light
+      //                  1 = AO beeinflusst auch direktes Licht
+  }
+
+SCREEN-SPACE AO (SSAO) ist in Godot 4 eingebaut (WorldEnvironment → SSAO).
+Für statische Szenen ist gebackenes AO (aus Textur) effizienter.
+
+------------------------------------------------------------------------
+12.6  RIM Light — Rand-Beleuchtung
+------------------------------------------------------------------------
+
+Rim Light erzeugt eine leuchtende Kante an der dem Licht abgewandten Seite
+eines Objekts — klassisch für SciFi, Fantasy, Cutout-Optik.
+
+  shader_type spatial;
+
+  uniform vec4 rim_farbe : source_color = vec4(0.2, 0.5, 1.0, 1.0);
+  uniform float rim_power : hint_range(0.0, 16.0) = 4.0;
+
+  void fragment() {
+      ALBEDO = vec3(0.1);
+      ROUGHNESS = 0.9;
+
+      // Rim: Winkel zwischen Normal und View-Richtung:
+      float rim = 1.0 - dot(NORMAL, VIEW);  // 0 = Mitte, 1 = Rand
+      rim = pow(rim, rim_power);             // Scharf machen
+
+      EMISSION = rim_farbe.rgb * rim;
+  }
+
+GODOT BUILT-IN RIM (einfacher):
+  void fragment() {
+      ALBEDO = vec3(0.1);
+      RIM = 1.0;          // Intensität
+      RIM_TINT = 0.0;     // 0 = weiß, 1 = Albedo-Farbe
+  }
+
+------------------------------------------------------------------------
+12.7  Custom Light Shader
+------------------------------------------------------------------------
+
+Mit der light()-Funktion kannst du die Beleuchtungsberechnung komplett
+selbst übernehmen:
+
+  shader_type spatial;
+  render_mode unshaded;  // Standard-Beleuchtung deaktivieren
+
+  void fragment() {
+      ALBEDO = vec3(0.8, 0.2, 0.1);
+  }
+
+  void light() {
+      // Verfügbare Variablen:
+      // LIGHT       vec3  Richtung zum Licht (normalisiert)
+      // LIGHT_COLOR vec3  Farbe und Intensität des Lichts
+      // ATTENUATION float Abschwächung (1.0 nahe, 0.0 fern)
+      // NORMAL      vec3  Oberflächen-Normal
+      // VIEW        vec3  Richtung zur Kamera
+      // ALBEDO      vec3  (von fragment() gesetzt)
+      // ROUGHNESS   float (von fragment() gesetzt)
+
+      // Einfaches Lambertian Diffuse:
+      float n_dot_l = max(dot(NORMAL, LIGHT), 0.0);
+      DIFFUSE_LIGHT += ALBEDO * LIGHT_COLOR * ATTENUATION * n_dot_l;
+
+      // Blinn-Phong Specular:
+      vec3 half_dir = normalize(VIEW + LIGHT);
+      float spec = pow(max(dot(NORMAL, half_dir), 0.0), 64.0);
+      SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * spec;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+1. Erstelle drei Materialien mit demselben ALBEDO (mittleres Grau):
+     a) Plastik: ROUGHNESS=0.4, METALLIC=0.0
+     b) Gold: ROUGHNESS=0.15, METALLIC=1.0, ALBEDO=vec3(1.0, 0.8, 0.3)
+     c) Gummi: ROUGHNESS=0.95, METALLIC=0.0
+   Stelle sie nebeneinander in der Szene und vergleiche die Beleuchtung.
+2. Baue einen "Energie-Schild"-Effekt:
+     - Basierend auf Rim Light
+     - EMISSION mit Rim-basierter Maske
+     - render_mode blend_mix, ALPHA niedrig (0.3)
+     - Mit TIME pulsierendes Glühen an den Rändern
+3. Erstelle ein "Feuer"-Material für eine Plane:
+     - ALBEDO: Farbgradient (Schwarz unten, Orange Mitte, Gelb oben) via UV.y
+     - EMISSION: Dasselbe, aber *3.0 für Bloom
+     - ALPHA: Noise-Textur (fades nach oben aus) mit render_mode blend_mix
+4. Custom Light: Implementiere "Toon Shading" in light():
+     - Nur 3 Helligkeitsstufen (0.1, 0.5, 1.0)
+     - Nutze step() oder floor() auf n_dot_l
+     - Harter Übergang zwischen Licht und Schatten
+5. Bonus: Subsurface Scattering approximieren:
+     - Addiere zur Beleuchtung einen Anteil des Lichts von der Rückseite
+     - max(dot(-NORMAL, LIGHT), 0.0) * subsurface_farbe * subsurface_staerke
+     - Sieht wie Haut oder Blätter aus (Licht scheint durch)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: Normal Maps, Roughness, Metallic — die PBR-Parameter
+================================================================================
+
+In diesem Modul vertiefen wir die Arbeit mit PBR-Texturen und lernen,
+wie wir Normal Maps, Detail-Texturen und Triplanar-Mapping implementieren.
+
+------------------------------------------------------------------------
+13.1  Normal Maps — Tangent Space erklärt
+------------------------------------------------------------------------
+
+Eine Normal Map kodiert Oberflächen-Normalen in "Tangent Space":
+  - Neutral (flache Oberfläche): RGB = (0.5, 0.5, 1.0) → normal = (0,0,1)
+  - Links-neigend: RGB = (0.0, 0.5, 0.5) → normal = (-1, 0, 0)
+  - Rechts-neigend: RGB = (1.0, 0.5, 0.5) → normal = (1, 0, 0)
+
+Tangent Space ist RELATIV zur Oberfläche — die Normal Map funktioniert
+deshalb auf beliebig orientierten Flächen ohne Änderung.
+
+In Godot kannst du eine Normal Map direkt zuweisen:
+  NORMAL_MAP = texture(normal_map_tex, UV).rgb;
+  // Godot konvertiert automatisch von Tangent Space zu World Space
+
+Stärke der Normal Map:
+  // Normal Map Intensität manuell steuern:
+  vec3 n = texture(normal_map_tex, UV).rgb;
+  n.xy *= normal_staerke;  // xy = die Neigungskomponenten
+  n = normalize(n);        // Wieder normalisieren!
+  NORMAL_MAP = n;
+
+  // Oder einfacher mit dem Built-in:
+  NORMAL_MAP = texture(normal_map_tex, UV).rgb;
+  NORMAL_MAP_DEPTH = normal_staerke;  // 0.0 = keine Wirkung, 1.0 = voll, >1 = übertrieben
+
+------------------------------------------------------------------------
+13.2  Normal Map Blending — Detail-Texturen kombinieren
+------------------------------------------------------------------------
+
+Für sehr große Flächen (Terrain) willst du oft eine Detail-Textur
+überlagern: Basis-Normal für große Form, Detail-Normal für feine Struktur.
+
+REORIENT-NORMAL-MAP BLENDING (korrekte Methode):
+
+  vec3 blend_normals_rnm(vec3 n1, vec3 n2) {
+      n1 += vec3(0.0, 0.0, 1.0);
+      n2 *= vec3(-1.0, -1.0, 1.0);
+      return n1 * dot(n1, n2) / n1.z - n2;
+  }
+
+  void fragment() {
+      vec3 basis_normal = texture(basis_normal_map, UV).rgb * 2.0 - 1.0;
+      vec3 detail_normal = texture(detail_normal_map, UV * 8.0).rgb * 2.0 - 1.0;
+      vec3 blended = normalize(blend_normals_rnm(basis_normal, detail_normal));
+      NORMAL_MAP = blended * 0.5 + 0.5;  // Zurück in 0-1 Raum
+  }
+
+------------------------------------------------------------------------
+13.3  Triplanar Mapping — UV-freies Texturieren
+------------------------------------------------------------------------
+
+Problem: Steile Flächen (Felsen, Terrain) haben UV-Stretching.
+Lösung: Triplanar Mapping — Texturen aus drei Richtungen projizieren und mischen.
+
+  shader_type spatial;
+
+  uniform sampler2D tex : source_color, hint_default_white;
+  uniform float tile_scale = 1.0;
+  uniform float blend_sharpness = 8.0;  // Wie scharf der Übergang ist
+
+  vec3 triplanar_sample(sampler2D s, vec3 pos, vec3 blend_weights, float scale) {
+      vec3 xaxis = texture(s, pos.yz * scale).rgb;  // X-Projektion
+      vec3 yaxis = texture(s, pos.xz * scale).rgb;  // Y-Projektion
+      vec3 zaxis = texture(s, pos.xy * scale).rgb;  // Z-Projektion
+      return xaxis * blend_weights.x + yaxis * blend_weights.y + zaxis * blend_weights.z;
+  }
+
+  void fragment() {
+      // Blend-Gewichte basierend auf Normal:
+      vec3 blend = pow(abs(NORMAL), vec3(blend_sharpness));
+      blend /= blend.x + blend.y + blend.z;  // Normieren → Summe = 1
+
+      // MODEL_MATRIX * VERTEX = Weltposition (im vertex() via varying übergeben!)
+      // Hier vereinfacht mit UV:
+      vec3 pos = vec3(UV * tile_scale, 0.0);
+
+      vec3 farbe = triplanar_sample(tex, pos, blend, 1.0);
+      ALBEDO = farbe;
+  }
+
+FÜR ECHTES TRIPLANAR (Weltkoordinaten im vertex() holen):
+  varying vec3 world_pos;
+  varying vec3 world_normal;
+
+  void vertex() {
+      world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+      world_normal = (MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz;
+  }
+
+  void fragment() {
+      vec3 blend = pow(abs(normalize(world_normal)), vec3(blend_sharpness));
+      blend /= blend.x + blend.y + blend.z;
+
+      vec3 farbe = triplanar_sample(tex, world_pos, blend, tile_scale);
+      ALBEDO = farbe;
+  }
+
+------------------------------------------------------------------------
+13.4  Parallax Mapping — Tiefenillusion auf flachen Flächen
+------------------------------------------------------------------------
+
+Parallax Mapping erzeugt eine Illusion von 3D-Tiefe auf einer flachen Fläche
+durch Verschiebung der UV-Koordinaten basierend auf einer Heightmap:
+
+  shader_type spatial;
+
+  uniform sampler2D albedo_tex : source_color, hint_default_white;
+  uniform sampler2D normal_map_tex : hint_normal;
+  uniform sampler2D height_map : hint_default_white;
+  uniform float parallax_tiefe : hint_range(0.0, 0.1) = 0.02;
+  uniform int parallax_schritte : hint_range(4, 64) = 16;
+
+  void fragment() {
+      // Blickrichtung in Tangent Space:
+      vec3 tangent_view = vec3(
+          dot(VIEW, TANGENT),
+          dot(VIEW, BINORMAL),
+          dot(VIEW, NORMAL)
+      );
+
+      // Steep Parallax Mapping:
+      float schicht_tiefe = 1.0 / float(parallax_schritte);
+      float aktuelle_tiefe = 0.0;
+      vec2 delta_uv = (tangent_view.xy / tangent_view.z) * parallax_tiefe / float(parallax_schritte);
+      vec2 aktuelles_uv = UV;
+
+      float tiefe_wert = 1.0 - texture(height_map, aktuelles_uv).r;
+      while (aktuelle_tiefe < tiefe_wert) {
+          aktuelles_uv -= delta_uv;
+          tiefe_wert = 1.0 - texture(height_map, aktuelles_uv).r;
+          aktuelle_tiefe += schicht_tiefe;
+      }
+
+      ALBEDO = texture(albedo_tex, aktuelles_uv).rgb;
+      NORMAL_MAP = texture(normal_map_tex, aktuelles_uv).rgb;
+  }
+
+HINWEIS: while-Schleifen in Shadern sind gefährlich wenn die Abbruchbedingung
+variabel ist. Hier ist es sicher weil parallax_schritte ein konstanter Uniform
+ist — aber großzügige Schritte (>32) kosten Performance.
+
+------------------------------------------------------------------------
+13.5  Detail Maps für Nahaufnahmen
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform sampler2D basis_albedo : source_color, hint_default_white;
+  uniform sampler2D detail_albedo : source_color, hint_default_white;
+  uniform sampler2D detail_normal : hint_normal;
+  uniform sampler2D detail_maske : hint_default_white;  // Wo erscheint Detail?
+  uniform float detail_scale = 8.0;
+
+  void fragment() {
+      vec4 basis = texture(basis_albedo, UV);
+      vec4 detail = texture(detail_albedo, UV * detail_scale);
+      float maske = texture(detail_maske, UV).r;
+
+      // Detail per Multiply blenden:
+      vec3 combined_albedo = basis.rgb * (detail.rgb * 2.0);  // Detail im Multiply-Mode
+      // Oder: combined_albedo = mix(basis.rgb, basis.rgb * detail.rgb * 2.0, maske);
+
+      ALBEDO = combined_albedo;
+      NORMAL_MAP = texture(detail_normal, UV * detail_scale).rgb;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+1. Baue ein komplettes PBR-Terrain-Material:
+     - Triplanar Texturierung (kein UV-Stretching auf steilen Flanken)
+     - Gras oben (UV.y relativ → oder Normal.y), Fels seitlich, Erde überall
+     - Normal Maps für alle drei Texturen
+2. Erstelle ein "altes Metall"-Material:
+     - Basis: Metall (METALLIC=1, ROUGHNESS=0.2)
+     - Rost-Maske (Textur): In rostigen Bereichen ROUGHNESS=0.9, METALLIC=0.0
+     - Rost-ALBEDO: orange-braun, Metall-ALBEDO: dunkelgrau
+3. Implementiere Parallax Mapping auf einer Mauer:
+     - Nur 8-16 Schritte (Performance)
+     - Vergleiche mit und ohne Parallax bei steilen Winkeln
+4. Detail-Map-System: Basis-Stein-Textur, Detail-Moos-Textur in einem
+   bestimmten UV-Bereich (z.B. UV.y < 0.3 = mehr Moos). Maske per Gradient.
+5. Bonus: Nasse Oberfläche: Wenn ein Bereich "nass" ist (uniform float naesse,
+   0.0-1.0), wird ROUGHNESS deutlich niedriger und ALBEDO leicht dunkler.
+   Nutze AO-Textur als Maske für "Wasser sammelt sich in Vertiefungen".
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: Vertex Shader — Geometrie manipulieren
+================================================================================
+
+Der Vertex Shader läuft VOR dem Fragment Shader — einmal pro Vertex.
+Er kann Geometrie verbiegen, animieren, und transformieren.
+
+------------------------------------------------------------------------
+14.1  VERTEX — die Positions-Variable
+------------------------------------------------------------------------
+
+Im vertex()-Shader ist VERTEX die lokale Position des aktuellen Vertex
+als vec3. Du kannst ihn direkt modifizieren:
+
+  void vertex() {
+      // Vertex nach oben schieben:
+      VERTEX.y += 1.0;
+
+      // Vertex in einer Welle bewegen:
+      VERTEX.y += sin(VERTEX.x * 5.0 + TIME * 2.0) * 0.1;
+  }
+
+VERTEX ist in "Objekt-Space" (lokal zum Objekt). Die Engine transformiert
+ihn danach automatisch in Welt- und Bildschirmkoordinaten.
+
+------------------------------------------------------------------------
+14.2  Wellen-Animation (Gras, Wasser, Flaggen)
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform float wellen_staerke = 0.2;
+  uniform float wellen_geschwindigkeit = 2.0;
+  uniform float wellen_frequenz = 5.0;
+
+  void vertex() {
+      // Welle in X-Richtung, basierend auf X-Position:
+      float welle = sin(VERTEX.x * wellen_frequenz + TIME * wellen_geschwindigkeit);
+      VERTEX.y += welle * wellen_staerke;
+
+      // Für Gras: Nur die oberen Vertices bewegen (Y > 0):
+      float maske = max(0.0, VERTEX.y);  // Boden bleibt fest
+      VERTEX.x += sin(TIME * 1.5 + VERTEX.z * 3.0) * 0.05 * maske;
+  }
+
+  void fragment() {
+      ALBEDO = vec3(0.3, 0.7, 0.2);
+      ROUGHNESS = 0.9;
+  }
+
+------------------------------------------------------------------------
+14.3  Billboarding (immer zur Kamera schauen)
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode cull_disabled;  // Beide Seiten sichtbar
+
+  void vertex() {
+      // Billboard: Rotation der Kamera auf das Mesh anwenden
+      // MODEL_MATRIX gibt die aktuelle Welt-Transformation
+      // MODELVIEW_MATRIX = VIEW_MATRIX * MODEL_MATRIX
+
+      // Kamera-relative Position beibehalten:
+      vec3 world_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+      vec3 campos = CAMERA_POSITION_WORLD;
+      vec3 to_cam = normalize(campos - world_vertex);
+
+      // Billboarding vereinfacht (für Y-aligned Billboard):
+      // Ersetze die Rotation der Modelview-Matrix durch Einheitsmatrix:
+      MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
+          vec4(1.0, 0.0, 0.0, 0.0),  // X bleibt
+          mat4(MODEL_MATRIX)[1],       // Y von Original
+          vec4(0.0, 0.0, 1.0, 0.0),  // Z bleibt
+          MODEL_MATRIX[3]              // Position von Original
+      );
+  }
+
+TIPP: Godot hat built-in Billboard-Unterstützung in BaseMaterial3D
+(Billboard Mode: Enabled/Y-Billboard/Particles). Für Standard-Sprites
+ist das einfacher. Vertex-Billboard brauchst du nur für Custom-Logik.
+
+------------------------------------------------------------------------
+14.4  Morph / Shape Keys (Vertex-Interpolation)
+------------------------------------------------------------------------
+
+Vertex Shader können zwischen zwei Mesh-Formen interpolieren:
+
+  // Basis-Mesh = ruhige Form, Detail-Textur enthält Offset-Daten
+  uniform sampler2D morph_textur : hint_default_black;
+  uniform float morph_factor : hint_range(0.0, 1.0) = 0.0;
+
+  void vertex() {
+      vec3 offset = texture(morph_textur, UV).rgb * 2.0 - 1.0;  // -1 bis +1
+      VERTEX += offset * morph_factor;
+  }
+
+------------------------------------------------------------------------
+14.5  Vertex-basiertes Instancing-Optimierung
+------------------------------------------------------------------------
+
+Wenn du viele gleiche Objekte hast (Gras, Bäume), kann das Vertex Shader
+Instancing nutzen — Godot 4 unterstützt MultiMeshInstance3D:
+
+  // INSTANCE_CUSTOM ist ein vec4 das pro Instanz anders ist
+  // (kannst du über MultiMesh.set_instance_custom_data() setzen)
+
+  void vertex() {
+      float phasen_offset = INSTANCE_CUSTOM.x;  // Jede Instanz eigene Phase
+      float hoehe = INSTANCE_CUSTOM.y;           // Individuelle Höhe
+
+      float maske = max(0.0, VERTEX.y / hoehe);
+      VERTEX.x += sin(TIME * 2.0 + phasen_offset) * 0.1 * maske;
+  }
+
+Mit MultiMeshInstance3D kannst du so Hunderttausende animierter Gras-
+Halme in einem einzigen Draw Call rendern.
+
+------------------------------------------------------------------------
+14.6  Normal- und UV-Manipulation im Vertex Shader
+------------------------------------------------------------------------
+
+  void vertex() {
+      // UV animieren (effizienter als in fragment()):
+      UV = UV + vec2(TIME * 0.1, 0.0);
+
+      // Normal manipulieren (z.B. für Smooth Normals):
+      // NORMAL = normalize(NORMAL + vec3(0.0, 0.1, 0.0));
+
+      // Vertex in Weltraum verschieben (VERTEX bleibt lokal):
+      // Für Welt-basierte Effekte: MODEL_MATRIX * VERTEX
+      vec4 welt_pos = MODEL_MATRIX * vec4(VERTEX, 1.0);
+      VERTEX.y += sin(welt_pos.x * 0.5 + TIME) * 0.2;  // Welt-koordinierter Effekt
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+1. Baue einen "Wasser"-Plane:
+     - Vertex Shader: Sinuswellen in X und Z (mehrere Frequenzen überlagern)
+     - Fragment Shader: Blaues ALBEDO, ROUGHNESS=0.1, METALLIC=0.0
+     - Optional: NORMAL basierend auf Wellen-Gradient berechnen
+2. Gras-Simulation mit MultiMeshInstance3D:
+     - 1000 Grass-Planes als MultiMesh
+     - Vertex Shader: Windanimation mit INSTANCE_CUSTOM für Phasen-Offset
+     - Nur obere Vertices bewegen (Masking mit VERTEX.y)
+3. "Flagge im Wind": Plane mit UV-koordinierter Wellen-Animation.
+     - Links (UV.x = 0) = fixiert (Fahnenstange)
+     - Rechts (UV.x = 1) = maximale Bewegung
+     - Mehrere überlagerte Sinus-Frequenzen für organische Bewegung
+4. Implementiere Vertex-basiertes Billboard für ein Sprite:
+     - Kamera schaut immer frontal auf das Sprite
+     - Test: Sprite rotieren → immer zur Kamera zeigen
+5. Bonus: "Breathing Sphere": Kugel-Mesh deren Vertices sich anhand ihrer
+   Normalen ein- und ausatmen (VERTEX += NORMAL * sin(TIME) * 0.1).
+   Variation: Rauschen via VALUE_NOISE auf die Amplitude → organischer Look.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Wasser, Gras, Laub — Umwelt-Shader
+================================================================================
+
+In diesem Modul bauen wir realistische Umgebungs-Shader — die häufigsten
+Spezialeffekte in 3D-Spielen.
+
+------------------------------------------------------------------------
+15.1  Wasser — vollständiger Shader
+------------------------------------------------------------------------
+
+Ein überzeugender Wasser-Shader kombiniert: Vertex-Wellen, Normal Maps,
+Fresnel-Effekt, Reflexion und Refraktion.
+
+  shader_type spatial;
+  render_mode depth_draw_never, cull_disabled;
+
+  uniform vec4 wasser_farbe : source_color = vec4(0.1, 0.4, 0.6, 1.0);
+  uniform vec4 schaumfarbe : source_color = vec4(0.8, 0.9, 1.0, 1.0);
+  uniform sampler2D wellen_normal_a : hint_normal;
+  uniform sampler2D wellen_normal_b : hint_normal;
+  uniform sampler2D tiefenmaske : hint_default_white;
+  uniform float wellen_geschwindigkeit = 0.05;
+  uniform float roughness_wert = 0.1;
+
+  // Fresnel-Funktion:
+  float fresnel(float betrag, vec3 normal, vec3 view) {
+      return pow(1.0 - clamp(dot(normalize(normal), normalize(view)), 0.0, 1.0), betrag);
+  }
+
+  varying vec3 welt_vertex;
+
+  void vertex() {
+      welt_vertex = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+      // Wellen:
+      VERTEX.y += sin(welt_vertex.x * 1.5 + TIME * 1.2) * 0.08;
+      VERTEX.y += sin(welt_vertex.z * 1.0 + TIME * 0.9) * 0.05;
+  }
+
+  void fragment() {
+      // Animierte Normal Maps überlagern:
+      vec2 uv_a = UV + vec2(TIME * wellen_geschwindigkeit, TIME * wellen_geschwindigkeit * 0.7);
+      vec2 uv_b = UV * 1.5 - vec2(TIME * wellen_geschwindigkeit * 0.5, 0.0);
+
+      vec3 normal_a = texture(wellen_normal_a, uv_a).rgb;
+      vec3 normal_b = texture(wellen_normal_b, uv_b).rgb;
+      vec3 gemischte_normal = normalize(normal_a + normal_b - 1.0);
+
+      NORMAL_MAP = gemischte_normal;
+      NORMAL_MAP_DEPTH = 0.5;
+
+      // Fresnel → weiter weg = spiegelnder:
+      float fres = fresnel(4.0, NORMAL, VIEW);
+      ALBEDO = mix(wasser_farbe.rgb, schaumfarbe.rgb, fres * 0.3);
+      ROUGHNESS = roughness_wert;
+      METALLIC = 0.0;
+      SPECULAR = 0.9;
+
+      // Transparenz über Fresnel:
+      ALPHA = mix(0.7, 0.95, fres);
+  }
+
+------------------------------------------------------------------------
+15.2  Gras — Wind-Simulation
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode cull_disabled, vertex_lighting;
+
+  uniform sampler2D gras_textur : source_color, hint_default_white;
+  uniform vec3 wind_richtung = vec3(1.0, 0.0, 0.5);
+  uniform float wind_staerke = 0.3;
+  uniform float wind_frequenz = 2.0;
+  uniform vec4 basis_farbe : source_color = vec4(0.3, 0.6, 0.2, 1.0);
+  uniform vec4 spitze_farbe : source_color = vec4(0.5, 0.8, 0.3, 1.0);
+
+  varying float hoehen_faktor;
+
+  void vertex() {
+      hoehen_faktor = UV.y;  // 0 = Boden, 1 = Spitze
+
+      // Wind (nur obere Vertices):
+      vec3 welt_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+      float wind_phase = dot(welt_pos.xz, wind_richtung.xz) * wind_frequenz;
+      float wind = sin(TIME * 2.5 + wind_phase) * 0.5 + 0.5;
+      wind = pow(wind, 2.0);  // Böen-Charakter
+
+      float auslenkung = hoehen_faktor * hoehen_faktor * wind_staerke;
+      VERTEX += normalize(wind_richtung) * auslenkung * wind;
+  }
+
+  void fragment() {
+      vec4 tex = texture(gras_textur, UV);
+      if (tex.a < 0.1) discard;  // Alpha-Cutout für Gras-Silhouette
+
+      // Farbgradient von Boden (dunkler) zu Spitze (heller):
+      vec3 farbe = mix(basis_farbe.rgb, spitze_farbe.rgb, hoehen_faktor);
+      ALBEDO = farbe * tex.rgb;
+      ROUGHNESS = 0.9;
+      METALLIC = 0.0;
+  }
+
+------------------------------------------------------------------------
+15.3  Laub / Blätter — Transluzenz und Wind
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode cull_disabled;
+
+  uniform sampler2D blatt_textur : source_color, hint_default_white;
+  uniform vec3 blatt_farbe : source_color = vec3(0.2, 0.6, 0.15);
+  uniform float transluzenz_staerke = 0.4;
+  uniform float wind_staerke = 0.15;
+
+  varying float hoehen_faktor;
+  varying vec3 welt_pos;
+
+  void vertex() {
+      welt_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+      hoehen_faktor = VERTEX.y / 5.0;  // Normiert (Baumhöhe anpassen)
+
+      // Windanimation (niedrige Frequenz für große Äste, hoch für Blätter):
+      float aestewind = sin(TIME * 0.8 + welt_pos.x * 0.1) * 0.05 * hoehen_faktor;
+      float blattwind = sin(TIME * 3.0 + welt_pos.x * 2.0 + welt_pos.z * 1.5) * 0.02;
+      VERTEX.x += aestewind + blattwind * wind_staerke;
+      VERTEX.z += cos(TIME * 0.7 + welt_pos.z * 0.1) * 0.03 * hoehen_faktor;
+  }
+
+  void fragment() {
+      vec4 tex = texture(blatt_textur, UV);
+      if (tex.a < 0.3) discard;
+
+      ALBEDO = blatt_farbe * tex.rgb;
+      ROUGHNESS = 0.85;
+
+      // Backlight / Transluzenz (Licht scheint durch Blätter):
+      BACKLIGHT = blatt_farbe * transluzenz_staerke;
+  }
+
+------------------------------------------------------------------------
+15.4  Schnee-Ansammlung
+------------------------------------------------------------------------
+
+  shader_type spatial;
+
+  uniform sampler2D terrain_albedo : source_color, hint_default_white;
+  uniform sampler2D terrain_normal : hint_normal;
+  uniform vec3 schnee_farbe : source_color = vec3(0.95, 0.97, 1.0);
+  uniform float schnee_menge : hint_range(0.0, 1.0) = 0.5;
+  uniform float schnee_haerte = 4.0;
+
+  void fragment() {
+      // Wie sehr zeigt die Normale nach oben?
+      float oben_faktor = pow(max(0.0, NORMAL.y), schnee_haerte);
+
+      // Schnee auf flachen Flächen ansammeln:
+      float schnee_maske = smoothstep(1.0 - schnee_menge, 1.0 - schnee_menge + 0.1, oben_faktor);
+
+      vec3 terrain = texture(terrain_albedo, UV).rgb;
+      ALBEDO = mix(terrain, schnee_farbe, schnee_maske);
+      ROUGHNESS = mix(0.8, 1.0, schnee_maske);  // Schnee ist rauer
+      METALLIC = 0.0;
+      NORMAL_MAP = texture(terrain_normal, UV).rgb;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+1. Vervollständige den Wasser-Shader mit Screen-Space-Refraktion:
+     - SCREEN_TEXTURE lesen (hint_screen_texture)
+     - SCREEN_UV leicht verschieben basierend auf Normal Map
+     - Mix zwischen Wasser-Farbe und Hintergrund
+2. Baue ein komplettes Gras-System mit MultiMesh:
+     - 5000 Gras-Sprites (Planes)
+     - Windanimation im Vertex Shader
+     - Jede Instanz leicht unterschiedliche Höhe/Farbe via INSTANCE_CUSTOM
+3. Laub-Shader für einen Baum:
+     - Verschiedene Windgeschwindigkeiten für Stamm und Kronenbereich
+     - Transluzenz stark wenn Licht von hinten kommt
+4. "Winterszene": Schneemaske basierend auf World Normal Y.
+   Mehr Schnee auf Uniforms-basierten "Schneemenge".
+   Schnee hat andere ROUGHNESS und leicht blauen Tone.
+5. Bonus: Dynamischer Schneematsch: Wo der Spieler läuft (uniform vec3
+   spieler_pos per GDScript gesetzt), nimmt die Schnee-Menge lokal ab
+   (Distanz zu spieler_pos < 2.0 → kein Schnee). Reset langsam mit TIME.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 16: Fortgeschrittene 3D-Effekte — Dissolve, Outline, Hologram
+================================================================================
+
+------------------------------------------------------------------------
+16.1  Dissolve-Effekt (3D)
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode cull_disabled;
+
+  uniform sampler2D dissolve_noise : hint_default_white;
+  uniform float dissolve_progress : hint_range(0.0, 1.0) = 0.5;
+  uniform vec3 rand_emission : source_color = vec3(1.0, 0.4, 0.0);
+  uniform float rand_breite = 0.05;
+
+  void fragment() {
+      float noise = texture(dissolve_noise, UV).r;
+      if (noise < dissolve_progress) discard;
+
+      float rand = smoothstep(dissolve_progress, dissolve_progress + rand_breite, noise);
+      ALBEDO = vec3(0.8, 0.5, 0.3);
+      EMISSION = rand_emission * (1.0 - rand) * 3.0;  // Glühender Rand
+      ROUGHNESS = 0.7;
+  }
+
+------------------------------------------------------------------------
+16.2  Outline im 3D-Raum (Inverted Hull)
+------------------------------------------------------------------------
+
+Der klassische 3D-Outline-Trick: Das Objekt zweimal rendern —
+einmal normal, einmal leicht vergrößert von hinten (Rückseiten sichtbar):
+
+  // Erster Pass: Normal-Material (standard)
+  // Zweiter Pass (extra MeshInstance3D mit diesem Shader):
+
+  shader_type spatial;
+  render_mode cull_front, unshaded;  // NUR Rückseiten, kein Licht
+
+  uniform vec4 outline_farbe : source_color = vec4(0.0, 0.0, 0.0, 1.0);
+  uniform float outline_dicke = 0.02;
+
+  void vertex() {
+      VERTEX += NORMAL * outline_dicke;  // Normal entlang aufblasen
+  }
+
+  void fragment() {
+      ALBEDO = outline_farbe.rgb;
+  }
+
+In GDScript: Zweite MeshInstance3D als Kind, dasselbe Mesh, Outline-Material.
+
+------------------------------------------------------------------------
+16.3  Hologramm-Effekt
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode cull_disabled, blend_add, depth_draw_never, unshaded;
+
+  uniform vec3 holo_farbe : source_color = vec3(0.2, 0.8, 1.0);
+  uniform float scan_geschwindigkeit = 2.0;
+  uniform float flicker_intensitaet = 0.1;
+  uniform float rim_power = 3.0;
+
+  float rand(float x) { return fract(sin(x * 127.1) * 43758.5453); }
+
+  void fragment() {
+      // Rim-Effekt:
+      float rim = 1.0 - dot(NORMAL, VIEW);
+      rim = pow(rim, rim_power);
+
+      // Scanlines (horizontal):
+      float scan_pos = fract(FRAGCOORD.y / 4.0 - TIME * scan_geschwindigkeit);
+      float scanline = step(0.5, scan_pos) * 0.3 + 0.7;
+
+      // Zufälliges Flackern:
+      float flicker = 1.0 + (rand(floor(TIME * 10.0)) - 0.5) * flicker_intensitaet;
+
+      // Gelegentliche Glitch-Zeilen:
+      float glitch = step(0.98, rand(floor(FRAGCOORD.y * 0.1 + TIME * 5.0)));
+
+      float alpha = (rim * 0.7 + 0.3) * scanline * flicker;
+      alpha += glitch * 0.5;
+
+      ALBEDO = holo_farbe * alpha;
+      ALPHA = clamp(alpha, 0.0, 1.0);
+  }
+
+------------------------------------------------------------------------
+16.4  X-Ray / Röntgen-Effekt
+------------------------------------------------------------------------
+
+Objekte hinter Wänden sichtbar machen (wie in vielen Action-Spielen):
+
+  // Normales Material auf das Objekt.
+  // ZUSÄTZLICH: zweite MeshInstance3D mit diesem Shader,
+  // die MIT depth_draw_never gerendert wird:
+
+  shader_type spatial;
+  render_mode blend_add, depth_test_disabled, unshaded;
+
+  uniform vec4 xray_farbe : source_color = vec4(0.0, 0.5, 1.0, 0.3);
+
+  void fragment() {
+      float rim = 1.0 - dot(NORMAL, VIEW);
+      rim = pow(rim, 2.0);
+      ALBEDO = xray_farbe.rgb;
+      ALPHA = rim * xray_farbe.a;
+  }
+
+depth_test_disabled: Depth-Buffer wird ignoriert → Objekt ist immer sichtbar.
+
+------------------------------------------------------------------------
+16.5  Cartoon / Cel-Shading
+------------------------------------------------------------------------
+
+  shader_type spatial;
+  render_mode unshaded;  // Wir berechnen Licht selbst
+
+  uniform vec4 base_farbe : source_color = vec4(0.8, 0.2, 0.1, 1.0);
+  uniform vec4 schatten_farbe : source_color = vec4(0.4, 0.1, 0.05, 1.0);
+  uniform vec4 highlight_farbe : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+  uniform float schatten_grenze = 0.4;
+  uniform float highlight_grenze = 0.95;
+
+  // Hinweis: Für Cel-Shading muss LIGHT_DIRECTION übergeben werden
+  // → Nutze light() statt fragment() für direktes Licht:
+
+  void fragment() {
+      ALBEDO = base_farbe.rgb;
+  }
+
+  void light() {
+      float n_dot_l = dot(NORMAL, LIGHT);
+
+      // Quantisierung auf Stufen:
+      vec3 licht_farbe;
+      if (n_dot_l < schatten_grenze) {
+          licht_farbe = schatten_farbe.rgb;
+      } else {
+          licht_farbe = base_farbe.rgb;
+      }
+
+      // Specular Highlight (Toon):
+      vec3 h = normalize(VIEW + LIGHT);
+      float spec = dot(NORMAL, h);
+      if (spec > highlight_grenze) {
+          licht_farbe = highlight_farbe.rgb;
+      }
+
+      DIFFUSE_LIGHT += licht_farbe * LIGHT_COLOR * ATTENUATION;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 16:
+1. Dissolve-Effekt mit GDScript-Steuerung:
+     - Shader auf einem Charakter
+     - GDScript: Bei Tod des Charakters dissolve_progress von 0 auf 1
+       über 2 Sekunden animieren. Danach den Node entfernen.
+2. Outline für Interaktions-Highlighting:
+     - Objekte in der Szene haben einen Outline-MeshInstance3D als Kind
+     - GDScript: Bei Maus-Hover → outline_farbe auf Gelb setzen
+     - Bei Maus-Leave → Outline ausblenden (ALPHA auf 0)
+3. Hologramm-Raum: Mehrere Hologramm-Objekte (verschiedene Farben),
+   ein "Projektions-Strahl" von unten (Spotlight + additiver Cone-Shader).
+4. Vollständiges Cel-Shading:
+     - Cartoon-Shader auf allen Szene-Objekten
+     - Outline (Inverted Hull) auf allen Objekten
+     - Fester Licht-Winkel (ignoriere dynamische Lichter — UNSHADED)
+5. Bonus: "Portaleffekt" à la Portal-Spiel:
+     - Kreisförmige Dissolve-Maske (SDF-Kreis statt Noise)
+     - Hinter dem Portal: andere Textur/Farbe (SCREEN_TEXTURE-basiert)
+     - Rand: Leuchtendes Orange/Blau
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 3
+################################################################################
+
+SPATIAL SHADER - AUSGABE VARIABLEN:
+  ALBEDO     vec3   Grundfarbe
+  ALPHA      float  Transparenz (nur mit blend_mix)
+  METALLIC   float  0=nicht-Metall, 1=Metall
+  ROUGHNESS  float  0=Spiegel, 1=rau
+  EMISSION   vec3   Selbstleuchten (kann > 1.0)
+  NORMAL_MAP vec3   Normal Map (tangent space)
+  AO         float  Ambient Occlusion
+  RIM        float  Rim Light Intensität
+  BACKLIGHT  vec3   Transluzenz-Licht
+
+VERTEX SHADER:
+  VERTEX    vec3   Position (modifizierbar!)
+  NORMAL    vec3   Normal (modifizierbar)
+  UV / UV2  vec2   Textur-Koordinaten
+
+WICHTIGE RENDER_MODES:
+  unshaded          Kein Licht
+  cull_disabled     Beide Seiten
+  blend_mix         Alpha-Transparenz
+  blend_add         Additiv (Glühen, Feuer)
+  depth_draw_never  Kein Depth-Write (Glas)
+  depth_test_disabled Depth ignorieren (X-Ray)
+
+HILFSFUNKTIONEN:
+  fresnel(betrag, normal, view)   → Randeffekt
+  triplanar_sample(tex, pos, blend, scale) → UV-freies Texturieren
+  blend_normals_rnm(n1, n2)       → Normalen mischen
+
+LIGHT() SHADER:
+  DIFFUSE_LIGHT += albedo * LIGHT_COLOR * ATTENUATION * n_dot_l;
+  SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * spec;
+
+================================================================================
+ENDE TEIL 3 — Weiter mit Teil 4: Profi-Level
+================================================================================

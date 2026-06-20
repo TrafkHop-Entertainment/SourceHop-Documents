@@ -1,0 +1,2043 @@
+================================================================================
+MODUL 1: Was ist CSS und wie funktioniert es?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Das Grundprinzip
+------------------------------------------------------------------------
+
+CSS (Cascading Style Sheets) beschreibt wie HTML-Elemente aussehen sollen.
+"Cascading" = Kaskade — Stile können überschrieben werden, je nach
+Spezifität, Herkunft und Reihenfolge.
+
+Eine CSS-Regel besteht aus:
+
+  selektor {
+    eigenschaft: wert;
+    andere-eigenschaft: anderer-wert;
+  }
+
+  Beispiel:
+  p {
+    color: red;
+    font-size: 18px;
+  }
+
+CSS kann in HTML auf drei Arten eingebunden werden:
+
+  1. Externe Datei (IMMER bevorzugen):
+     <link rel="stylesheet" href="style.css">
+
+  2. Im <head> eingebettet (manchmal sinnvoll, z.B. kritisches CSS):
+     <style>
+       p { color: red; }
+     </style>
+
+  3. Inline (fast nie benutzen, sehr schwer überschreibbar):
+     <p style="color: red;">Text</p>
+
+------------------------------------------------------------------------
+1.2  Kommentare
+------------------------------------------------------------------------
+
+  /* Das ist ein CSS-Kommentar */
+
+  /*
+    Mehrzeilig
+    auch möglich
+  */
+
+Aus deinem Code (standard.css):
+  /*
+  DIE FARBEN
+  */
+  ← Sauber kommentiert!
+
+------------------------------------------------------------------------
+1.3  Die Kaskade — was überschreibt was?
+------------------------------------------------------------------------
+
+Wenn mehrere Regeln auf dasselbe Element zutreffen, gewinnt:
+
+  1. Browser-Standardstile (User Agent Stylesheet) — als Basis
+  2. Externe Stylesheets
+  3. Inline-Styles (überschreiben fast alles)
+  4. !important (überschreibt alles, sparsam einsetzen!)
+
+Innerhalb gleicher Herkunft entscheidet: Spezifität (Modul 2).
+Bei gleicher Spezifität: die spätere Regel gewinnt.
+
+Aus deinem Code:
+  max-width: 90% !important;   ← in index.css
+  ← Nötig um Regeln aus standard.css zu überschreiben.
+    !important sollte Ausnahme bleiben, nicht Regel.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle eine externe CSS-Datei. Schreibe eine Regel die alle <p>
+lila (var(--Trafk)) macht. Dann überschreibe sie mit einer spezifischeren
+Regel für p innerhalb von main. Beobachte die Kaskade.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Selektoren — das Herzstück von CSS
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Einfache Selektoren
+------------------------------------------------------------------------
+
+  *               → Universalselektor — ALLE Elemente
+  p               → Typselektor — alle <p>-Elemente
+  .klasse         → Klassenselektor — alle Elemente mit class="klasse"
+  #id             → ID-Selektor — Element mit id="id" (nur einmal pro Seite!)
+  [attr]          → Attributselektor — Elemente die attr haben
+  [attr="wert"]   → Attributselektor — Elemente wo attr genau "wert" ist
+
+Aus deinem Code:
+  * { padding: 0; margin: 0; }     ← Universalselektor — Reset!
+  p, h1, h2, ... { color: ... }    ← Mehrere Typen auf einmal
+  .do { filter: drop-shadow... }   ← Klassen-Selektor
+  #logo { height: 2.5rem; }        ← ID-Selektor
+  #search { ... }                  ← ID-Selektor
+
+------------------------------------------------------------------------
+2.2  Kombinations-Selektoren
+------------------------------------------------------------------------
+
+  div p           → Nachfahren-Selektor: alle p die irgendwo in div sind
+  div > p         → Kind-Selektor: alle p die DIREKTE Kinder von div sind
+  h1 + p          → Nachbar-Selektor: p das DIREKT nach h1 kommt
+  h1 ~ p          → Geschwister-Selektor: alle p die nach h1 kommen
+
+Beispiele:
+
+  /* Nur p direkt im header, nicht tiefer verschachtelt: */
+  header > p { color: var(--Trafk-dark); }
+
+  /* Das erste p nach einem h1: */
+  h1 + p { font-size: 1.2rem; }
+
+Aus deinem Code:
+  footer p, header p { color: var(--Trafk-dark); }
+  ← Nachfahren-Selektor: p überall in footer oder header
+
+  section > .TrafkSectionBubble { ... }
+  ← Kind-Selektor: direkte .TrafkSectionBubble-Kinder von section
+
+------------------------------------------------------------------------
+2.3  Attributselektoren (sehr mächtig!)
+------------------------------------------------------------------------
+
+  [href]              → Hat href-Attribut
+  [href="https://x"]  → href ist genau "https://x"
+  [href^="https"]     → href beginnt mit "https" (^ = starts with)
+  [href$=".pdf"]      → href endet mit ".pdf" ($ = ends with)
+  [href*="trafk"]     → href enthält "trafk" (* = contains)
+  [lang~="de"]        → lang-Attribut enthält "de" als Wort (getrennt durch Leerzeichen)
+  [lang|="de"]        → lang-Attribut ist "de" oder beginnt mit "de-"
+
+  /* Alle externen Links optisch markieren: */
+  a[href^="http"] {
+    padding-right: 1rem;
+    background: url("extern-icon.svg") no-repeat right center;
+  }
+
+  /* Alle PDF-Links: */
+  a[href$=".pdf"]::after {
+    content: " (PDF)";
+  }
+
+------------------------------------------------------------------------
+2.4  Pseudo-Klassen — Zustände und Strukturposition
+------------------------------------------------------------------------
+
+ZUSTAND:
+  :hover          → Maus ist drüber
+  :focus          → Element hat Tastaturfokus
+  :focus-visible  → Fokus NUR bei Tastaturnavigation (nicht bei Mausklick)
+  :focus-within   → Element ODER ein Nachfahre hat Fokus
+  :active         → Wird gerade geklickt
+  :visited        → Link wurde besucht
+  :link           → Link wurde noch nicht besucht
+  :checked        → Checkbox/Radio ist ausgewählt
+  :disabled       → Element ist deaktiviert
+  :enabled        → Element ist aktiv
+  :placeholder-shown → Input zeigt seinen Placeholder
+  :required       → Input ist required
+  :optional       → Input ist nicht required
+  :valid          → Input-Inhalt ist gültig
+  :invalid        → Input-Inhalt ist ungültig
+  :in-range       → Zahlenwert innerhalb min/max
+  :out-of-range   → Zahlenwert außerhalb min/max
+  :read-only      → Element ist readonly
+  :target         → Element ist das Ziel der aktuellen URL (z.B. #anker)
+  :fullscreen     → Element ist im Vollbild
+
+Aus deinem Code:
+  .do:hover { filter: drop-shadow(...) }    ← :hover für interaktive Objekte
+  footer:hover { bottom: 0; }              ← Footer ausfahren beim Hover!
+  .nav:hover > video... { display: none; } ← Verschachtelter Hover
+
+STRUKTUR:
+  :first-child        → Erstes Kind-Element
+  :last-child         → Letztes Kind-Element
+  :nth-child(n)       → Das n-te Kind-Element
+  :nth-child(2n)      → Jedes gerade Kind (n = 0, 1, 2, ...)
+  :nth-child(2n+1)    → Jedes ungerade Kind
+  :nth-child(even)    → Wie 2n
+  :nth-child(odd)     → Wie 2n+1
+  :nth-child(3n+2)    → Jedes 3. Kind, startend beim 2.
+  :nth-last-child(n)  → Wie nth-child, aber von hinten gezählt
+  :first-of-type      → Erstes Element dieses Typs unter seinen Geschwistern
+  :last-of-type       → Letztes
+  :nth-of-type(n)     → Das n-te dieses Typs
+  :only-child         → Einziges Kind
+  :only-of-type       → Einziges Element dieses Typs
+  :empty              → Element hat keinen Inhalt (auch kein Whitespace!)
+  :root               → Das Wurzelelement (<html>) — für Custom Properties!
+  :not(selektor)      → Alles außer was der Selektor trifft
+  :is(a, b, c)        → Kurzschreibung für mehrere Selektoren (mit der
+                        höchsten Spezifität der enthaltenen Selektoren)
+  :where(a, b, c)     → Wie :is, aber Spezifität immer 0
+  :has(selektor)      → Element das den Selektor als Nachfahren enthält
+
+  /* Jede zweite Zeile in einer Tabelle: */
+  tr:nth-child(even) { background: rgba(255,255,255,0.05); }
+
+  /* Letztes li ohne Bottom-Border: */
+  li:last-child { border-bottom: none; }
+
+  /* Ein Container der ein Bild enthält: */
+  .karte:has(img) { padding: 0; }
+
+Aus deinem Code:
+  :root { --Kraft: #fff495; --Trafk: #5a3998; }
+  ← Perfekt! :root für Custom Properties (CSS-Variablen).
+
+------------------------------------------------------------------------
+2.5  Pseudo-Elemente — generierte Inhalte
+------------------------------------------------------------------------
+
+  ::before        → Generierter Inhalt VOR dem Element
+  ::after         → Generierter Inhalt NACH dem Element
+  ::first-line    → Erste Zeile eines Textblocks
+  ::first-letter  → Erster Buchstabe
+  ::selection     → Ausgewählter/markierter Text
+  ::placeholder   → Placeholder-Text in Inputs
+  ::marker        → Das Bullet/Zahl in Listeneinträgen
+  ::backdrop      → Hintergrund bei Dialogen/Fullscreen
+  ::file-selector-button → Button in file-Inputs
+  ::spelling-error       → Rot unterstrichene Wörter (Browserkontrolle)
+
+  .nav::before {
+    content: "";   ← PFLICHT! Kann leer sein.
+    display: block;
+    width: 10px;
+    height: 10px;
+    background: var(--Kraft);
+  }
+
+  /* Text vor jedem Link: */
+  a[href^="mailto:"]::before {
+    content: "✉ ";
+  }
+
+  /* Ausgewählter Text: */
+  ::selection {
+    background: var(--Kraft);
+    color: var(--Trafk-dark);
+  }
+
+------------------------------------------------------------------------
+2.6  Spezifität — wer gewinnt bei Konflikten?
+------------------------------------------------------------------------
+
+Spezifität wird als (A, B, C) berechnet:
+  A = ID-Selektoren (#id)
+  B = Klassen (.klasse), Pseudo-Klassen (:hover), Attribut-Selektoren
+  C = Typ-Selektoren (p, div), Pseudo-Elemente (::before)
+
+  * hat keine Spezifität (0, 0, 0)
+
+Berechnung:
+  p                    → (0, 0, 1)
+  .klasse              → (0, 1, 0)
+  #id                  → (1, 0, 0)
+  div.klasse           → (0, 1, 1)
+  #id.klasse           → (1, 1, 0)
+  header > nav a.do    → (0, 1, 2)
+  :is(h1, h2, h3)      → Spezifität des spezifischsten Elements darin
+
+Inline-Style überschlägt alle Selektoren.
+!important überschlägt inline-styles (außer anderes !important).
+
+Faustregel: Spezifität möglichst niedrig halten. Je spezifischer,
+desto schwerer zu überschreiben. Klassen bevorzugen, IDs vermeiden.
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+Schreibe einen Selektor der:
+1. Alle ungeraden li in nav anspricht
+2. Alle a die zu externen Seiten zeigen
+3. Den letzten section-Bereich (section:last-of-type)
+4. Jedes input das focused UND invalid ist
+Ordne sie nach Spezifität von niedrig bis hoch.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Das Box Model — wie Elemente Platz einnehmen
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Die vier Bereiche
+------------------------------------------------------------------------
+
+Jedes HTML-Element ist eine Box mit:
+
+  ┌────────────────────────────────┐
+  │          MARGIN                │  ← Außenabstand (transparent)
+  │  ┌────────────────────────┐    │
+  │  │        BORDER          │    │  ← Rahmen
+  │  │  ┌────────────────┐    │    │
+  │  │  │    PADDING     │    │    │  ← Innenabstand
+  │  │  │  ┌──────────┐  │    │    │
+  │  │  │  │ CONTENT  │  │    │    │  ← Der eigentliche Inhalt
+  │  │  │  └──────────┘  │    │    │
+  │  │  └────────────────┘    │    │
+  │  └────────────────────────┘    │
+  └────────────────────────────────┘
+
+  content: width × height des Inhalts
+  padding: Abstand zwischen Inhalt und Border
+  border:  Rahmen (hat Dicke)
+  margin:  Abstand zum nächsten Element (außen, kein Hintergrund)
+
+------------------------------------------------------------------------
+3.2  box-sizing — das Wichtigste
+------------------------------------------------------------------------
+
+Standard (content-box):
+  width: 300px + padding: 20px + border: 5px = 350px tatsächliche Breite
+  → Sehr verwirrend!
+
+Mit border-box (IMMER benutzen):
+  width: 300px = 300px tatsächliche Breite (padding und border eingeschlossen)
+  → Viel intuitiver.
+
+Der Universal-Reset aus deinem Code:
+  * {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;  ← Das hier macht den Unterschied
+  }
+  ← Perfekt! Das macht fast jedes moderne Projekt.
+
+------------------------------------------------------------------------
+3.3  Margins, Padding, Border
+------------------------------------------------------------------------
+
+SHORTHAND-Syntax:
+
+  /* Ein Wert: alle 4 Seiten */
+  margin: 20px;
+
+  /* Zwei Werte: oben/unten  links/rechts */
+  margin: 20px 40px;
+
+  /* Drei Werte: oben  links/rechts  unten */
+  margin: 20px 40px 10px;
+
+  /* Vier Werte: oben  rechts  unten  links (Uhrzeigersinn!) */
+  margin: 10px 20px 30px 40px;
+
+  /* Einzelne Seiten: */
+  margin-top: 10px;
+  margin-right: 20px;
+  margin-bottom: 30px;
+  margin-left: 40px;
+
+  /* Logische Eigenschaften (besser für RTL-Sprachen): */
+  margin-block: 10px 30px;     → oben/unten (block-direction)
+  margin-inline: 20px 40px;    → links/rechts (inline-direction)
+  margin-block-start: 10px;    → oben
+  margin-block-end: 30px;      → unten
+  margin-inline-start: 20px;   → links (oder rechts in RTL)
+
+MARGIN COLLAPSE:
+Wenn zwei vertikale Margins aufeinandertreffen, "kollabieren" sie:
+Der größere gewinnt, sie addieren sich NICHT.
+
+  <p style="margin-bottom: 30px">Text 1</p>
+  <p style="margin-top: 20px">Text 2</p>
+  → Abstand zwischen beiden: 30px (nicht 50px!)
+
+  Passiert nur vertikal, nur bei Block-Elementen, nur bei benachbarten
+  Elementen oder Kind/Eltern wenn kein Padding/Border dazwischen ist.
+
+BORDER:
+
+  /* Shorthand: breite stil farbe */
+  border: 3px solid var(--Kraft);
+  border-bottom: 3px solid var(--Kraft);  ← Nur unten
+
+  border-style: solid | dotted | dashed | double | groove | ridge | inset | outset | none
+  border-width: 1px 2px 3px 4px;
+  border-color: red blue green yellow;
+  border-radius: 8px;   ← Abgerundete Ecken
+
+  /* Ellipse: */
+  border-radius: 50%;   ← Kreis (wenn width = height)
+  border-radius: 2rem;  ← Aus deinem Code für header/footer!
+
+  /* Pro Ecke: */
+  border-top-left-radius: 8px;
+  /* Oder: */
+  border-radius: 8px 4px 8px 4px;   ← TL  TR  BR  BL
+
+OUTLINE:
+  outline: 2px solid blue;
+  outline-offset: 4px;   ← Abstand zwischen Element und Outline
+
+  Wichtig: Outline nimmt KEINEN Platz weg (kein Layout-Einfluss).
+  → Ideal für :focus-Styles!
+
+------------------------------------------------------------------------
+3.4  Display — wie Elemente sich verhalten
+------------------------------------------------------------------------
+
+  display: block;
+    → Nimmt volle Breite ein, Zeilenumbruch davor und danach.
+    → div, p, h1-h6, section, ul sind block by default.
+
+  display: inline;
+    → Nur so breit wie der Inhalt. Kein Zeilenumbruch.
+    → width/height haben keinen Effekt!
+    → span, a, strong, em sind inline by default.
+
+  display: inline-block;
+    → Wie inline (kein Zeilenumbruch), aber akzeptiert width/height.
+
+  display: none;
+    → Komplett ausgeblendet und aus dem Layout entfernt.
+
+  display: flex;         → Flexbox (Modul 5)
+  display: grid;         → CSS Grid (Modul 6)
+  display: inline-flex;  → Flexbox aber inline
+  display: inline-grid;  → Grid aber inline
+  display: contents;     → Element verschwindet, Kinder bleiben (fortgeschritten)
+  display: table;        → Verhält sich wie Tabelle (selten nötig)
+  display: list-item;    → Wie li
+
+------------------------------------------------------------------------
+3.5  overflow — was passiert wenn Inhalt zu groß ist
+------------------------------------------------------------------------
+
+  overflow: visible;  → Inhalt ragt heraus (Standard)
+  overflow: hidden;   → Inhalt wird abgeschnitten
+  overflow: scroll;   → Immer Scrollbar
+  overflow: auto;     → Scrollbar nur wenn nötig
+  overflow: clip;     → Wie hidden, aber verhindert Scroll-Container
+
+  overflow-x: hidden;   → Nur horizontal
+  overflow-y: auto;     → Nur vertikal
+  overflow: hidden auto; → x: hidden, y: auto (Kurzschreibung)
+
+  text-overflow: ellipsis;  → "..." wenn Text abgeschnitten wird
+    → Braucht: overflow: hidden; white-space: nowrap;
+
+  /* Einzeiliger Text mit "...": */
+  p {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+Erstelle eine Box mit genau 200px Breite inkl. Padding.
+Füge einen 2px border mit Trafk-Farbe hinzu.
+Setze abgerundete Ecken (8px).
+Demonstriere Margin Collapse mit zwei gestapelten Elementen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Farben, Einheiten und Custom Properties
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Farben — alle Formate
+------------------------------------------------------------------------
+
+  color: red;                      → Named Color (147 vordefinierte Namen)
+  color: #fff495;                  → Hex (R R G G B B)
+  color: #fff4;                    → Hex Kurzform + Alpha (#RGBA)
+  color: rgb(255, 244, 149);       → RGB
+  color: rgba(255, 244, 149, 0.5); → RGB mit Alpha (0-1)
+  color: hsl(53, 100%, 79%);       → Hue Saturation Lightness
+  color: hsla(53, 100%, 79%, 0.5); → HSL mit Alpha
+  color: oklch(0.93 0.12 98);      → Modernes perceptuell gleichmäßiges Farbraum
+  color: color-mix(in srgb, var(--Kraft) 70%, black);  → Farben mischen
+
+  Aus deinem Code:
+  --Kraft:      #fff495;     ← Dein charakteristisches Gelb
+  --Kraft-dark: #ede59f;
+  --Trafk:      #5a3998;     ← Das charakteristische Lila
+  --Trafk-dark: #351b67;
+
+  currentColor → Nimmt die aktuelle text-color des Elements:
+    border: 2px solid currentColor;  ← nützlich für Icon-Farben
+
+  transparent  → Komplett durchsichtig
+
+------------------------------------------------------------------------
+4.2  Einheiten — absolut vs relativ
+------------------------------------------------------------------------
+
+ABSOLUT (Bildschirm-unabhängige Einheiten):
+  px     → Pixel (1px ≠ physischer Pixel auf Retina!)
+  pt     → Punkt (1pt = 1.33px) — für Print
+  cm, mm → Zentimeter, Millimeter — für Print
+  in     → Zoll — für Print
+
+RELATIV ZUM SCHRIFTGRÖSSE:
+  em     → Relativ zur Schriftgröße des ELEMENTS (gefährlich: kaskadiert!)
+             1em = Schriftgröße des Elternelements
+  rem    → Relativ zur Schriftgröße des ROOT-Elements (<html>)
+             Meistens: 1rem = 16px (Browser-Standard)
+             → rem für Schriftgrößen und Abstände BEVORZUGEN
+
+RELATIV ZUM VIEWPORT:
+  vw     → 1% der Viewport-Breite
+  vh     → 1% der Viewport-Höhe
+  vmin   → 1% des kleineren Viewport-Maßes (vw oder vh)
+  vmax   → 1% des größeren Viewport-Maßes
+  svw/svh → Small Viewport (ohne Browser-UI, mobile)
+  dvw/dvh → Dynamic Viewport (ändert sich wenn Browser-UI erscheint/verschwindet)
+  lvw/lvh → Large Viewport (mit Browser-UI)
+
+RELATIVITÄTEN:
+  %      → Prozent — relativ zum Elternelement (meistens Breite)
+  ch     → Breite des "0"-Zeichens in der aktuellen Schrift
+  ex     → Höhe des "x"-Zeichens
+  lh     → Aktuelle Zeilenhöhe
+
+CONTAINER-RELATIV:
+  cqw    → Container Query Width — 1% der Container-Breite (Modul 11)
+  cqh    → Container Query Height
+  cqi    → Container Query Inline (wie cqw für horizontal)
+  cqb    → Container Query Block
+
+Aus deinem Code:
+  height: 3.5rem;   ← rem — skaliert mit Browser-Schriftgröße, gut!
+  padding: 5rem;    ← rem für Abstände
+  left: 22cqw;      ← cqw — Container Query Width, modernes Feature!
+  margin-top: 450px ← px, hier statisch — könnte responsive Problem sein
+
+------------------------------------------------------------------------
+4.3  CSS Custom Properties (Variablen) — dein mächtigstes Werkzeug
+------------------------------------------------------------------------
+
+Deklaration (immer in einem Selektor, meistens :root):
+
+  :root {
+    --Kraft:      #fff495;
+    --Trafk:      #5a3998;
+    --abstand-gross: 3rem;
+    --schatten: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+Verwendung:
+
+  p { color: var(--Kraft); }
+  section { padding: var(--abstand-gross); }
+
+  /* Mit Fallback (wenn Variable nicht definiert): */
+  color: var(--unbekannt, #fff);
+
+  /* Variablen können auf andere Variablen aufbauen: */
+  :root {
+    --basis-farbe: #5a3998;
+    --text-farbe: color-mix(in srgb, var(--basis-farbe), white 60%);
+  }
+
+Warum Custom Properties > Sass-Variablen:
+  → Sind Live-CSS, können per JS geändert werden
+  → Kaskadieren (können per Element überschrieben werden)
+  → Können auf verschiedene Werte je nach Media Query gesetzt werden
+
+  /* Responsive Variables: */
+  :root {
+    --spacing: 1rem;
+  }
+  @media (min-width: 768px) {
+    :root {
+      --spacing: 2rem;
+    }
+  }
+
+  /* Per JS ändern: */
+  document.documentElement.style.setProperty('--Kraft', '#ff0000');
+
+Aus deinem Code — sehr sauber und konsistent:
+  var(--Kraft-dark)    → Hover-Farbe
+  var(--Trafk)         → Primärfarbe Lila
+  3px solid var(--Kraft) → Border mit Variable
+
+------------------------------------------------------------------------
+4.4  calc(), min(), max(), clamp() — mathematische Funktionen
+------------------------------------------------------------------------
+
+  calc(100% - 2rem)
+    → Berechnung mit gemischten Einheiten!
+    calc(100vw - 17px)   → Viewport-Breite minus Scrollbar
+    calc(50% + 20px)
+    calc(var(--spacing) * 2)
+
+  min(50%, 400px)
+    → Nimmt den kleineren Wert.
+    → width: min(100%, 60rem)  ← Maximal 60rem, aber niemals über 100%
+
+  max(200px, 50%)
+    → Nimmt den größeren Wert.
+
+  clamp(minimum, ideal, maximum)
+    → Zwischen Minimum und Maximum, idealerweise ideal.
+    → font-size: clamp(1rem, 2.5vw, 2rem)
+       ← Mindestens 1rem, maximal 2rem, fließt mit dem Viewport
+
+  Aus deinem Code:
+  left: calc(-215px + 22cqw - 25cqh);   ← calc mit cqw und cqh, sehr modern!
+  calc(100% + 30px)                     ← Aus section Bubble
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+Definiere ein Farbsystem mit 6 Custom Properties (Primär, Sekundär,
+Hintergrund, Text, Akzent, Fehler).
+Benutze clamp() für eine fluid font-size.
+Benutze calc() um einen Bereich zu berechnen der eine Sidebar hat.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Flexbox — eindimensionales Layout
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Der Flex-Container
+------------------------------------------------------------------------
+
+  .container {
+    display: flex;        → Kinder werden zu Flex Items
+  }
+
+WICHTIGE CONTAINER-EIGENSCHAFTEN:
+
+  flex-direction:
+    row             → Links nach rechts (Standard)
+    row-reverse     → Rechts nach links
+    column          → Oben nach unten
+    column-reverse  → Unten nach oben
+
+  flex-wrap:
+    nowrap          → Alles in einer Linie (Standard — kann überlaufen!)
+    wrap            → Umbruch wenn nötig
+    wrap-reverse    → Umbruch, letzte Zeile oben
+
+  flex-flow: row wrap;  → Kurzschreibung für flex-direction + flex-wrap
+
+  justify-content:       → Ausrichtung entlang der Hauptachse
+    flex-start           → Links (Standard bei row)
+    flex-end             → Rechts
+    center               → Zentriert
+    space-between        → Gleicher Abstand zwischen Items
+    space-around         → Gleicher Abstand um Items (halber Abstand außen)
+    space-evenly         → Gleicher Abstand überall (auch außen)
+
+  align-items:           → Ausrichtung entlang der Querachse
+    flex-start           → Oben (oder Start der Querachse)
+    flex-end             → Unten
+    center               → Vertikal zentriert
+    baseline             → An der Textbasislinie ausgerichtet
+    stretch              → Streckt Items auf volle Höhe (Standard)
+
+  align-content:         → Mehrere Zeilen ausrichten (nur bei wrap)
+    flex-start, flex-end, center, space-between, space-around, stretch
+
+  gap: 15px;             → Abstand zwischen Items (kein Abstand nach außen!)
+  gap: 10px 20px;        → row-gap column-gap
+  row-gap: 10px;
+  column-gap: 20px;
+
+Aus deinem Code:
+  display: flex;
+  flex-direction: row;         ← Horizontal
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  ← Dein #projectsdiv — sauber!
+
+  display: flex;
+  flex-direction: column;      ← Vertical Stack (sections etc.)
+  align-items: center;
+  ← main
+
+------------------------------------------------------------------------
+5.2  Flex Items — einzelne Elemente steuern
+------------------------------------------------------------------------
+
+  flex-grow: 0;       → Wie stark darf das Item wachsen? (0 = gar nicht)
+  flex-shrink: 1;     → Wie stark darf es schrumpfen? (1 = proportional)
+  flex-basis: auto;   → Startgröße vor Verteilung (auto = content-size)
+
+  flex: 1;            → Kurzschreibung: grow=1 shrink=1 basis=0%
+  flex: 0 0 200px;    → Nicht wachsen, nicht schrumpfen, immer 200px
+  flex: auto;         → grow=1 shrink=1 basis=auto
+  flex: none;         → grow=0 shrink=0 basis=auto (feste Größe)
+
+  align-self: center; → Überschreibt align-items für dieses eine Item
+  order: 2;           → Reihenfolge ändern ohne DOM zu ändern (0 = Standard)
+
+  /* Zentrieren — das einfachste aller Zeiten: */
+  .container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+------------------------------------------------------------------------
+5.3  Flex-Rezepte für häufige Layouts
+------------------------------------------------------------------------
+
+  /* Sticky Footer — Footer immer unten: */
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  main { flex: 1; }   ← Main nimmt restlichen Platz ein
+
+  /* Sidebar + Content: */
+  .layout {
+    display: flex;
+    gap: 2rem;
+  }
+  .sidebar { flex: 0 0 250px; }   ← Fixe Sidebar-Breite
+  .content { flex: 1; }           ← Content nimmt Rest
+
+  /* Navigation gleichmäßig verteilt: */
+  nav {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Elemente um eine Achse ausrichten und einen pushen: */
+  header {
+    display: flex;
+    align-items: center;
+  }
+  header .logo { /* links, kein margin */ }
+  header nav { margin-left: auto; }   ← Schiebt alles nach rechts!
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+Baue den Header nach: Logo links, Navigation mittig, Suche rechts.
+Nur mit Flexbox, kein position: fixed.
+Dann: Baue ein 3-Spalten-Karten-Layout das auf Mobile zu einer Spalte
+wird (flex-wrap).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: CSS Grid — zweidimensionales Layout
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Der Grid-Container
+------------------------------------------------------------------------
+
+  .container {
+    display: grid;
+    grid-template-columns: 200px 1fr 200px;  → 3 Spalten: fix flex fix
+    grid-template-rows: auto 1fr auto;        → 3 Reihen: auto flex auto
+    gap: 20px;
+  }
+
+  fr = fraction unit — teilt den verfügbaren Platz auf:
+    1fr 1fr 1fr   → 3 gleich breite Spalten
+    1fr 2fr 1fr   → Mittlere Spalte doppelt so breit
+    200px 1fr     → 200px links, Rest rechts
+
+  grid-template-columns: repeat(3, 1fr);    → 3 gleiche Spalten
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    → So viele Spalten wie möglich, mindestens 250px breit, responsive!
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    → Wie auto-fit, aber behält leere Spuren
+
+------------------------------------------------------------------------
+6.2  Items platzieren
+------------------------------------------------------------------------
+
+  .item {
+    grid-column: 1 / 3;   → Von Linie 1 bis Linie 3 (= 2 Spalten breit)
+    grid-row: 1 / 2;      → Von Linie 1 bis Linie 2 (= 1 Reihe hoch)
+
+    /* Kurzform: */
+    grid-column: 1 / span 2;   → Startet bei 1, erstreckt sich über 2
+    grid-column: span 2;        → 2 breit, Position automatisch
+    grid-column: 1 / -1;        → Volle Breite (von erster bis letzter Linie)
+  }
+
+  /* Gleiches für Reihen: */
+  grid-row: 1 / span 3;
+
+------------------------------------------------------------------------
+6.3  Benannte Bereiche — Template Areas
+------------------------------------------------------------------------
+
+  .layout {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    grid-template-rows: 60px 1fr 60px;
+    grid-template-areas:
+      "header  header"
+      "sidebar content"
+      "footer  footer";
+  }
+
+  header { grid-area: header; }
+  .sidebar { grid-area: sidebar; }
+  main { grid-area: content; }
+  footer { grid-area: footer; }
+
+  Ein "." bedeutet eine leere Zelle:
+    grid-template-areas:
+      "header header header"
+      ".      content sidebar"
+      "footer footer  .";
+
+------------------------------------------------------------------------
+6.4  Alignment im Grid
+------------------------------------------------------------------------
+
+  Container:
+    justify-items: start | end | center | stretch;    → Horizontal
+    align-items:   start | end | center | stretch;    → Vertikal
+    place-items: center center;  → Kurzschreibung für beide
+
+    justify-content: start | end | center | space-between | space-around;
+    align-content:   start | end | center | space-between | space-around;
+    place-content: center;
+
+  Item (überschreibt Container-Einstellung):
+    justify-self: start | end | center | stretch;
+    align-self:   start | end | center | stretch;
+    place-self: center;
+
+------------------------------------------------------------------------
+6.5  Implizites Grid
+------------------------------------------------------------------------
+
+Wenn Items über das definierte Grid hinausgehen, erstellt der Browser
+implizite Tracks. Größe davon steuern:
+
+  grid-auto-rows: 100px;       → Implizite Reihen 100px hoch
+  grid-auto-rows: minmax(100px, auto);  → Mindestens 100px
+  grid-auto-columns: 1fr;
+  grid-auto-flow: row;         → Standard: Items füllen Reihen auf
+  grid-auto-flow: column;      → Items füllen Spalten auf
+  grid-auto-flow: dense;       → Lücken werden aufgefüllt
+
+------------------------------------------------------------------------
+6.6  Typisches Seiten-Grid
+------------------------------------------------------------------------
+
+  body {
+    display: grid;
+    grid-template-columns: [sidebar-start] 250px [sidebar-end content-start] 1fr [content-end];
+    grid-template-rows: 60px 1fr 60px;
+    min-height: 100vh;
+  }
+
+  /* Oder mit Template Areas (lesbarer): */
+  body {
+    display: grid;
+    grid-template:
+      "header"   60px
+      "main"     1fr
+      "footer"   60px
+      / 1fr;        → Nur eine Spalte, volle Breite
+  }
+
+  /* Desktop: Header + Footer voll, Sidebar + Content: */
+  @media (min-width: 768px) {
+    body {
+      grid-template:
+        "header  header"  60px
+        "sidebar content" 1fr
+        "footer  footer"  60px
+        / 250px  1fr;
+    }
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Baue ein Blog-Layout mit Grid:
+Desktop: Header voll, 2 Spalten (content 2fr, aside 1fr), Footer voll.
+Mobile (media query): alles einspaltig.
+Nutze grid-template-areas.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Positionierung
+================================================================================
+
+------------------------------------------------------------------------
+7.1  position-Werte
+------------------------------------------------------------------------
+
+  position: static;     → Standard. Im normalen Dokumentfluss.
+                          top/left/right/bottom haben keinen Effekt.
+
+  position: relative;   → Bleibt im normalen Fluss, aber kann mit
+                          top/right/bottom/left verschoben werden.
+                          Verschobener Raum bleibt "besetzt".
+                          Erstellt neuen Stacking Context (wichtig für z-index).
+                          Erstellt Container für absolute Kinder!
+
+  position: absolute;   → Raus aus dem normalen Fluss! Kein Platz mehr besetzt.
+                          Positionierung relativ zum nächsten Elternelement
+                          das NICHT static ist.
+                          Wenn kein solches → relativ zur Seite.
+
+  position: fixed;      → Raus aus dem Fluss, positioniert relativ zum Viewport.
+                          Bleibt beim Scrollen fixiert.
+
+  position: sticky;     → Bleibt im normalen Fluss, bis es den offset erreicht,
+                          dann "klebt" es dort.
+                          Braucht einen overflow:scroll Vorfahren oder html/body!
+
+Aus deinem Code:
+  position: fixed;      ← header und footer sind fixed (bleiben beim Scrollen)
+  position: absolute;   ← .TrafkSectionBubble absolut im section
+  position: relative;   ← section als Container für die absoluten Kinder
+
+------------------------------------------------------------------------
+7.2  top, right, bottom, left, inset
+------------------------------------------------------------------------
+
+  /* Klassisch: */
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  /* Modernes Kurzform-inset: */
+  inset: 0;            → Alle 4 Seiten 0 (oft für volle Überlagerung)
+  inset: 10px 20px;    → top/bottom: 10px, left/right: 20px
+  inset-block: 0;      → Logisch: oben und unten
+  inset-inline: 0;     → Logisch: links und rechts
+
+------------------------------------------------------------------------
+7.3  z-index — Stapelreihenfolge
+------------------------------------------------------------------------
+
+  z-index funktioniert NUR auf positionierten Elementen
+  (position != static) und Flex/Grid-Items.
+
+  Höherer z-index → liegt oben.
+  Standard: 0 (oder auto, was keinen Stacking Context erstellt).
+
+  Aus deinem Code:
+  z-index: 999;   ← header (oben)
+  z-index: 998;   ← footer (eins drunter)
+  z-index: -1;    ← .TrafkSectionBubble (hinter allem)
+
+  STACKING CONTEXT: Ein neuer Stacking Context entsteht bei:
+  - position: relative/absolute/fixed/sticky + z-index != auto
+  - opacity < 1
+  - transform != none
+  - filter != none
+  - isolation: isolate
+  → Elemente innerhalb eines Stacking Context können nicht über Elemente
+    AUSSERHALB ihres Stacking Context gestapelt werden!
+
+------------------------------------------------------------------------
+7.4  Sticky — praktische Anwendungen
+------------------------------------------------------------------------
+
+  /* Sticky Header: */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  /* Sticky Sidebar: */
+  aside {
+    position: sticky;
+    top: 80px;   ← 80px vom oberen Rand (Platz für Header)
+    height: max-content;
+    align-self: start;   ← Wichtig in Grid/Flex-Kontext!
+  }
+
+  /* Sticky Tabellen-Header: */
+  thead th {
+    position: sticky;
+    top: 0;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Baue einen sticky Header der beim Scrollen oben bleibt.
+Baue ein absolut positioniertes Badge/Label über einer Projektkarte.
+Demonstriere z-index: Überlagere drei Elemente korrekt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Typografie
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Schriften
+------------------------------------------------------------------------
+
+  font-family: "Open Sans", Arial, sans-serif;
+    → Listet Schriften in Reihenfolge der Präferenz.
+    → Letzter Eintrag: generische Familie (serif, sans-serif, monospace,
+      cursive, fantasy, system-ui)
+
+  /* Eigene Schrift einbinden (@font-face): */
+  @font-face {
+    font-family: "TrafkFont";
+    src: url("fonts/trafkfont.woff2") format("woff2"),
+         url("fonts/trafkfont.woff") format("woff");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;   → Text bleibt sichtbar während Schrift lädt
+  }
+
+  body { font-family: "TrafkFont", sans-serif; }
+
+  /* Variable Fonts (modern — eine Datei, alle Gewichte): */
+  @font-face {
+    font-family: "VariableFont";
+    src: url("font.woff2") format("woff2-variations");
+    font-weight: 100 900;   ← Bereich!
+  }
+
+------------------------------------------------------------------------
+8.2  Textformatierung
+------------------------------------------------------------------------
+
+  font-size: 1rem;            → Schriftgröße
+  font-weight: 700;           → Schriftstärke (100-900, bold=700, normal=400)
+  font-style: italic;         → Kursiv
+  font-variant: small-caps;   → Kapitälchen
+
+  line-height: 1.6;           → Zeilenhöhe (ohne Einheit = relativ zu font-size)
+  letter-spacing: 0.05em;     → Buchstabenabstand
+  word-spacing: 0.1em;        → Wortabstand
+
+  text-align: left | right | center | justify;
+  text-decoration: none | underline | line-through | overline;
+  text-decoration: underline dotted var(--Kraft);  → Stil + Farbe
+  text-transform: uppercase | lowercase | capitalize | none;
+  text-indent: 2em;           → Erste Zeile einrücken
+
+  white-space: normal | nowrap | pre | pre-wrap | pre-line | break-spaces;
+    nowrap    → Kein Zeilenumbruch (alles in einer Linie)
+    pre       → Wie im <pre> Tag
+    pre-wrap  → Wie pre, aber mit Zeilenumbruch wenn nötig
+
+  word-break: normal | break-all | keep-all | break-word;
+  overflow-wrap: break-word;  → Bricht lange Wörter um (moderner als word-break)
+  hyphens: auto;              → Automatische Silbentrennung (braucht lang-Attribut!)
+
+------------------------------------------------------------------------
+8.3  Fortgeschrittene Typografie
+------------------------------------------------------------------------
+
+  /* Fluid Typography mit clamp: */
+  font-size: clamp(1rem, 2.5vw + 0.5rem, 2.5rem);
+    → Zwischen 1rem und 2.5rem, fließend mit dem Viewport
+
+  /* Mehrzeiliger Text mit "...": */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+    → Schneidet nach 3 Zeilen mit "..." ab
+
+  /* Font Features (OpenType): */
+  font-variant-numeric: oldstyle-nums;   → Alte Ziffern (1,2,3 tiefer)
+  font-variant-ligatures: common-ligatures;  → fi, fl etc. als Ligatur
+  font-feature-settings: "kern" 1, "liga" 1;  → Direkter OpenType-Zugriff
+
+  /* Schrift-Messwerte: */
+  font-size-adjust: 0.5;   → Erhält x-Höhe wenn Fallback-Schrift kleiner
+  ascent-override, descent-override, line-gap-override  → Schriften angleichen
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Baue ein Typografie-System:
+- Basis: clamp(1rem, 2vw, 1.25rem)
+- h1-h3 mit Größen basierend auf Modular Scale (1.25er Skala)
+- Schrift: Google Font (oder system-font-stack)
+- Textkürzung mit Ellipsis für Projektnamen
+- line-height für Lesbarkeit (1.6 für Fließtext)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Hintergründe und Effekte
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Hintergründe
+------------------------------------------------------------------------
+
+  background-color: var(--Kraft);
+  background-image: url("bild.jpg");
+  background-repeat: no-repeat | repeat | repeat-x | repeat-y;
+  background-position: center top | 50% 20% | left 10px bottom 20px;
+  background-size: cover | contain | 100% auto | 300px 200px;
+    cover   → Bild füllt Bereich vollständig (ggf. abgeschnitten)
+    contain → Bild vollständig sichtbar (ggf. Lücken)
+
+  background-attachment: scroll | fixed | local;
+    fixed  → Parallax-Effekt (Bild bleibt beim Scrollen fixiert)
+
+  background-origin: border-box | padding-box | content-box;
+  background-clip: border-box | padding-box | content-box | text;
+    text   → Hintergrund nur unter dem Text sichtbar (mit transparenter Farbe!)
+
+  /* Kurzform: */
+  background: url("bild.jpg") no-repeat center/cover var(--Kraft);
+
+Aus deinem Code:
+  background-image: url("/...13WorldsBG3.png");
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: contain;
+  ← Hintergrundbild für den Parallax-Effekt.
+
+------------------------------------------------------------------------
+9.2  Mehrere Hintergründe
+------------------------------------------------------------------------
+
+  /* Übereinanderliegende Hintergründe (erster = oben): */
+  background-image:
+    url("overlay.png"),
+    url("hintergrund.jpg");
+  background-size: auto, cover;
+  background-position: center, center;
+
+------------------------------------------------------------------------
+9.3  Verläufe (Gradients)
+------------------------------------------------------------------------
+
+  /* Linearer Verlauf: */
+  background: linear-gradient(to right, var(--Kraft), var(--Trafk));
+  background: linear-gradient(135deg, #fff495, #5a3998);
+  background: linear-gradient(to bottom,
+    var(--Kraft) 0%,
+    var(--Kraft) 30%,
+    var(--Trafk) 100%
+  );
+
+  /* Radialer Verlauf: */
+  background: radial-gradient(circle, var(--Kraft), var(--Trafk));
+  background: radial-gradient(ellipse at top left, #fff495, #5a3998);
+
+  /* Konischer Verlauf (Torte/Pie): */
+  background: conic-gradient(var(--Kraft) 0deg, var(--Trafk) 360deg);
+  background: conic-gradient(from 90deg, var(--Kraft) 0%, var(--Trafk) 100%);
+
+  /* Sich wiederholende Verläufe: */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--Kraft) 0px,
+    var(--Kraft) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+
+------------------------------------------------------------------------
+9.4  filter und backdrop-filter
+------------------------------------------------------------------------
+
+  /* filter — auf das Element und seinen Inhalt: */
+  filter: blur(4px);
+  filter: brightness(0.8);   → 0 = schwarz, 1 = normal, 2 = doppelt hell
+  filter: contrast(1.2);
+  filter: saturate(0.5);     → Weniger gesättigt (richtung Graustufen)
+  filter: grayscale(100%);   → Graustufen
+  filter: sepia(50%);
+  filter: hue-rotate(90deg); → Farben drehen
+  filter: invert(100%);      → Farben invertieren
+  filter: opacity(0.5);      → Wie opacity-Property
+  filter: drop-shadow(4px 4px 8px black);   → Schatten (anders als box-shadow!)
+
+  /* Mehrere Filter kombinieren: */
+  filter: brightness(1.1) saturate(1.2) drop-shadow(0 0 10px var(--Kraft));
+
+Aus deinem Code:
+  filter: drop-shadow(0px 0px 2px var(--Kraft)) drop-shadow(0px 0px 5px var(--Kraft));
+  ← Zwei drop-shadows für einen weichen Glüheffekt! Sehr kreativ.
+  filter: drop-shadow(0px 0px 3px var(--Kraft)) drop-shadow(0px 0px 5px var(--Kraft));
+
+  /* backdrop-filter — Hintergrund hinter dem Element unscharf: */
+  backdrop-filter: blur(10px) brightness(0.8);
+  ← Glas-Effekt! Sieht schön aus für Modals, Cards.
+  ← Braucht einen halbtransparenten Hintergrund damit man den Effekt sieht.
+
+------------------------------------------------------------------------
+9.5  box-shadow
+------------------------------------------------------------------------
+
+  /* Schatten: offset-x offset-y blur spread farbe */
+  box-shadow: 4px 4px 8px 0 rgba(0,0,0,0.3);
+
+  /* Mehrere Schatten: */
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.1),
+    0 4px 12px rgba(0,0,0,0.15);
+
+  /* Innenschatten: */
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+
+  /* Glüheffekt mit box-shadow: */
+  box-shadow: 0 0 10px var(--Kraft), 0 0 30px var(--Kraft);
+
+  /* Kein Schatten: */
+  box-shadow: none;
+
+  Unterschied filter: drop-shadow vs box-shadow:
+  → box-shadow: Folgt der Box des Elements (Rechteck).
+  → drop-shadow: Folgt der Form des Elements (Pixel-genau, auch für PNGs!).
+
+  Aus deinem Code nutzt du drop-shadow via filter für das .glow-Klassen-System.
+  Das ist der bessere Ansatz für Bilder und unregelmäßige Formen!
+
+------------------------------------------------------------------------
+9.6  Masken und Clip-Path
+------------------------------------------------------------------------
+
+  /* Clip-Path — Element ausschneiden: */
+  clip-path: circle(50% at center);
+  clip-path: ellipse(100px 50px at 50% 50%);
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
+  clip-path: inset(10px 20px round 8px);  → Abgerundetes Rechteck einschneiden
+
+  /* Mask — wie clip-path, aber weicher Rand möglich: */
+  mask-image: linear-gradient(to right, black 0%, transparent 100%);
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+
+Aus deinem Code:
+  -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,0.99) 0%, transparent 100%);
+  mask-image: linear-gradient(to right, rgba(0,0,0,0.99) 0%, transparent 85%);
+  ← Maske für die Sektionsblasen — links sichtbar, rechts auslaufend. Schön!
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+Erstelle eine Karte mit:
+- Hintergrundbild das mit cover skaliert
+- Einem halbtransparenten Overlay (gradient oben drüber)
+- Einem Glas-Effekt (backdrop-filter) für den Text-Bereich
+- drop-shadow Glüheffekt in Kraft-Gelb
+- mask-image das den unteren Rand ausblendet
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Animationen und Übergänge
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Transitions — weiche Übergänge
+------------------------------------------------------------------------
+
+  transition: eigenschaft dauer timing-function verzögerung;
+
+  /* Einzelne Eigenschaft: */
+  transition: background-color 0.3s ease;
+
+  /* Mehrere: */
+  transition: background-color 0.3s ease, transform 0.2s ease-out;
+
+  /* Alle Properties: */
+  transition: all 0.3s ease;   ← Vermeiden! Zu breit, schlecht für Performance
+
+  Timing-Funktionen:
+    ease           → Sanft rein und raus (Standard)
+    ease-in        → Langsam rein, schnell raus
+    ease-out       → Schnell rein, langsam raus
+    ease-in-out    → Sanft rein, sanft raus
+    linear         → Konstante Geschwindigkeit
+    steps(4, end)  → 4 harte Schritte (für Sprite-Animationen)
+    cubic-bezier(0.25, 0.46, 0.45, 0.94)  → Eigene Kurve
+
+Aus deinem Code:
+  transition: 0.085s ease-in-out;   ← .do
+  transition: bottom 0.15s ease-in-out;  ← footer (ausfahren!)
+  transition: transform 0.2s ease-in-out !important;  ← nav arrow
+
+  Welche Properties sind animierbar (performant):
+    ✓ transform    → GPU-beschleunigt
+    ✓ opacity      → GPU-beschleunigt
+    ✓ filter       → GPU-beschleunigt
+    △ color, background, border → OK
+    ✗ width, height, margin, padding → Löst Layout aus (teuer!)
+    → Für Performance: transform + opacity bevorzugen.
+
+  Zum Beispiel: Statt width zu animieren → transform: scaleX() animieren.
+
+------------------------------------------------------------------------
+10.2  @keyframes — Animationen
+------------------------------------------------------------------------
+
+  @keyframes nameDerAnimation {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Mit Prozentwerten für mehr Kontrolle: */
+  @keyframes pulsieren {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  /* Anwenden: */
+  .element {
+    animation: nameDerAnimation 0.5s ease forwards;
+  }
+
+  animation-name: pulsieren;
+  animation-duration: 2s;
+  animation-timing-function: ease-in-out;
+  animation-delay: 0.3s;
+  animation-iteration-count: infinite | 3 | 1;
+  animation-direction: normal | reverse | alternate | alternate-reverse;
+  animation-fill-mode: none | forwards | backwards | both;
+    → forwards: Endzustand bleibt erhalten nach der Animation
+    → backwards: Anfangszustand wird schon während delay angewandt
+  animation-play-state: running | paused;
+
+  /* Kurzform: */
+  animation: pulsieren 2s ease-in-out infinite;
+
+  /* Mehrere Animationen: */
+  animation: einfahren 0.5s ease, pulsieren 2s ease 0.5s infinite;
+
+------------------------------------------------------------------------
+10.3  Transform — Transformationen
+------------------------------------------------------------------------
+
+  transform: translateX(20px);         → Horizontal verschieben
+  transform: translateY(-10px);        → Vertikal verschieben
+  transform: translate(20px, -10px);   → Beide gleichzeitig
+  transform: translate3d(x, y, z);     → 3D (z aktiviert GPU)
+
+  transform: scaleX(1.5);       → Horizontal skalieren
+  transform: scaleY(0.5);       → Vertikal skalieren
+  transform: scale(1.2);        → Proportional
+  transform: scale(1.5, 0.8);   → Unterschiedlich
+
+  transform: rotate(45deg);     → Drehen (im Uhrzeigersinn)
+  transform: rotateX(30deg);    → 3D X-Achse
+  transform: rotateY(45deg);    → 3D Y-Achse
+
+  transform: skewX(15deg);      → Verzerren X
+  transform: skewY(-10deg);     → Verzerren Y
+
+  /* Mehrere kombinieren: */
+  transform: translateY(-5px) scale(1.05) rotate(2deg);
+  ← Reihenfolge wichtig! Wird von rechts nach links angewandt.
+
+  transform-origin: center center;   → Drehpunkt (Standard: Mittelpunkt)
+  transform-origin: top left;
+  transform-origin: 100% 50%;
+
+Aus deinem Code:
+  transform: translateZ(-65px) scale(6) translateY(-365px);
+  ← Der Parallax-Effekt! Z-Achse + Scale + Y-Verschiebung.
+  transform: rotate(90deg);    ← Pfeil-Rotation bei geöffneter Nav
+
+------------------------------------------------------------------------
+10.4  Will-Change und Performance
+------------------------------------------------------------------------
+
+  /* Browser Hinweis: Dieses Element wird sich ändern: */
+  will-change: transform, opacity;
+  ← Spart Performance-Overhead. Aber: Sparsam einsetzen!
+    Nur für Elemente die sich WIRKLICH animieren.
+
+  /* Nach der Animation wieder entfernen: */
+  element.style.willChange = 'auto';
+
+  /* Neue Ebene erzwingen: */
+  transform: translateZ(0);   ← "Null-Transform Hack" für GPU-Beschleunigung
+
+------------------------------------------------------------------------
+10.5  View Transitions — Seitenübergänge (sehr modern)
+------------------------------------------------------------------------
+
+  /* In CSS: */
+  ::view-transition-old(root) {
+    animation: ausblenden 0.3s ease;
+  }
+  ::view-transition-new(root) {
+    animation: einblenden 0.3s ease;
+  }
+
+  /* Im JavaScript: */
+  document.startViewTransition(() => {
+    // DOM-Änderungen hier
+    updateContent();
+  });
+
+  /* Benannte Elemente für eigene Übergänge: */
+  .hero-bild {
+    view-transition-name: hero;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Erstelle ein pulsierendes Element (keyframes) das sich in Trafk-Lila
+transformiert (scale + opacity).
+Füge einen smooth hover-Effekt für Projektkarten ein (translateY, box-shadow).
+Baue einen Ladebalken-Animation (von 0% bis 100% Breite).
+Stelle sicher dass alle Animationen die prefer-reduced-motion Regel respektieren.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Responsive Design und Media Queries
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Media Queries — das Grundprinzip
+------------------------------------------------------------------------
+
+  @media (min-width: 768px) {
+    /* Gilt für Viewports >= 768px */
+  }
+
+  @media (max-width: 767px) {
+    /* Gilt für Viewports <= 767px */
+  }
+
+  @media (min-width: 600px) and (max-width: 1200px) {
+    /* Zwischen 600 und 1200px */
+  }
+
+  /* Moderne Syntax (Level 4): */
+  @media (width >= 768px) { }
+  @media (768px <= width < 1200px) { }
+
+  Wichtige Media Features:
+    width / min-width / max-width    → Viewport-Breite
+    height / min-height / max-height
+    aspect-ratio / max-aspect-ratio  → Seitenverhältnis des Viewports
+    orientation: landscape | portrait
+    resolution: 2dppx                → Retina-Displays
+    hover: hover | none               → Hat das Gerät Hover? (Maus = hover)
+    any-hover: hover | none
+    pointer: fine | coarse | none    → Maus (fine), Touch (coarse)
+    color-scheme: light | dark
+    prefers-color-scheme: light | dark  → Dark Mode!
+    prefers-reduced-motion: reduce      → Animations-Einstellung
+    prefers-reduced-transparency: reduce
+    prefers-contrast: high | low
+    forced-colors: active               → Windows High Contrast Mode
+    display-mode: standalone | browser  → Als PWA installiert?
+
+Aus deinem Code:
+  @media (max-aspect-ratio: 1/1) {
+    → "Wenn Viewport höher als breit ist" = Portrait/Mobile!
+    Das ist eigentlich sehr clever — nutzt Seitenverhältnis statt px.
+
+------------------------------------------------------------------------
+11.2  Breakpoints — Strategien
+------------------------------------------------------------------------
+
+  Mobile First (empfohlen):
+  /* Grundstile gelten für Mobile */
+  .layout { display: block; }
+
+  /* Größere Viewports überschreiben: */
+  @media (min-width: 640px) {
+    .layout { display: grid; grid-template-columns: 1fr 1fr; }
+  }
+  @media (min-width: 1024px) {
+    .layout { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  Desktop First (dein Code benutzt das):
+  /* Grundstile für Desktop */
+  @media (max-aspect-ratio: 1/1) { /* Mobile Anpassungen */ }
+
+  Typische Breakpoints (keine absolute Wahrheit — nach Content anpassen):
+    sm: 640px
+    md: 768px
+    lg: 1024px
+    xl: 1280px
+    2xl: 1536px
+
+------------------------------------------------------------------------
+11.3  Container Queries — Responsive nach Container-Größe
+------------------------------------------------------------------------
+
+Das Revolutionäre: Nicht der Viewport-Breakpoint entscheidet, sondern
+wie groß der Container des Elements ist. Das ist flexibler!
+
+  /* Container definieren: */
+  .karten-container {
+    container-type: inline-size;
+    container-name: kartenbereich;
+  }
+
+  /* Karten reagieren auf ihren Container: */
+  @container kartenbereich (min-width: 600px) {
+    .karte {
+      flex-direction: row;
+    }
+  }
+
+  /* Kurzform: */
+  .karten-container {
+    container: kartenbereich / inline-size;
+  }
+
+  /* Container Units: */
+  .karte {
+    padding: 2cqi;    → 2% der Container-Breite
+    font-size: 1.5cqb; → 1.5% der Container-Höhe
+  }
+
+Aus deinem Code:
+  left: calc(-215px + 22cqw - 25cqh);
+  ← Du nutzt cqw und cqh — Container Query Units!
+
+------------------------------------------------------------------------
+11.4  Dark Mode und Nutzer-Einstellungen
+------------------------------------------------------------------------
+
+  /* Dark Mode: */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --hintergrund: #0a0a0a;
+      --text: #f0f0f0;
+    }
+  }
+
+  /* Animationen deaktivieren wenn der Nutzer das bevorzugt: */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Farben für Windows High Contrast Mode: */
+  @media (forced-colors: active) {
+    .mein-button {
+      forced-color-adjust: none;  → Eigene Farben beibehalten
+    }
+  }
+
+------------------------------------------------------------------------
+11.5  Die @layer-Regel — Kaskaden-Layer (sehr modern)
+------------------------------------------------------------------------
+
+Schafft explizite Schichten in der Kaskade:
+
+  @layer base, components, utilities;
+
+  @layer base {
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+  }
+
+  @layer components {
+    .btn { padding: 0.5rem 1rem; }
+  }
+
+  @layer utilities {
+    .mt-1 { margin-top: 0.25rem; }
+  }
+
+  /* utilities überschreibt immer components, egal ob die Spezifität
+     niedrig ist — Layer-Reihenfolge schlägt Spezifität! */
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+Mache dein bestehende Layout vollständig responsive:
+- Mobile: Einspaltiges Layout, größere Touch-Targets (min 44px)
+- Desktop: Mehrspaltig, Hover-Effekte
+- Container Query für eine Karten-Komponente
+- Dark Mode Support mit CSS Custom Properties
+- prefers-reduced-motion für alle Animationen
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Fortgeschrittene Layout-Techniken
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Aspect Ratio
+------------------------------------------------------------------------
+
+  aspect-ratio: 16 / 9;    → Behält das Seitenverhältnis beim Skalieren
+  aspect-ratio: 1;         → Quadrat
+  aspect-ratio: auto;      → Standard (von Inhalt bestimmt)
+
+  /* Immer responsives Video: */
+  iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    height: auto;
+  }
+
+  /* Quadratische Thumbnails: */
+  img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+
+------------------------------------------------------------------------
+12.2  object-fit und object-position
+------------------------------------------------------------------------
+
+  /* Für img und video — wie background-size: */
+  object-fit: fill;      → Streckt (Standard, verzerrt!)
+  object-fit: contain;   → Vollständig sichtbar, Lücken
+  object-fit: cover;     → Füllt komplett, beschneidet
+  object-fit: none;      → Originalgröße, beschneidet
+  object-fit: scale-down; → Kleiner von contain oder none
+
+  object-position: center center;   → Position (wie background-position)
+  object-position: top left;
+  object-position: 20% 80%;
+
+------------------------------------------------------------------------
+12.3  Columns — CSS Multi-Column Layout
+------------------------------------------------------------------------
+
+  /* Text in mehreren Spalten: */
+  .text {
+    column-count: 3;         → 3 Spalten
+    column-width: 250px;     → Spalten mindestens 250px breit
+    columns: 3 250px;        → Kurzform
+    column-gap: 2rem;        → Abstand zwischen Spalten
+    column-rule: 1px solid var(--Kraft);   → Trennlinie
+  }
+
+  /* Element über mehrere Spalten spannen: */
+  h2 {
+    column-span: all;
+  }
+
+  /* Umbrechverhalten: */
+  p {
+    break-inside: avoid;    → Absatz nicht aufteilen
+    break-before: column;   → Immer neue Spalte beginnen
+  }
+
+------------------------------------------------------------------------
+12.4  Subgrid
+------------------------------------------------------------------------
+
+Erlaubt Kindern eines Grid-Items die Linien des übergeordneten Grids zu erben:
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto 1fr auto;
+    gap: 1rem;
+  }
+
+  .karte {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;   ← Erbt die 3 Reihen des Parent-Grids!
+  }
+
+  .karte-header { }    → Ausgerichtet mit anderen Karten-Headern!
+  .karte-body { }      → Alle Bodies gleich hoch!
+  .karte-footer { }    → Alle Footers auf gleicher Linie!
+
+------------------------------------------------------------------------
+12.5  Scroll Snap
+------------------------------------------------------------------------
+
+  /* Scroll Snap — sanftes Einrasten: */
+  .container {
+    scroll-snap-type: x mandatory;   → Horizontal, muss einrasten
+    overflow-x: scroll;
+    display: flex;
+  }
+
+  .slide {
+    scroll-snap-align: start;   → An welchem Punkt einrasten
+    flex-shrink: 0;
+    width: 100%;
+  }
+
+  /* Vertikal (Vollbild-Abschnitte): */
+  html {
+    scroll-snap-type: y proximity;   → Einrasten wenn nah genug
+  }
+  section {
+    scroll-snap-align: start;
+    height: 100vh;
+  }
+
+  /* Abstand beim Snapping: */
+  .slide {
+    scroll-snap-stop: always;   → Kann nicht "überspringen"
+    scroll-margin-top: 80px;    → Abstand zum Snap-Punkt (für Header)
+  }
+
+------------------------------------------------------------------------
+12.6  Scroll-Driven Animations (ultramodern, 2023+)
+------------------------------------------------------------------------
+
+Animationen die durch Scrollen gesteuert werden — ohne JavaScript!
+
+  /* Timeline erstellen: */
+  @keyframes einblenden {
+    from { opacity: 0; transform: translateY(50px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .element {
+    animation: einblenden linear;
+    animation-timeline: view();         → Timeline basiert auf Element im Viewport
+    animation-range: entry 0% entry 40%;  → Nur während "Entry" animieren
+  }
+
+  /* Scroll Progress Bar: */
+  #progress-bar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--Kraft);
+    transform-origin: left;
+    animation: scaleX linear;
+    animation-timeline: scroll(root);    → Scrollfortschritt der Seite
+    animation-range: 0% 100%;
+  }
+
+  @keyframes scaleX {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+Baue ein horizontales Bildergalerie mit Scroll Snap.
+Füge eine animierte Progress Bar am oberen Rand ein (scroll-driven).
+Baue ein 3-Spalten Karten-Layout mit Subgrid für aligned Headers/Footers.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 13: CSS Features die es wirklich gibt (und kaum jemand kennt)
+================================================================================
+
+------------------------------------------------------------------------
+13.1  :has() — der "Parent Selector"
+------------------------------------------------------------------------
+
+  /* Karte mit Bild bekommt anderen Style: */
+  .karte:has(img) {
+    padding-top: 0;
+  }
+
+  /* Form wenn es ein invalides Feld hat: */
+  form:has(:invalid) {
+    border: 2px solid red;
+  }
+
+  /* Header wenn er ein .sticky-aktiv hat: */
+  header:has(+ .sticky-aktiv) {
+    background: rgba(255,255,255,0.9);
+  }
+
+  /* Navigation wenn sie ein offenes Dropdown hat: */
+  nav:has([aria-expanded="true"]) {
+    background: rgba(90,57,152,0.1);
+  }
+
+------------------------------------------------------------------------
+13.2  @starting-style — Animiertes Einblenden aus display:none
+------------------------------------------------------------------------
+
+  /* Element das von display:none zu sichtbar animiert: */
+  dialog {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 0.3s, transform 0.3s, display 0.3s allow-discrete;
+
+    @starting-style {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+  }
+
+  dialog:not([open]) {
+    display: none;
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+------------------------------------------------------------------------
+13.3  popover — eingebautes Popover-System
+------------------------------------------------------------------------
+
+  <!-- HTML: -->
+  <button popovertarget="mein-popup">Öffnen</button>
+  <div id="mein-popup" popover>
+    <p>Inhalt des Popovers</p>
+  </div>
+
+  /* CSS: */
+  [popover] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--Kraft);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  [popover]::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  /* Animieren: */
+  [popover] {
+    transition: opacity 0.3s, display 0.3s allow-discrete;
+    opacity: 1;
+  }
+  [popover]:not(:popover-open) {
+    display: none;
+    opacity: 0;
+  }
+
+------------------------------------------------------------------------
+13.4  Weitere nützliche moderne Properties
+------------------------------------------------------------------------
+
+  /* Text Wrap — Typografisch schöne Umbrüche: */
+  h1, h2, h3 {
+    text-wrap: balance;    → Versucht ausgeglichene Zeilen
+  }
+  p {
+    text-wrap: pretty;     → Vermeidet Schusterjungen/Hurenkinder (einzelne Wörter)
+  }
+
+  /* Logische Eigenschaften — RTL-freundlich: */
+  margin-inline: auto;     → Wie margin: 0 auto (zentriert)
+  padding-block: 2rem;     → padding-top + padding-bottom
+  border-inline-end: 1px solid;   → Rechte Seite (in LTR)
+
+  /* Appearance — Formularelemente restylen: */
+  input, select {
+    appearance: none;      → Browser-Standardstyle entfernen
+  }
+
+  /* Print-Styles — für den Druck: */
+  @media print {
+    header, footer, nav { display: none; }
+    body { font-size: 12pt; color: black; }
+    a[href]::after { content: " (" attr(href) ")"; }
+  }
+
+  /* Accent Color — Checkboxen und Radios stylen: */
+  :root {
+    accent-color: var(--Trafk);
+  }
+  ← Macht alle Checkboxen, Radios, Range-Inputs in Trafk-Lila!
+
+  /* Color Scheme: */
+  :root {
+    color-scheme: light dark;   → Browser wählt passend zu Systemeinstellung
+  }
+
+  /* Scroll Behavior: */
+  html {
+    scroll-behavior: smooth;   → Sanftes Scrollen zu Ankern
+  }
+
+  /* Overscroll Behavior: */
+  body {
+    overscroll-behavior: none;         → Kein Pull-to-Refresh etc.
+    overscroll-behavior-y: contain;    → Scroll endet am Element
+  }
+
+  /* Touch Action: */
+  .slider {
+    touch-action: pan-x;   → Nur horizontales Scrollen erlaubt (für Slider)
+  }
+
+  /* Pointer Events: */
+  .overlay {
+    pointer-events: none;  → Klicks gehen "durch" das Element
+  }
+
+  /* Resize: */
+  textarea {
+    resize: vertical;   → Nur vertikal veränderbar (horizontal, both, none)
+  }
+
+  /* Cursor: */
+  button { cursor: pointer; }
+  .ladevorgang { cursor: wait; }
+  .verschieben { cursor: move; }
+  .benutzerdefiniert { cursor: url("cursor.png"), auto; }
+
+------------------------------------------------------------------------
+13.5  Nesting — CSS ohne Präprozessor
+------------------------------------------------------------------------
+
+  /* Natives CSS Nesting (kein Sass nötig): */
+  .nav {
+    display: flex;
+    gap: 1rem;
+
+    & a {
+      color: white;
+      text-decoration: none;
+
+      &:hover {
+        color: var(--Kraft);
+      }
+    }
+
+    & .aktiv {
+      font-weight: bold;
+    }
+  }
+
+  /* Media Queries im Selector: */
+  .karte {
+    padding: 1rem;
+
+    @media (min-width: 768px) {
+      padding: 2rem;
+    }
+  }
+
+------------------------------------------------------------------------
+13.6  @scope — Styles auf einen Bereich begrenzen
+------------------------------------------------------------------------
+
+  @scope (.karte) to (.karte-footer) {
+    /* Styles gelten nur innerhalb .karte, nicht im .karte-footer: */
+    p { color: var(--Kraftlight); }
+    h2 { font-size: 1.5rem; }
+  }
+
+------------------------------------------------------------------------
+13.7  Custom Properties mit @property (registriert)
+------------------------------------------------------------------------
+
+  @property --winkel {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+  }
+
+  /* Jetzt kann der Winkel animiert werden!
+     Normale Custom Properties können nicht animiert werden: */
+  .element {
+    background: conic-gradient(var(--Kraft), var(--Trafk) var(--winkel));
+    transition: --winkel 0.3s ease;
+  }
+  .element:hover {
+    --winkel: 360deg;
+  }
+
+--------------------------------------------------------------------------------
+ABSCHLUSSÜBUNG:
+Baue das komplette TrafkSite-Layout mit allem was du gelernt hast:
+1. CSS Custom Properties für alle Farben und Abstände
+2. Grid für das Seiten-Layout
+3. Flexbox für Header und Footer
+4. Container Queries für Projektkarten
+5. Scroll Snap für eine horizontale Galerie
+6. CSS Nesting für alle Komponenten
+7. Dark Mode via prefers-color-scheme
+8. Vollständig responsive mit Mobile-First
+9. Alle Animationen mit prefers-reduced-motion respektieren
+10. :has() für mindestens eine Komponente
+11. Custom Properties die per JS animiert werden können
+--------------------------------------------------------------------------------
+
+
+================================================================================
+SCHNELLREFERENZ — CSS
+================================================================================
+
+SELEKTOREN:   * p .klasse #id [attr] :hover :nth-child() ::before
+KASKADE:      Spezifität: ID > Klasse > Typ | !important als Notfall
+BOX MODEL:    box-sizing: border-box | padding, margin, border, outline
+DISPLAY:      block, inline, inline-block, flex, grid, none
+POSITION:     static, relative, absolute, fixed, sticky | z-index
+FARBEN:       #hex, rgb(), hsl(), oklch() | Custom Properties --name
+EINHEITEN:    rem (root) | em (parent) | vw/vh (viewport) | cqw (container)
+MATHE:        calc(), min(), max(), clamp()
+FLEXBOX:      flex-direction, justify-content, align-items, gap
+GRID:         grid-template-columns, grid-area, fr, repeat(), auto-fit
+RESPONSIVE:   @media min/max-width | Container Queries | prefers-*
+TYPO:         font-family, font-size, line-height, clamp() für fluid
+HINTERGRUND:  background-image, gradient, backdrop-filter
+ANIMATIONEN:  transition | @keyframes + animation | scroll-driven
+FILTER:       blur, brightness, drop-shadow, contrast, hue-rotate
+TRANSFORM:    translate, scale, rotate | transform-origin
+MODERN:       :has() | nesting | @layer | @property | scroll-snap
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN — CSS
+================================================================================
+
+MDN CSS Docs   → https://developer.mozilla.org/de/docs/Web/CSS
+CSS-Tricks     → https://css-tricks.com (Anleitungen und Demos)
+web.dev/css    → https://web.dev/learn/css (Google-Tutorial)
+Can I Use      → https://caniuse.com (Browser-Unterstützung)
+SmolCSS        → https://smolcss.dev (minimale moderne Patterns)
+Every Layout   → https://every-layout.dev (robuste Layouts)
+CSS Zen Garden → https://csszengarden.com (was CSS alles kann!)
+Open Props     → https://open-props.style (Design-Token-Bibliothek)
+
+================================================================================
+Ende des CSS-Kurses — Copyright-Hinweis
+================================================================================
+
+Dieser Kurs wurde speziell für TrafkHop Entertainment erstellt, basierend
+auf den tatsächlich vorhandenen Dateien (standard.css, index.css) sowie
+dem bewährten Format des JS/Bash/HTML-Kurses.
+
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

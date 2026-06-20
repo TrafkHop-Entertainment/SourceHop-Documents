@@ -1,0 +1,4025 @@
+================================================================================
+RUST KOMPLETTKURS — VOLLSTÄNDIG
+Grundlagen · Ownership · Typsystem · Traits · Concurrency · Async · Unsafe
+================================================================================
+
+Dieser Kurs führt dich von Null bis Experte in Rust.
+Am Ende beherrschst du die gesamte Sprache — von einfachen Variablen bis zu
+Unsafe-Code, Makros, Async/Await und eigenem Crate-Publishing.
+
+Kursstruktur:
+  Modul  1–6   → Grundlagen: Syntax, Typen, Kontrollfluss, Funktionen
+  Modul  7–9   → Ownership: Das Herzstück von Rust — Borrowing, Lifetimes
+  Modul 10–12  → Datenstrukturen: Structs, Enums, Pattern Matching, Collections
+  Modul 13–14  → Fehlerbehandlung: Result, Option, ? Operator
+  Modul 15–17  → Traits, Generics, Closures, Iteratoren
+  Modul 18–20  → Module, Cargo, Dateien, I/O, Umgebung
+  Modul 21–22  → Fearless Concurrency: Threads, Channels, Arc, Mutex
+  Modul 23–24  → Smart Pointers: Box, Rc, Arc, RefCell, Cow
+  Modul 25–26  → Async/Await mit Tokio, async-Ökosystem
+  Modul 27–28  → Unsafe Rust, FFI, Raw Pointers
+  Modul 29–30  → Makros, Testing, Dokumentation, Publishing
+
+================================================================================
+MODUL 1: Rust verstehen — Warum Rust? Was ist anders?
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Was Rust ist und was es verspricht
+------------------------------------------------------------------------
+
+Rust ist eine Systemprogrammiersprache, die drei Eigenschaften kombiniert,
+die man bisher nicht gleichzeitig haben konnte:
+
+  Speichersicherheit:
+    In C/C++ gibt es Use-After-Free, Dangling Pointers, Buffer Overflows.
+    Diese Fehlerklassen sind der häufigste Ursprung von Sicherheitslücken.
+    Rust verhindert sie zur Compile-Zeit — ohne Garbage Collector.
+
+  Zero-Cost-Abstractions:
+    Du schreibst sicheren, ergonomischen High-Level-Code.
+    Der Compiler erzeugt dennoch denselben Maschinencode wie handoptimiertes C.
+    Du zahlst keinen Laufzeit-Preis für Sicherheit.
+
+  Fearless Concurrency:
+    Data Races sind in Rust unmöglich — der Compiler erkennt sie.
+    Paralleler Code wird erzwungenermaßen korrekt geschrieben.
+
+Rust ist compiliert und statisch typisiert:
+  Der Code wird zu nativem Maschinencode übersetzt — kein VM, kein JIT.
+  Alle Typen sind zur Compile-Zeit bekannt.
+  Das macht Rust so schnell wie C, aber viel sicherer.
+
+Was Rust NICHT ist:
+  - Kein objektorientiertes Java/C# (keine Vererbungshierarchien)
+  - Kein dynamisch typisiertes Python
+  - Kein Garbage-Collector-basiertes Go
+  Rust ist ein eigenes Paradigma — aber die Konzepte sind erlernbar.
+
+Wo Rust eingesetzt wird:
+  - Systemprogrammierung: Treiber, Betriebssystem-Komponenten (z.B. Linux-Kernel)
+  - WebAssembly: Rust → WASM läuft im Browser
+  - CLI-Tools: ripgrep, fd, bat, exa — alle in Rust, alle extrem schnell
+  - Web-Backend: actix-web, axum — hochperformante HTTP-Server
+  - Embedded: Rust läuft auf Mikrocontrollern
+  - Game-Engines: Bevy (wie dein GDScript, aber in Rust!)
+
+------------------------------------------------------------------------
+1.2  Der Stack, der Heap, und warum das wichtig ist
+------------------------------------------------------------------------
+
+Um Rust zu verstehen, muss man wissen wie Speicher funktioniert.
+
+  Stack — der schnelle Stapel:
+    Funktionsaufruf legt lokale Variablen auf den Stack.
+    Feste, bekannte Größe zur Compile-Zeit.
+    Automatisch freigegeben wenn die Funktion endet.
+    Zugriff extrem schnell (einfacher Pointer-Decrement).
+
+    let x: i32 = 42;       // liegt auf dem Stack
+    let y: f64 = 3.14;     // liegt auf dem Stack
+
+  Heap — der flexible Speicher:
+    Beliebig große Daten, Größe zur Laufzeit unbekannt.
+    Muss explizit alloziert UND freigegeben werden.
+    Zugriff langsamer (Pointer-Dereferenzierung).
+
+    // In C: malloc + free (manuell, fehleranfällig)
+    // In Java/Python: Garbage Collector (bequem, aber Laufzeitkosten)
+    // In Rust: Ownership (automatisch zur Compile-Zeit!)
+
+  Rusts Lösung — Ownership:
+    Jeder Heap-Wert hat genau EINEN Besitzer (Owner).
+    Wenn der Besitzer den Scope verlässt, wird der Speicher freigegeben.
+    Kein GC, kein manuelles free() — der Compiler erledigt es.
+
+------------------------------------------------------------------------
+1.3  Rust im Vergleich zu deinen anderen Sprachen
+------------------------------------------------------------------------
+
+  Python:     Interpretiert, dynamisch, GC → langsam aber flexibel
+  Java:       Compiliert zu Bytecode, GC auf JVM → mittlere Performance
+  Bash:       Shell-Skriptsprache, extern-Befehle statt Bibliotheken
+  GDScript:   Spieleskripting, Garbage Collector, Python-ähnlich
+  C/C++:      Schnell und mächtig, aber unsicher (Rust ersetzt diese!)
+  Rust:       Compiliert zu Maschinencode, kein GC, aber trotzdem sicher
+
+  Was aus deinen anderen Sprachen wiederverwendbar ist:
+    - Python-Logik (Algorithmen, Datenstrukturen) → fast 1:1 übertragbar
+    - Java-OOP-Denken → Structs + Traits ersetzen Klassen + Interfaces
+    - Pattern Matching → Rust macht das viel mächtiger als alle anderen
+    - Bash-Mentalität (Pipes, Verkettung) → Iteratoren in Rust
+
+================================================================================
+MODUL 2: Installation, Cargo und erstes Programm
+================================================================================
+
+------------------------------------------------------------------------
+2.1  Rust installieren
+------------------------------------------------------------------------
+
+Rust wird über rustup installiert — den offiziellen Toolchain-Manager:
+
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+  Danach:
+  source $HOME/.cargo/env    ← oder neues Terminal öffnen
+
+  Versionen prüfen:
+  rustc --version            → rustc 1.78.0 (9b00956e5 2024-04-29)
+  cargo --version            → cargo 1.78.0 (54d8815d0 2024-03-26)
+  rustup --version           → rustup 1.27.1 (...)
+
+  Rust aktualisieren:
+  rustup update              ← auf aktuelle stable Version aktualisieren
+
+  Zusätzliche Targets installieren (z.B. für WebAssembly):
+  rustup target add wasm32-unknown-unknown
+
+  Nightly-Version (für experimentelle Features):
+  rustup install nightly
+  rustup default nightly     ← wechsle auf Nightly
+  rustup default stable      ← zurück zu Stable
+
+------------------------------------------------------------------------
+2.2  Cargo — Rusts Build-System und Paketmanager
+------------------------------------------------------------------------
+
+Cargo ist das Äquivalent zu pip (Python), npm (JS), maven (Java).
+Es macht alles: Bauen, Testen, Dokumentation, Paket-Publishing.
+
+  Neues Projekt erstellen:
+  cargo new mein_projekt          ← erstellt Binary-Projekt
+  cargo new meine_lib --lib       ← erstellt Library-Projekt
+  cd mein_projekt
+
+  Projektstruktur:
+  mein_projekt/
+  ├── Cargo.toml           ← Konfiguration (wie package.json in npm)
+  ├── Cargo.lock           ← Genaue Versionen aller Dependencies (in Git!)
+  └── src/
+      └── main.rs          ← Einstiegspunkt des Programms
+
+  Cargo-Befehle:
+  cargo build              ← Kompiliert (debug-Modus, schnell zu bauen)
+  cargo build --release    ← Kompiliert optimiert (langsamer, kleiner, schneller)
+  cargo run                ← Kompiliert und führt aus
+  cargo run -- arg1 arg2   ← Mit Kommandozeilen-Argumenten
+  cargo check              ← Prüft auf Fehler OHNE zu kompilieren (schnell!)
+  cargo test               ← Führt alle Tests aus
+  cargo doc --open         ← Generiert Dokumentation und öffnet sie im Browser
+  cargo fmt                ← Formatiert den Code (wie Python's black)
+  cargo clippy             ← Linter — gibt Verbesserungsvorschläge
+
+  cargo new vs cargo init:
+  cargo new ordner/   ← erstellt neuen Ordner und Projekt darin
+  cargo init          ← initialisiert Projekt im aktuellen Ordner
+
+------------------------------------------------------------------------
+2.3  Cargo.toml verstehen
+------------------------------------------------------------------------
+
+Cargo.toml ist die Projektkonfiguration im TOML-Format:
+
+  [package]
+  name = "mein_projekt"       ← Name des Projekts/Crate
+  version = "0.1.0"           ← Semantische Versionierung: Major.Minor.Patch
+  edition = "2021"            ← Rust-Edition (2015, 2018, 2021 — nimm immer 2021)
+  authors = ["TrafkHop <deine@email.de>"]
+  description = "Mein erstes Rust-Projekt"
+  license = "MIT"
+
+  [dependencies]
+  serde = "1.0"               ← Abhängigkeit: serde Version 1.x.y
+  serde_json = "1.0"
+  tokio = { version = "1", features = ["full"] }    ← Mit Features
+  rand = { version = "0.8", optional = true }       ← Optionale Dep
+
+  [dev-dependencies]
+  criterion = "0.5"           ← Nur für Tests und Benchmarks
+
+  [profile.release]
+  opt-level = 3               ← Maximale Optimierung
+  lto = true                  ← Link-Time Optimization
+  strip = true                ← Debug-Symbole entfernen → kleinere Binary
+
+  [features]
+  default = []
+  tls = ["tokio-tls"]         ← Optionale Feature-Flags
+
+  Abhängigkeiten suchen:
+  cargo search serde          ← sucht auf crates.io
+  oder direkt: https://crates.io
+
+  Abhängigkeit hinzufügen (ohne Cargo.toml manuell zu editieren):
+  cargo add serde              ← fügt neueste Version hinzu
+  cargo add serde --features derive
+  cargo remove serde           ← entfernt Abhängigkeit
+
+------------------------------------------------------------------------
+2.4  Hello World — das erste Rust-Programm
+------------------------------------------------------------------------
+
+  // src/main.rs
+  fn main() {
+      println!("Hallo, Welt!");
+  }
+
+  cargo run
+  → Compiling mein_projekt v0.1.0
+  → Finished dev [unoptimized + debuginfo] target(s) in 0.52s
+  → Running `target/debug/mein_projekt`
+  → Hallo, Welt!
+
+Was hier passiert:
+  fn main()        → die main-Funktion ist der Einstiegspunkt (wie in C/Java)
+  println!         → das ! macht es zu einem Makro, nicht einer Funktion
+  "Hallo, Welt!"   → String-Literal (immer doppelte Anführungszeichen)
+  ;                → Statements enden mit Semikolon
+
+  Unterschied Makro vs Funktion:
+  Makros (println!, vec!, format!, panic!) werden zur Compile-Zeit expandiert.
+  Sie können variable Argumente haben — das können normale Funktionen nicht.
+  Du erkennst Makros immer am ! am Ende.
+
+Ausgabe-Makros:
+  println!("Hallo")           → mit Zeilenumbruch
+  print!("Hallo ")            → OHNE Zeilenumbruch
+  eprintln!("Fehler!")        → auf stderr statt stdout
+
+Format-Syntax (ähnlich Python f-Strings):
+  let name = "TrafkHop";
+  let version = 2;
+  println!("Hallo, {}!", name);               → Hallo, TrafkHop!
+  println!("Version: {}", version);           → Version: 2
+  println!("{name} v{version}");              → TrafkHop v2  (Rust 1.58+)
+  println!("{:.2}", 3.14159);                 → 3.14
+  println!("{:>10}", "rechts");               → "     rechts" (rechtsbündig)
+  println!("{:0>5}", 42);                     → 00042
+  println!("{:?}", vec![1,2,3]);              → Debug-Format: [1, 2, 3]
+  println!("{:#?}", vec![1,2,3]);             → Pretty-Debug (mehrzeilig)
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+Erstelle ein Projekt namens "rust_kurs" mit cargo new.
+Schreibe ein Programm das ausgibt:
+- Deinen Namen
+- Das aktuelle Jahr als Zahl (formatiert mit 4 Stellen: 2024)
+- Den Satz: "Rust ist [Dein Gefühl]!" — ersetze [] mit einer Variable
+Führe es mit cargo run aus. Prüfe ob cargo check Fehler findet.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Variablen, Datentypen und Shadowing
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Variablen und Unveränderlichkeit
+------------------------------------------------------------------------
+
+In Rust sind Variablen standardmäßig UNVERÄNDERLICH (immutable).
+Das ist der Gegensatz zu fast allen anderen Sprachen.
+
+  let x = 5;
+  x = 6;         // COMPILE-FEHLER: cannot assign twice to immutable variable
+
+  Warum? Unveränderliche Variablen sind sicherer und leichter zu reason-about.
+  Wenn du weißt dass x immer 5 ist, musst du nicht den ganzen Code verfolgen.
+
+  Veränderliche Variablen — mit mut:
+  let mut y = 5;
+  y = 6;         // OK
+  y += 1;        // OK → y ist jetzt 7
+
+  Konvention: Benutze mut nur wenn du wirklich ändern musst.
+  Der Compiler warnt wenn du mut schreibst aber nie änderst.
+
+  Konstanten — immer unveränderlich, kein mut möglich:
+  const MAX_PUNKTE: u32 = 100_000;   // Typ MUSS angegeben werden!
+  const PI: f64 = 3.14159265358979;
+
+  Unterschied let vs const:
+    let: Laufzeit-Wert, kann Funktionen/Berechnungen als Wert haben
+    const: MUSS zur Compile-Zeit bekannt sein, wird überall eingesetzt wo
+           der Name steht (wie #define in C, aber typsicher!)
+    const SATZ: &str = "Hallo!";    // &str als const: ok
+
+  Statische Variablen:
+  static GREETING: &str = "Hallo";  // Lebt für die gesamte Programmdauer
+  static mut ZAEHLER: u32 = 0;      // Mutable static → nur in unsafe-Block
+
+------------------------------------------------------------------------
+3.2  Shadowing — Variable überschreiben
+------------------------------------------------------------------------
+
+Shadowing bedeutet: du deklarierst eine neue Variable mit demselben Namen.
+Sie "überschattet" die alte Variable im selben Scope:
+
+  let x = 5;
+  let x = x + 1;      // NEUE Variable x, die alte ist weg
+  let x = x * 2;      // Wieder neue Variable
+  println!("{x}");    // 12
+
+  // Wichtig: Shadowing erlaubt sogar Typänderung!
+  let leerzeichen = "   ";    // &str
+  let leerzeichen = leerzeichen.len();  // jetzt usize (Zahl)
+  // Das geht mit mut NICHT:
+  // let mut leerzeichen = "   ";
+  // leerzeichen = leerzeichen.len();   // FEHLER: Typ stimmt nicht
+
+  Wozu ist Shadowing gut?
+    - Transformation ohne neuen Variablennamen (ergebnis_roh → ergebnis)
+    - Typkonvertierung ohne künstliche Namen
+    - In einem inneren Scope überschatten ohne den äußeren zu ändern:
+
+  let x = 5;
+  {
+      let x = x * 100;   // x = 500 nur hier im inneren Block
+      println!("{x}");   // 500
+  }
+  println!("{x}");       // 5 — äußeres x unverändert
+
+------------------------------------------------------------------------
+3.3  Ganzzahl-Typen
+------------------------------------------------------------------------
+
+Rust hat präzise Integer-Typen — du wählst die Größe explizit:
+
+  Vorzeichenbehaftet (signed) — können negativ sein:
+    i8    → -128 bis 127
+    i16   → -32_768 bis 32_767
+    i32   → -2_147_483_648 bis 2_147_483_647  ← Standard für ganze Zahlen
+    i64   → -(2^63) bis 2^63-1
+    i128  → -(2^127) bis 2^127-1
+    isize → Plattformabhängig (64-Bit auf 64-Bit-System)
+
+  Vorzeichenlos (unsigned) — nur positiv:
+    u8    → 0 bis 255                ← für Bytes!
+    u16   → 0 bis 65_535
+    u32   → 0 bis 4_294_967_295
+    u64   → 0 bis 18_446_744_073_709_551_615
+    u128  → 0 bis 2^128-1
+    usize → Plattformabhängig        ← für Indices und Größen!
+
+  Warum usize für Indices?
+    Vec/Arrays werden mit usize-Indices angesprochen.
+    usize ist immer groß genug für Speicheradressen auf der Plattform.
+
+  Literale schreiben:
+  let a: i32 = 1_000_000;    // Unterstriche für Lesbarkeit
+  let b = 0xFF;               // Hexadezimal
+  let c = 0b1010_0011;        // Binär
+  let d = 0o77;               // Oktal
+  let e = 255u8;              // Typ als Suffix: e ist u8
+  let f = -42_i64;            // Negativer i64
+
+  Integer-Overflow:
+    Im Debug-Modus: Panic (Absturz mit Fehlermeldung)
+    Im Release-Modus: Wraparound (0u8 - 1 → 255) — VORSICHT!
+    Explizit: u8::wrapping_add(200, 100) → 44  (bewusstes Wraparound)
+               u8::checked_add(200, 100) → None (gibt Option zurück)
+               u8::saturating_add(200, 100) → 255 (klemmt am Maximum)
+
+------------------------------------------------------------------------
+3.4  Fließkomma-Typen
+------------------------------------------------------------------------
+
+  f32   → 32-Bit Fließkomma (einfache Genauigkeit, ~7 Dezimalstellen)
+  f64   → 64-Bit Fließkomma (doppelte Genauigkeit, ~15 Dezimalstellen) ← Standard
+
+  let x = 3.14;          // f64 (Standard)
+  let y: f32 = 3.14;     // explizit f32
+  let z = 1.0_f64;       // Suffix-Notation
+
+  Arithmetik:
+  let summe = 5.0 + 10.3;
+  let diff  = 95.5 - 4.3;
+  let prod  = 4.0 * 30.0;
+  let quot  = 56.7 / 32.2;
+  let rest  = 43.0 % 5.0;    // Modulo auch bei Fließkomma
+
+  Wichtige Konstanten:
+  f64::INFINITY           → unendlich
+  f64::NEG_INFINITY       → negativ unendlich
+  f64::NAN                → Not a Number
+  f64::MAX                → größter f64-Wert
+  f64::MIN_POSITIVE       → kleinster positiver f64-Wert
+
+  NaN-Prüfung:
+  let nan = f64::NAN;
+  nan == f64::NAN        // false! NaN ist nie gleich sich selbst
+  nan.is_nan()           // true — so prüfst du auf NaN
+
+------------------------------------------------------------------------
+3.5  bool und char
+------------------------------------------------------------------------
+
+  bool:
+  let t: bool = true;
+  let f: bool = false;
+  // true und false sind Schlüsselwörter (wie in Python, anders als Java: True)
+
+  char — ein Unicode-Skalarwert (4 Bytes!):
+  let c = 'z';           // einzelne Anführungszeichen (NICHT doppelte!)
+  let emoji = '🦀';      // Rust-Maskottchen! Rust unterstützt Unicode-Chars
+  let unicode = '\u{1F600}';   // 😀
+
+  ACHTUNG: char in Rust ist NICHT ein Byte wie in C!
+  Ein Rust-char ist immer ein Unicode-Skalarwert (U+0000 bis U+D7FF und U+E000 bis U+10FFFF).
+  Das macht Strings komplexer (mehr dazu in Modul 4).
+
+  let zeichen: char = 'A';
+  zeichen.is_alphabetic()   → true
+  zeichen.is_numeric()      → false
+  zeichen.is_uppercase()    → true
+  zeichen.to_lowercase().next()  → Some('a')
+
+------------------------------------------------------------------------
+3.6  Compound Types — Tupel und Arrays
+------------------------------------------------------------------------
+
+Tupel — verschiedene Typen, feste Länge:
+  let tup: (i32, f64, bool) = (500, 6.4, true);
+
+  // Destrukturierung (wie Python-Unpacking):
+  let (x, y, z) = tup;
+  println!("{x}");    // 500
+
+  // Punkt-Notation für Zugriff:
+  let erster = tup.0;   // 500
+  let zweiter = tup.1;  // 6.4
+
+  // Leeres Tupel () — der "unit type":
+  // Funktionen die nichts zurückgeben, geben implizit () zurück
+  let unit = ();
+
+Arrays — gleicher Typ, feste Länge (auf dem Stack!):
+  let arr = [1, 2, 3, 4, 5];      // Typ: [i32; 5]
+  let arr: [i32; 5] = [1, 2, 3, 4, 5];
+  let arr = [0; 100];              // 100 Nullen
+
+  // Zugriff:
+  let erster = arr[0];     // 1
+  let letzter = arr[4];    // 5
+  let laenge = arr.len();  // 5
+
+  // Out-of-bounds → PANIC zur Laufzeit (in debug UND release)!
+  // arr[10]  → thread 'main' panicked at 'index out of bounds'
+
+  // Sicherer Zugriff:
+  arr.get(10)     // gibt Option<&i32> zurück → None statt Panic
+
+  Wann Array, wann Vec?
+    Array: Größe zur Compile-Zeit bekannt, auf Stack, maximale Performance
+    Vec: Größe variabel, auf Heap, flexibel (in Modul 12 ausführlich)
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+1. Erstelle Variablen für alle Integer-Typen (i8, i16, i32, i64, u8, u64).
+   Fülle sie mit sinnvollen Maximalwerten (nutze i32::MAX etc.).
+   Gib alle mit println! aus.
+
+2. Shadowing-Experiment:
+   let text = "42";
+   Mache text zu einer Zahl (nutze text.parse::<i32>().unwrap()).
+   Gib den Typ-Unterschied aus.
+
+3. Erstelle ein Tupel (vorname, nachname, alter, groesse) mit den
+   richtigen Typen (&str, &str, u8, f32).
+   Destrukturiere es und gib einen formatierten Satz aus.
+
+4. Erstelle ein Array mit den Temperaturen einer Woche.
+   Berechne den Durchschnitt. Nutze .get() für sicheren Zugriff.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Strings — &str vs String
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Die zwei String-Typen
+------------------------------------------------------------------------
+
+Rust hat ZWEI fundamentale String-Typen — das ist der häufigste
+Stolperstein für Einsteiger. Man muss beide verstehen:
+
+  &str — String-Slice (unveränderlicher Verweis auf String-Daten):
+    let s: &str = "Hallo, Welt!";
+    ← Liegt im Programm-Speicher (read-only section)
+    ← Feste Länge, kann nicht verändert werden
+    ← Sehr schnell, kein Heap-Alloc
+    ← Lebt so lange wie das Programm (oder kürzer bei Borrows)
+
+  String — besessener, wachsender String (auf dem Heap):
+    let s: String = String::from("Hallo, Welt!");
+    let s = "Hallo".to_string();
+    let s = format!("Hallo, {}!", "Welt");
+    ← Liegt auf dem Heap, kann wachsen
+    ← Hat Ownership (Besitzer)
+    ← Kann verändert werden (wenn mut)
+
+  Analogie:
+    &str ist wie eine unveränderliche Notiz.
+    String ist wie ein beschreibbares Notizbuch.
+
+------------------------------------------------------------------------
+4.2  String erstellen und manipulieren
+------------------------------------------------------------------------
+
+  Neuer leerer String:
+  let mut s = String::new();
+
+  Aus Literal:
+  let s = "hallo".to_string();
+  let s = String::from("hallo");
+
+  Anhängen:
+  let mut s = String::from("Hallo");
+  s.push_str(", Welt!");    // Anhängen: s ist jetzt "Hallo, Welt!"
+  s.push('!');               // Einzelnen char anhängen
+
+  Verketten mit +:
+  let s1 = String::from("Hallo, ");
+  let s2 = String::from("Welt!");
+  let s3 = s1 + &s2;        // s1 wird VERSCHOBEN (owned), s2 wird geborgt
+  // s1 ist nach dieser Zeile nicht mehr gültig!
+
+  format! — eleganter für mehrere:
+  let s1 = String::from("tic");
+  let s2 = String::from("tac");
+  let s3 = String::from("toe");
+  let s = format!("{}-{}-{}", s1, s2, s3);   // "tic-tac-toe"
+  // Alle drei bleiben gültig — format! borgt nur
+
+  Länge und Bytes:
+  let s = String::from("Hallo");
+  s.len()            // 5 — Anzahl BYTES, nicht Zeichen!
+  s.is_empty()       // false
+  s.contains("all")  // true
+  s.starts_with("Ha") // true
+  s.ends_with("lo")   // true
+
+------------------------------------------------------------------------
+4.3  Strings und Unicode — warum kein Indexing
+------------------------------------------------------------------------
+
+In Python kannst du s[0] auf einem String machen.
+In Rust geht das NICHT — und der Grund ist wichtig:
+
+  let s = "Hallo";
+  let h = s[0];      // COMPILE-FEHLER!
+
+Warum? Rust-Strings sind UTF-8 kodiert.
+Ein Zeichen kann 1, 2, 3 oder 4 Bytes lang sein:
+
+  "Hello" → 5 Bytes, 5 Zeichen (ASCII, 1 Byte pro Zeichen)
+  "Héllo" → 6 Bytes, 5 Zeichen (é = 2 Bytes in UTF-8)
+  "Привет" → 12 Bytes, 6 Zeichen (jeder kyrillische Buchstabe = 2 Bytes)
+  "日本語" → 9 Bytes, 3 Zeichen (jedes CJK-Zeichen = 3 Bytes)
+
+  s[0] wäre nur das erste BYTE, nicht das erste Zeichen.
+  Das wäre in den meisten Fällen falsch!
+
+Sicheres String-Slicing:
+  let s = "Hallo, Welt!";
+  let hallo = &s[0..5];    // Byte-Range: "Hallo"
+  let welt = &s[7..11];    // "Welt"
+  // ACHTUNG: Wenn die Range in der Mitte eines Multibyte-Zeichens liegt → PANIC!
+
+Über Zeichen iterieren:
+  for c in "Привет".chars() {      // iteriert über Unicode-Zeichen (char)
+      print!("{c} ");
+  }
+
+  for b in "Hallo".bytes() {       // iteriert über rohe Bytes (u8)
+      print!("{b} ");               // 72 101 108 108 111
+  }
+
+  "Привет".chars().count()   // 6 — Anzahl Zeichen
+  "Привет".len()             // 12 — Anzahl Bytes
+
+Zeichen nach Index (langsam, O(n)):
+  "Hallo".chars().nth(1)     // Some('a')
+
+------------------------------------------------------------------------
+4.4  Wichtige String-Methoden
+------------------------------------------------------------------------
+
+  let s = "  Hallo, Rust!  ";
+
+  // Whitespace
+  s.trim()                   → "Hallo, Rust!"
+  s.trim_start()             → "Hallo, Rust!  "
+  s.trim_end()               → "  Hallo, Rust!"
+
+  // Groß/Klein
+  "hallo".to_uppercase()     → "HALLO"
+  "HALLO".to_lowercase()     → "hallo"
+
+  // Suchen
+  "Hallo".find('l')          → Some(2)
+  "Hallo".contains("all")    → true
+  "Hallo".replace("l", "r")  → "Harro"
+  "Hallo".replacen("l", "r", 1) → "Harlo" (nur erstes Vorkommen)
+
+  // Aufteilen
+  "a,b,c".split(',')              → Iterator über ["a", "b", "c"]
+  "a,b,c".split(',').collect::<Vec<&str>>()   → Vec<&str>
+  "a  b  c".split_whitespace()   → Iterator über ["a", "b", "c"]
+  "a,b,c".splitn(2, ',')         → ["a", "b,c"] (maximal 2 Teile)
+
+  // Zusammenbauen
+  vec!["a","b","c"].join(", ")    → "a, b, c"
+
+  // Parsen
+  "42".parse::<i32>()        → Ok(42)
+  "abc".parse::<i32>()       → Err(ParseIntError)
+  "3.14".parse::<f64>()      → Ok(3.14)
+  // .unwrap() wenn du sicher bist es klappt:
+  let n: i32 = "42".parse().unwrap();
+
+  // Konvertierungen
+  42.to_string()             → "42"
+  format!("{:.2}", 3.14159) → "3.14"
+
+------------------------------------------------------------------------
+4.5  String vs &str in Funktionen
+------------------------------------------------------------------------
+
+Faustregel: Wenn du einen String nur lesen willst → nimm &str.
+Wenn du ihn besitzen/verändern musst → nimm String.
+
+  // SCHLECHT — zu restriktiv, akzeptiert nur &String:
+  fn gruesse(s: &String) { println!("{s}"); }
+
+  // GUT — akzeptiert &String UND &str (und String-Slices):
+  fn gruesse(s: &str) { println!("{s}"); }
+
+  // Aufrufe:
+  gruesse("Hallo");                        // &str Literal → direkt
+  gruesse(&String::from("Hallo"));         // &String → coerced zu &str
+
+  // Funktion die String zurückgibt:
+  fn erstelle_name(vorname: &str, nachname: &str) -> String {
+      format!("{} {}", vorname, nachname)
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+1. Erstelle einen String "Rust ist großartig!".
+   Zähle die Bytes UND die Zeichen. Erkläre den Unterschied.
+
+2. Schreibe eine Funktion erste_woerter(s: &str, n: usize) -> Vec<&str>
+   die die ersten n Wörter eines Strings als Vec zurückgibt.
+
+3. Experimentiere mit Unicode:
+   let emoji = "🦀🦀🦀";
+   Was gibt emoji.len() aus? Was emoji.chars().count()? Warum?
+
+4. Schreibe eine Funktion palindrom_pruefen(s: &str) -> bool
+   die prüft ob ein String ein Palindrom ist (z.B. "racecar").
+   Tipp: s.chars().rev() gibt umgekehrte Zeichen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Kontrollfluss — if, loop, while, for
+================================================================================
+
+------------------------------------------------------------------------
+5.1  if-Ausdrücke
+------------------------------------------------------------------------
+
+In Rust ist if ein AUSDRUCK — er hat einen Wert!
+Das ist anders als in Python/Java wo if ein Statement ist.
+
+  let zahl = 7;
+
+  if zahl < 5 {
+      println!("klein");
+  } else if zahl < 10 {
+      println!("mittel");
+  } else {
+      println!("groß");
+  }
+
+  Keine Klammern um die Bedingung (anders als C/Java/JS)!
+  Die geschweiften Klammern sind PFLICHT (anders als C wo sie optional sind).
+  Die Bedingung MUSS bool sein — anders als Python/JS gibt es kein "truthy":
+
+  let n = 3;
+  if n {                      // COMPILE-FEHLER! n ist i32, nicht bool
+      println!("nicht null");
+  }
+  if n != 0 {                 // richtig
+      println!("nicht null");
+  }
+
+  // if als Ausdruck — Wert zuweisen:
+  let modus = if stunde > 20 { "dunkel" } else { "hell" };
+  //                          ^^^^^^^^^          ^^^^^^
+  //                          ohne Semikolon → das ist der Rückgabewert
+
+  // WICHTIG: beide Arme müssen denselben Typ haben!
+  let wert = if bedingung { 5 } else { 6 };       // ok
+  let wert = if bedingung { 5 } else { "sechs" }; // COMPILE-FEHLER!
+
+------------------------------------------------------------------------
+5.2  loop — die Endlosschleife
+------------------------------------------------------------------------
+
+  loop {
+      println!("Immer und ewig...");
+  }
+
+  // Mit break beenden:
+  let mut counter = 0;
+  loop {
+      counter += 1;
+      if counter == 10 { break; }
+  }
+
+  // loop als Ausdruck — Wert zurückgeben:
+  let mut counter = 0;
+  let ergebnis = loop {
+      counter += 1;
+      if counter == 10 {
+          break counter * 2;  // Wert nach break → wird zurückgegeben!
+      }
+  };
+  println!("{ergebnis}");  // 20
+
+  // Loop Labels — bei verschachtelten Loops:
+  'aussen: loop {
+      'innen: loop {
+          break 'aussen;   // beendet den äußeren Loop!
+      }
+  }
+
+------------------------------------------------------------------------
+5.3  while-Schleifen
+------------------------------------------------------------------------
+
+  let mut n = 3;
+  while n != 0 {
+      println!("{n}");
+      n -= 1;
+  }
+
+  // while let — bis Option None wird:
+  let mut stack = vec![1, 2, 3];
+  while let Some(top) = stack.pop() {
+      println!("{top}");   // 3, 2, 1
+  }
+  // stack.pop() gibt Some(wert) zurück oder None wenn leer.
+  // while let weist top zu solange Some(top) passt.
+
+------------------------------------------------------------------------
+5.4  for-Schleifen — der Standard in Rust
+------------------------------------------------------------------------
+
+for in Rust iteriert über Iteratoren — immer!
+
+  // Über einen Bereich:
+  for i in 0..5 {       // 0, 1, 2, 3, 4 (5 EXKLUSIV)
+      print!("{i} ");
+  }
+  for i in 0..=5 {      // 0, 1, 2, 3, 4, 5 (5 INKLUSIV)
+      print!("{i} ");
+  }
+
+  // Rückwärts:
+  for i in (0..5).rev() {   // 4, 3, 2, 1, 0
+      print!("{i} ");
+  }
+
+  // Über einen Vec/Array:
+  let zahlen = vec![10, 20, 30, 40, 50];
+  for zahl in &zahlen {       // borge den Vec (kein move)
+      println!("{zahl}");
+  }
+  // zahlen ist danach noch gültig!
+
+  // for konsumiert ohne &:
+  for zahl in zahlen {        // zahlen wird BEWEGT!
+      println!("{zahl}");
+  }
+  // zahlen ist jetzt nicht mehr gültig
+
+  // Mit Index — enumerate():
+  let tage = ["Mo", "Di", "Mi", "Do", "Fr"];
+  for (i, tag) in tage.iter().enumerate() {
+      println!("{}: {}", i + 1, tag);   // "1: Mo", "2: Di", ...
+  }
+
+  // Zwei Vektoren gleichzeitig — zip():
+  let namen = vec!["Alice", "Bob", "Charlie"];
+  let punkte = vec![95, 87, 92];
+  for (name, punkt) in namen.iter().zip(punkte.iter()) {
+      println!("{name}: {punkt}");
+  }
+
+------------------------------------------------------------------------
+5.5  match — Rusts mächtigstes Kontrollfluss-Werkzeug
+------------------------------------------------------------------------
+
+match ist wie switch, aber VIEL mächtiger. Es ist ein Ausdruck.
+
+  let zahl = 3;
+  match zahl {
+      1 => println!("eins"),
+      2 => println!("zwei"),
+      3 => println!("drei"),
+      _ => println!("etwas anderes"),   // _ = Wildcard (wie default)
+  }
+
+  // match als Ausdruck:
+  let text = match zahl {
+      1 => "eins",
+      2 => "zwei",
+      3 => "drei",
+      _ => "unbekannt",
+  };
+
+  // Mehrere Werte im selben Arm — | (oder):
+  match zahl {
+      1 | 2 => println!("eins oder zwei"),
+      3..=9 => println!("drei bis neun"),   // inklusiver Bereich
+      _     => println!("anders"),
+  }
+
+  // Guards — zusätzliche Bedingungen:
+  let pair = (2, -2);
+  match pair {
+      (x, y) if x == y => println!("gleich"),
+      (x, y) if x + y == 0 => println!("Gegensätze"),
+      (x, _) => println!("x ist {x}"),
+  }
+
+  // Matching mit Binding — @:
+  match zahl {
+      n @ 1..=10 => println!("{n} ist zwischen 1 und 10"),
+      n => println!("{n} ist außerhalb"),
+  }
+
+  // Destrukturierung in match:
+  let point = (0, -2);
+  match point {
+      (0, 0) => println!("Ursprung"),
+      (x, 0) | (0, x) => println!("Auf Achse bei {x}"),
+      (x, y) => println!("Punkt ({x}, {y})"),
+  }
+
+  // match muss VOLLSTÄNDIG sein (exhaustive) — der Compiler prüft das!
+  // Ohne _ am Ende würde er meckern wenn nicht alle Fälle abgedeckt sind.
+
+  // if let — wenn nur ein Fall interessiert:
+  let manche_zahl: Option<u32> = Some(7);
+  if let Some(i) = manche_zahl {
+      println!("Matched {i}");
+  }
+  // Einfacher als: match manche_zahl { Some(i) => ..., _ => () }
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+1. Schreibe eine Funktion ampel(farbe: &str) -> &str die:
+   - "Grün" → "Fahren!" zurückgibt
+   - "Gelb" → "Vorsicht!" zurückgibt
+   - "Rot" → "Stopp!" zurückgibt
+   - Alles andere → "Unbekannte Ampel!" zurückgibt
+   Nutze match.
+
+2. FizzBuzz in Rust:
+   for i in 1..=100 mit match und Guards:
+   - Durch 15 teilbar → "FizzBuzz"
+   - Durch 3 → "Fizz"
+   - Durch 5 → "Buzz"
+   - Sonst → die Zahl
+
+3. Schreibe mit while let eine Schleife die ein Vec von hinten liest
+   und stoppt wenn sie auf eine negative Zahl trifft.
+
+4. Nutze loop mit break und return-Wert um die erste Primzahl
+   größer als 100 zu finden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 6: Funktionen — Signaturen, Rückgabewerte, Ausdrücke vs. Statements
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Funktionen definieren
+------------------------------------------------------------------------
+
+  fn addiere(x: i32, y: i32) -> i32 {
+      x + y      // KEIN Semikolon → das ist der Rückgabewert!
+  }
+
+  Wichtige Unterschiede zu anderen Sprachen:
+    - Parameter MÜSSEN immer Typen haben (kein Typ-Inferenz in Signaturen)
+    - Rückgabetyp nach -> (nicht vor dem Funktionsnamen wie in Java/C)
+    - Snake_case für Funktionsnamen (wie Python, anders als Java camelCase)
+    - Keine Klammern ohne geschweifte Klammern (immer {})
+
+  fn ohne_rueckgabe(name: &str) {
+      println!("Hallo, {name}!");
+      // Gibt implizit () zurück
+  }
+
+  // Explizites return ist auch möglich (meist für frühe Rückkehr):
+  fn absolut(n: i32) -> i32 {
+      if n < 0 {
+          return -n;    // frühe Rückkehr
+      }
+      n    // letzter Ausdruck = Rückgabewert
+  }
+
+------------------------------------------------------------------------
+6.2  Ausdrücke vs. Statements — der Kernunterschied
+------------------------------------------------------------------------
+
+Das ist fundamental für Rust. Viele Konstrukte sind AUSDRÜCKE mit Wert:
+
+  Statements — haben KEINEN Wert, enden mit ;:
+  let x = 5;             // Statement
+  println!("Hallo");     // Statement (Makro-Aufruf)
+
+  Expressions — haben einen Wert, kein ; am Ende:
+  5 + 6                  // Ausdruck, Wert: 11
+  { let x = 3; x + 1 }  // Block-Ausdruck, Wert: 4
+  if cond { 1 } else { 2 }  // if-Ausdruck, Wert: 1 oder 2
+
+  // Fehler: Statement wo Ausdruck erwartet:
+  fn plus_eins(x: i32) -> i32 {
+      x + 1;    // Semikolon macht es zum Statement! Wert: ()
+                // COMPILE-FEHLER: expected i32, found ()
+  }
+  fn plus_eins(x: i32) -> i32 {
+      x + 1     // kein Semikolon → Ausdruck → Rückgabewert i32 ✓
+  }
+
+  // Block als Ausdruck:
+  let y = {
+      let x = 3;
+      x * x          // kein ; → Block-Rückgabewert: 9
+  };
+  println!("{y}");   // 9
+
+------------------------------------------------------------------------
+6.3  Mehrere Rückgabewerte mit Tupeln
+------------------------------------------------------------------------
+
+  fn min_max(zahlen: &[i32]) -> (i32, i32) {
+      let mut min = zahlen[0];
+      let mut max = zahlen[0];
+      for &n in zahlen {
+          if n < min { min = n; }
+          if n > max { max = n; }
+      }
+      (min, max)   // Tupel zurückgeben
+  }
+
+  let daten = vec![3, 1, 4, 1, 5, 9, 2, 6];
+  let (min, max) = min_max(&daten);  // Destrukturierung
+  println!("Min: {min}, Max: {max}");
+
+------------------------------------------------------------------------
+6.4  Funktionen als Argumente und Higher-Order Functions
+------------------------------------------------------------------------
+
+Funktionen können andere Funktionen als Argumente nehmen:
+
+  fn anwende(f: fn(i32) -> i32, wert: i32) -> i32 {
+      f(wert)
+  }
+
+  fn verdopple(n: i32) -> i32 { n * 2 }
+  fn quadriere(n: i32) -> i32 { n * n }
+
+  println!("{}", anwende(verdopple, 5));    // 10
+  println!("{}", anwende(quadriere, 5));    // 25
+
+  // Mit Closures (anonyme Funktionen — mehr in Modul 17):
+  println!("{}", anwende(|n| n + 1, 5));   // 6
+
+------------------------------------------------------------------------
+6.5  Diverging Functions — Funktionen die nie zurückkehren
+------------------------------------------------------------------------
+
+Manche Funktionen kehren NIEMALS zurück — ihr Typ ist ! (never type):
+
+  fn abbrechen() -> ! {
+      panic!("Etwas ist schief gelaufen!");
+  }
+
+  fn endlos() -> ! {
+      loop {
+          // läuft ewig
+      }
+  }
+
+  // panic! ist häufig:
+  fn teile(a: i32, b: i32) -> i32 {
+      if b == 0 {
+          panic!("Division durch Null!");  // ! Typ
+      }
+      a / b
+  }
+
+  // todo!() und unimplemented!() für nicht fertige Funktionen:
+  fn noch_nicht_fertig() -> i32 {
+      todo!("Muss ich noch implementieren")
+  }
+  // Kompiliert, aber panics bei Aufruf
+
+  // unreachable!() für Zweige die nie eintreten können:
+  fn farbe_zu_zahl(farbe: &str) -> u8 {
+      match farbe {
+          "rot" => 0, "grün" => 1, "blau" => 2,
+          _ => unreachable!("Andere Farben gibt es nicht"),
+      }
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+1. Schreibe eine Funktion celsius_zu_fahrenheit(c: f64) -> f64.
+   Formel: (c * 9.0 / 5.0) + 32.0
+   Schreibe auch fahrenheit_zu_celsius(f: f64) -> f64.
+
+2. Schreibe eine rekursive Funktion fakultaet(n: u64) -> u64.
+   Denke an den Basisfall!
+
+3. Schreibe eine Funktion teile_sicher(a: i32, b: i32) -> i32 die:
+   - Wenn b == 0: panics mit einer sinnvollen Nachricht
+   - Sonst: a / b zurückgibt
+
+4. Schreibe eine Funktion statistik(zahlen: &[f64]) -> (f64, f64, f64)
+   die Minimum, Maximum und Durchschnitt zurückgibt.
+   Teste sie mit verschiedenen Slices.
+
+5. Experimentiere: Was passiert wenn du { x + 1; } mit Semikolon schreibst
+   statt { x + 1 }? Welche Fehlermeldung gibt Rust?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Ownership — Das Herzstück von Rust
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Die drei Ownership-Regeln
+------------------------------------------------------------------------
+
+Ownership ist der Mechanismus mit dem Rust Speichersicherheit garantiert.
+Alles in Rust folgt drei simplen Regeln — der Compiler prüft sie alle:
+
+  REGEL 1: Jeder Wert in Rust hat genau einen Besitzer (Owner).
+  REGEL 2: Es kann immer nur EINEN Besitzer geben.
+  REGEL 3: Wenn der Besitzer den Scope verlässt, wird der Wert gelöscht.
+
+  fn main() {
+      let s = String::from("Hallo");    // s ist Owner des Strings
+      // ... s benutzen ...
+  }   // ← s verlässt den Scope → String wird automatisch freigegeben!
+  // kein free(), kein Garbage Collector nötig!
+
+  // Was passiert genau beim Verlassen des Scopes?
+  // Rust ruft den "Drop"-Trait auf → wie ein Destruktor in C++
+  // Das passiert guaranteed, deterministisch, ohne Laufzeit-Overhead
+
+------------------------------------------------------------------------
+7.2  Move — Ownership übertragen
+------------------------------------------------------------------------
+
+Wenn du einen Heap-Wert einer anderen Variable zuweist, wird er BEWEGT:
+
+  let s1 = String::from("Hallo");
+  let s2 = s1;     // Ownership wird von s1 auf s2 übertragen (MOVE)
+
+  println!("{s1}");    // COMPILE-FEHLER: s1 is moved!
+  println!("{s2}");    // ok
+
+  Warum? Wenn s1 und s2 beide Owner wären, würde der String zweimal
+  freigegeben → Double-Free → Undefined Behavior. Rust verhindert das!
+
+  // Visualisierung:
+  // s1 → [ptr | len | cap] → "Hallo" (auf dem Heap)
+  // s2 = s1:
+  // s1 → invalidiert (moved)
+  // s2 → [ptr | len | cap] → "Hallo" (dasselbe auf dem Heap)
+  // Nur s2 gibt den Heap-Speicher frei wenn es seinen Scope verlässt.
+
+  // Bei Stack-Typen (i32, f64, bool, char, Tupel aus diesen) passiert
+  // KEIN Move, sondern eine KOPIE — weil Stack-Kopien billig sind:
+  let x = 5;
+  let y = x;       // x wird KOPIERT
+  println!("{x}"); // ok! x ist noch gültig
+  println!("{y}"); // ok!
+
+  // Der Copy-Trait markiert welche Typen kopiert werden:
+  // Copy-Typen: alle Integer, f32, f64, bool, char, Tupel von Copy-Typen
+  // NICHT Copy: String, Vec, HashMap, Box, etc. (Heap-Allokationen)
+
+------------------------------------------------------------------------
+7.3  Clone — explizite Tiefenkopie
+------------------------------------------------------------------------
+
+Wenn du wirklich eine Kopie eines nicht-Copy-Typs willst:
+
+  let s1 = String::from("Hallo");
+  let s2 = s1.clone();     // Tiefenkopie: neuer Heap-Speicher, neuer String
+
+  println!("{s1}");    // ok! s1 ist noch gültig
+  println!("{s2}");    // ok! s2 ist eine unabhängige Kopie
+
+  // clone() ist teuer! Es alloziert neuen Speicher und kopiert alle Daten.
+  // Benutze es nur wenn du wirklich Ownership von zwei unabhängigen Werten brauchst.
+  // Meist reicht Borrowing (Modul 8).
+
+------------------------------------------------------------------------
+7.4  Ownership und Funktionen
+------------------------------------------------------------------------
+
+Beim Übergeben an Funktionen gelten dieselben Regeln:
+
+  fn druck_string(s: String) {   // s ist jetzt Owner!
+      println!("{s}");
+  }   // ← s wird hier freigegeben
+
+  let mein_string = String::from("Hallo");
+  druck_string(mein_string);      // mein_string wird BEWEGT!
+  println!("{mein_string}");      // COMPILE-FEHLER: moved!
+
+  // Lösung 1: Clone (teuer):
+  druck_string(mein_string.clone());
+  println!("{mein_string}");      // ok
+
+  // Lösung 2: Rückgabe von Ownership (umständlich):
+  fn druck_und_zurück(s: String) -> String {
+      println!("{s}");
+      s    // s zurückgeben — Ownership zurück zum Aufrufer
+  }
+  let mein_string = druck_und_zurück(mein_string);
+  println!("{mein_string}");      // ok
+
+  // Lösung 3: Borrowing! (der richtige Weg — Modul 8)
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+Erkläre für jedes Beispiel ob es kompiliert und warum:
+
+  // Beispiel A:
+  let v1 = vec![1, 2, 3];
+  let v2 = v1;
+  println!("{:?}", v1);   // ?
+
+  // Beispiel B:
+  let v1 = vec![1, 2, 3];
+  let v2 = v1.clone();
+  println!("{:?}", v1);   // ?
+  println!("{:?}", v2);   // ?
+
+  // Beispiel C:
+  let x = 42;
+  let y = x;
+  println!("{x}");        // ?
+
+  // Beispiel D:
+  fn nimm(v: Vec<i32>) { }
+  let v = vec![1,2,3];
+  nimm(v);
+  println!("{:?}", v);    // ?
+
+  // Beispiel E:
+  fn nimm(v: Vec<i32>) -> Vec<i32> { v }
+  let v = vec![1,2,3];
+  let v = nimm(v);
+  println!("{:?}", v);    // ?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Borrowing und Referenzen
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Referenzen — Ausleihen ohne Besitz
+------------------------------------------------------------------------
+
+Referenzen erlauben es auf einen Wert zuzugreifen OHNE ihn zu besitzen.
+Das ist das Borrowing. Es gibt kein Move, kein Clone nötig.
+
+  fn berechne_laenge(s: &String) -> usize {   // & = Referenz
+      s.len()    // nutze s, besitzen es nicht
+  }   // ← s wird NICHT freigegeben (wir besitzen es nicht)
+
+  let s1 = String::from("Hallo");
+  let laenge = berechne_laenge(&s1);           // & = leihe s1 aus
+  println!("{s1} hat {laenge} Zeichen");       // s1 noch gültig!
+
+  // Visualisierung:
+  // s1 → String("Hallo") auf dem Heap [Besitzer]
+  //  r → zeigt auf s1 [Referenz, kein Besitzer]
+
+  Referenzen sind standardmäßig UNVERÄNDERLICH:
+  fn versuch_aendern(s: &String) {
+      s.push_str(", Welt");    // COMPILE-FEHLER: cannot borrow as mutable
+  }
+
+------------------------------------------------------------------------
+8.2  Mutable Referenzen
+------------------------------------------------------------------------
+
+  fn aendern(s: &mut String) {      // &mut = mutable Referenz
+      s.push_str(", Welt");
+  }
+
+  let mut s = String::from("Hallo");    // mut nötig!
+  aendern(&mut s);                       // &mut beim Aufruf
+  println!("{s}");                       // "Hallo, Welt"
+
+  Die GOLDENE REGEL von Borrowing:
+  Du kannst gleichzeitig haben:
+    ENTWEDER beliebig viele unveränderliche Referenzen (&T)
+    ODER     genau EINE mutable Referenz (&mut T)
+    NIEMALS  beides gleichzeitig!
+
+  let mut s = String::from("Hallo");
+  let r1 = &s;      // ok
+  let r2 = &s;      // ok (mehrere & erlaubt)
+  let r3 = &mut s;  // COMPILE-FEHLER: s schon als & geliehen!
+
+  let mut s = String::from("Hallo");
+  let r1 = &mut s;   // ok
+  let r2 = &mut s;   // COMPILE-FEHLER: s schon als &mut geliehen!
+
+  Warum? Wenn es nur eine &mut Referenz geben kann, ist garantiert
+  dass niemand sonst den Wert liest während er geändert wird.
+  → Kein Data Race möglich!
+
+------------------------------------------------------------------------
+8.3  Non-Lexical Lifetimes (NLL)
+------------------------------------------------------------------------
+
+Moderne Rust-Versionen benutzen NLL: Eine Referenz "lebt" nur bis zu
+ihrer letzten Benutzung — nicht bis zum Ende des Blocks:
+
+  let mut s = String::from("Hallo");
+  let r1 = &s;
+  let r2 = &s;
+  println!("{r1} {r2}");   // letzte Benutzung von r1 und r2!
+  // r1 und r2 sind jetzt "tot" (NLL)
+
+  let r3 = &mut s;         // jetzt erlaubt, da r1/r2 nicht mehr benutzt
+  r3.push_str("!");
+  println!("{r3}");
+
+------------------------------------------------------------------------
+8.4  Dangling Referenzen — der Compiler verhindert sie
+------------------------------------------------------------------------
+
+In C/C++ ist ein Dangling Pointer ein häufiger Fehler:
+
+  fn dangling() -> &String {      // COMPILE-FEHLER!
+      let s = String::from("Hallo");
+      &s    // Referenz auf s... aber s wird hier zerstört!
+  }
+  // Der Compiler: "missing lifetime specifier"
+  // Er schützt uns davor!
+
+  // Lösung: Ownership zurückgeben, nicht Referenz:
+  fn kein_dangling() -> String {
+      let s = String::from("Hallo");
+      s    // Ownership wird übertragen, kein Problem
+  }
+
+------------------------------------------------------------------------
+8.5  Slices — Referenzen auf Teile von Collections
+------------------------------------------------------------------------
+
+Ein Slice ist eine Referenz auf einen zusammenhängenden Teil einer Sequenz:
+
+  // String-Slice:
+  let s = String::from("Hallo, Welt!");
+  let hallo = &s[0..5];     // "Hallo"
+  let welt  = &s[7..12];    // "Welt!"
+
+  // Typ von hallo: &str (nicht &String!)
+  // &str ist ein String-Slice
+
+  // Erste Wort finden:
+  fn erstes_wort(s: &str) -> &str {
+      let bytes = s.as_bytes();
+      for (i, &item) in bytes.iter().enumerate() {
+          if item == b' ' {
+              return &s[0..i];
+          }
+      }
+      &s[..]   // ganzer String wenn kein Leerzeichen
+  }
+
+  // Array-Slices:
+  let a = [1, 2, 3, 4, 5];
+  let slice = &a[1..3];    // [2, 3], Typ: &[i32]
+
+  for element in slice {
+      println!("{element}");
+  }
+
+  // Slice-Funktionen:
+  fn summe(zahlen: &[i32]) -> i32 {   // akzeptiert slice von Vec oder Array!
+      zahlen.iter().sum()
+  }
+
+  let arr = [1, 2, 3, 4, 5];
+  let v = vec![1, 2, 3, 4, 5];
+  summe(&arr);        // Array-Slice
+  summe(&v);          // Vec-Slice
+  summe(&v[1..3]);    // Teil-Slice
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+1. Schreibe eine Funktion letztes_wort(s: &str) -> &str
+   die das letzte Wort eines Strings zurückgibt.
+   Tipp: rsplit(' ') oder die Bytes rückwärts durchsuchen.
+
+2. Zeige warum dieser Code nicht kompiliert und korrigiere ihn:
+   let mut s = String::from("Hallo");
+   let wort = erstes_wort(&s);
+   s.clear();
+   println!("{wort}");
+
+3. Schreibe eine Funktion make_title(words: &[&str]) -> String
+   die ["hello", "world"] zu "Hello World" macht.
+   Nutze Slices als Parameter.
+
+4. Was gibt dieser Code aus? Denke erst nach, dann kompiliere:
+   let mut x = 5;
+   let y = &x;
+   let z = &x;
+   // x += 1;   ← Kommentiere das ein. Was passiert?
+   println!("{y} {z}");
+   x += 1;
+   println!("{x}");
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Lifetimes — Wenn der Compiler Hilfe braucht
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Was Lifetimes sind und wann man sie schreibt
+------------------------------------------------------------------------
+
+Lifetimes sind Rusts Art zu verfolgen wie lange Referenzen gültig sind.
+In den meisten Fällen werden sie AUTOMATISCH inferiert (lifetime elision).
+Du musst sie nur explizit schreiben wenn der Compiler nicht selbst
+herausfinden kann welche Referenz welche Lifetime hat.
+
+  // Hier kann Rust die Lifetime inferieren (elision):
+  fn erstes_wort(s: &str) -> &str { ... }
+  // Implizit: fn erstes_wort<'a>(s: &'a str) -> &'a str { ... }
+
+  // Hier muss der Compiler fragen:
+  fn laengste(x: &str, y: &str) -> &str {   // FEHLER
+      if x.len() > y.len() { x } else { y }
+  }
+  // Rust weiß nicht: kommt das Ergebnis aus x oder aus y?
+  // Und damit: wie lange ist die Rückgabe gültig?
+
+------------------------------------------------------------------------
+9.2  Lifetime-Annotationen schreiben
+------------------------------------------------------------------------
+
+  // Lösung: Lifetime-Parameter annotieren mit 'a:
+  fn laengste<'a>(x: &'a str, y: &'a str) -> &'a str {
+      if x.len() > y.len() { x } else { y }
+  }
+
+  // 'a ist ein Name für die Lifetime (konvention: 'a, 'b, 'c)
+  // Bedeutung: "Rückgabe lebt mindestens so lange wie das Kürzere von x und y"
+
+  let s1 = String::from("langes Wort");
+  let ergebnis;
+  {
+      let s2 = String::from("xyz");
+      ergebnis = laengste(&s1, &s2);   // s2 lebt nur im inneren Block!
+      println!("{ergebnis}");          // hier ok: s2 noch gültig
+  }
+  // println!("{ergebnis}");           // FEHLER! s2 schon freigegeben
+
+------------------------------------------------------------------------
+9.3  Lifetimes in Structs
+------------------------------------------------------------------------
+
+Wenn ein Struct Referenzen enthält, muss es Lifetime-Parameter haben:
+
+  struct Wichtig<'a> {
+      teil: &'a str,
+  }
+
+  impl<'a> Wichtig<'a> {
+      fn ansage(&self) -> &str {
+          self.teil
+      }
+  }
+
+  let roman = String::from("Ruf mich Ishmael...");
+  let erste_zeile;
+  {
+      let s = roman.split('.').next().expect("Kein Punkt gefunden");
+      erste_zeile = Wichtig { teil: s };
+      println!("{}", erste_zeile.ansage());
+  }
+
+------------------------------------------------------------------------
+9.4  Die Elision-Regeln
+------------------------------------------------------------------------
+
+Rust hat drei Regeln für automatische Lifetime-Inferenz:
+
+  Regel 1: Jeder Referenz-Parameter bekommt eine eigene Lifetime:
+    fn f(x: &str, y: &str) →  fn f<'a, 'b>(x: &'a str, y: &'b str)
+
+  Regel 2: Wenn es genau einen Input-Lifetime gibt, bekommt die
+           Ausgabe dieselbe:
+    fn f(x: &str) -> &str  →  fn f<'a>(x: &'a str) -> &'a str
+
+  Regel 3: Wenn einer der Parameter &self oder &mut self ist,
+           bekommt die Ausgabe die Lifetime von self:
+    fn f(&self, s: &str) -> &str  →  Rückgabe hat self's Lifetime
+
+  Wenn diese Regeln nicht ausreichen → musst du annotieren.
+
+------------------------------------------------------------------------
+9.5  'static — die spezielle Lifetime
+------------------------------------------------------------------------
+
+  let s: &'static str = "Ich lebe für die Ewigkeit!";
+  // 'static bedeutet: lebt für die gesamte Programmlaufzeit
+  // String-Literale sind immer 'static (sie stehen im Programm-Binary)
+
+  // Du wirst 'static in Fehlermeldungen sehen wenn Rust eine Referenz
+  // erwartet die "ewig" lebt — das ist oft ein Hinweis dass du
+  // Ownership statt Referenz nutzen solltest.
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+1. Erkläre warum diese Funktion nicht kompiliert und füge die nötigen
+   Lifetime-Annotationen hinzu:
+   fn waehle_eins(a: &str, b: &str, flag: bool) -> &str {
+       if flag { a } else { b }
+   }
+
+2. Erstelle einen Struct Satz<'a> mit einem Feld wort: &'a str.
+   Implementiere eine Methode erster_buchstabe(&self) -> char.
+
+3. Warum ist diese Funktion falsch?
+   fn zahl_als_str() -> &str {
+       let s = 42.to_string();
+       &s
+   }
+   Schreibe sie korrekt.
+--------------------------------------------------------------------------------
+
+================================================================================
+MODUL 10: Structs — Eigene Datentypen
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Struct definieren und instanzieren
+------------------------------------------------------------------------
+
+  struct Benutzer {
+      benutzername: String,
+      email: String,
+      anmeldungen: u64,
+      aktiv: bool,
+  }
+
+  // Instanz erstellen:
+  let mut user1 = Benutzer {
+      email: String::from("user@beispiel.de"),
+      benutzername: String::from("trafkhop"),
+      anmeldungen: 1,
+      aktiv: true,
+  };
+
+  // Feld lesen:
+  println!("{}", user1.email);
+
+  // Feld ändern (nur wenn mut!):
+  user1.email = String::from("neue@email.de");
+
+  // Update-Syntax — Felder von einer anderen Instanz übernehmen:
+  let user2 = Benutzer {
+      email: String::from("andere@email.de"),
+      ..user1    // Rest von user1 übernehmen
+  };
+  // ACHTUNG: user1.benutzername wird nach user2 bewegt (String ist nicht Copy)!
+
+  // Tuple Structs:
+  struct Farbe(i32, i32, i32);         // RGB
+  struct Punkt(f64, f64, f64);         // 3D-Koordinate
+
+  let schwarz = Farbe(0, 0, 0);
+  let ursprung = Punkt(0.0, 0.0, 0.0);
+  println!("{}", schwarz.0);   // Zugriff über Index
+
+  // Unit Structs (kein Felder — für Traits):
+  struct AlwaysEqual;
+  let _s = AlwaysEqual;
+
+------------------------------------------------------------------------
+10.2  Methoden implementieren — impl
+------------------------------------------------------------------------
+
+  struct Rechteck {
+      breite: u32,
+      hoehe: u32,
+  }
+
+  impl Rechteck {
+      // Methode: erster Parameter ist immer self
+      fn flaeche(&self) -> u32 {      // &self = unveränderliche Referenz
+          self.breite * self.hoehe
+      }
+
+      fn umfang(&self) -> u32 {
+          2 * (self.breite + self.hoehe)
+      }
+
+      fn ist_quadrat(&self) -> bool {
+          self.breite == self.hoehe
+      }
+
+      // Mutable self:
+      fn verdoppeln(&mut self) {      // &mut self = veränderliche Referenz
+          self.breite *= 2;
+          self.hoehe *= 2;
+      }
+
+      // Consuming self (selten):
+      fn vernichten(self) { }         // self (ohne &) → Ownership genommen
+
+      // Assoziierte Funktion (kein self) — wie static methods in Java:
+      fn neu(breite: u32, hoehe: u32) -> Self {
+          Self { breite, hoehe }      // Kurzform wenn Feldname = Variable
+      }
+
+      fn quadrat(groesse: u32) -> Self {
+          Self { breite: groesse, hoehe: groesse }
+      }
+  }
+
+  // Aufrufen:
+  let mut r = Rechteck::neu(30, 50);    // :: für assoziierte Funktion
+  println!("Fläche: {}", r.flaeche()); // . für Methoden
+  r.verdoppeln();
+
+  // Methoden-Verkettung (wenn Methoden &mut self zurückgeben):
+  impl Rechteck {
+      fn setze_breite(&mut self, b: u32) -> &mut Self {
+          self.breite = b;
+          self
+      }
+      fn setze_hoehe(&mut self, h: u32) -> &mut Self {
+          self.hoehe = h;
+          self
+      }
+  }
+  r.setze_breite(100).setze_hoehe(200);
+
+------------------------------------------------------------------------
+10.3  Derive-Makros — automatische Trait-Implementierungen
+------------------------------------------------------------------------
+
+  #[derive(Debug)]    // ermöglicht {:?} Formatierung
+  #[derive(Clone)]    // ermöglicht .clone()
+  #[derive(PartialEq)] // ermöglicht == und !=
+  #[derive(Copy)]     // erlaubt Copy statt Move (nur wenn alle Felder Copy!)
+  struct Punkt {
+      x: f64,
+      y: f64,
+  }
+
+  // Alles auf einmal:
+  #[derive(Debug, Clone, PartialEq)]
+  struct Punkt { x: f64, y: f64 }
+
+  let p = Punkt { x: 1.0, y: 2.0 };
+  println!("{:?}", p);     // Debug: Punkt { x: 1.0, y: 2.0 }
+  println!("{:#?}", p);    // Pretty Debug
+
+  let p2 = p.clone();
+  println!("{}", p == p2); // true (PartialEq)
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+1. Definiere einen Struct Kreis { radius: f64 } mit:
+   - Methode flaeche() -> f64
+   - Methode umfang() -> f64  (2 * PI * r)
+   - Assoziierte Funktion neu(r: f64) -> Self
+   - Derive: Debug, Clone, PartialEq
+   Tipp: std::f64::consts::PI
+
+2. Erstelle einen Struct Konto { inhaber: String, saldo: f64 } mit:
+   - einzahlen(&mut self, betrag: f64)
+   - abheben(&mut self, betrag: f64) -> bool (false wenn nicht genug)
+   - Getter: saldo(&self) -> f64
+
+3. Implementiere Display für Kreis:
+   use std::fmt;
+   impl fmt::Display for Kreis {
+       fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+           write!(f, "Kreis(r={})", self.radius)
+       }
+   }
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Enums und Pattern Matching
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Enums definieren
+------------------------------------------------------------------------
+
+  enum Richtung {
+      Norden,
+      Sueden,
+      Osten,
+      Westen,
+  }
+
+  let r = Richtung::Norden;
+
+  match r {
+      Richtung::Norden => println!("Norden"),
+      Richtung::Sueden => println!("Süden"),
+      Richtung::Osten  => println!("Osten"),
+      Richtung::Westen => println!("Westen"),
+  }
+
+  // Enums können Daten tragen — das macht sie viel mächtiger als in anderen Sprachen!
+  enum Nachricht {
+      Beenden,
+      Bewegen { x: i32, y: i32 },   // Struct-ähnlich
+      Text(String),                   // ein String
+      FarbeAendern(i32, i32, i32),   // Tupel
+  }
+
+  // Implementierungen auf Enums:
+  impl Nachricht {
+      fn verarbeiten(&self) {
+          match self {
+              Nachricht::Beenden => println!("Beende!"),
+              Nachricht::Bewegen { x, y } => println!("Bewege zu ({x}, {y})"),
+              Nachricht::Text(t) => println!("Text: {t}"),
+              Nachricht::FarbeAendern(r, g, b) => println!("Farbe: ({r},{g},{b})"),
+          }
+      }
+  }
+
+  let nachrichten = vec![
+      Nachricht::Bewegen { x: 10, y: 20 },
+      Nachricht::Text(String::from("Hallo")),
+      Nachricht::Beenden,
+  ];
+  for n in &nachrichten { n.verarbeiten(); }
+
+------------------------------------------------------------------------
+11.2  Option<T> — das Null-Ersatz
+------------------------------------------------------------------------
+
+Rust hat kein null! Stattdessen gibt es Option<T>:
+
+  enum Option<T> {
+      Some(T),   // Es gibt einen Wert
+      None,      // Es gibt keinen Wert
+  }
+
+  // Option ist so häufig dass Some und None ohne Prefix benutzt werden:
+  let manche_zahl: Option<i32> = Some(5);
+  let keine_zahl: Option<i32> = None;
+
+  // Du MUSST den Fall None behandeln — keine vergessenen Null-Checks!
+
+  // 1. Mit match:
+  match manche_zahl {
+      Some(n) => println!("Habe Zahl: {n}"),
+      None    => println!("Keine Zahl"),
+  }
+
+  // 2. unwrap() — Panic wenn None (nur wenn du sicher bist!):
+  let n = manche_zahl.unwrap();           // Panic wenn None
+  let n = manche_zahl.unwrap_or(0);       // Fallback-Wert
+  let n = manche_zahl.unwrap_or_else(|| berechne_default());
+
+  // 3. ? Operator (in Modul 14):
+  fn nimm(opt: Option<i32>) -> Option<i32> {
+      let n = opt?;   // wenn None → gibt None zurück
+      Some(n * 2)
+  }
+
+  // 4. map() — transformiere den Wert wenn Some:
+  let s: Option<&str> = Some("Hallo");
+  let laenge: Option<usize> = s.map(|s| s.len());  // Some(5)
+
+  // 5. and_then() (flatMap) — Kette von Options:
+  fn quadratwurzel(n: f64) -> Option<f64> {
+      if n >= 0.0 { Some(n.sqrt()) } else { None }
+  }
+  let ergebnis = Some(-4.0_f64).and_then(quadratwurzel);  // None
+
+  // 6. if let — wenn nur Some interessiert:
+  if let Some(n) = manche_zahl {
+      println!("Wert: {n}");
+  }
+
+------------------------------------------------------------------------
+11.3  Tiefes Pattern Matching
+------------------------------------------------------------------------
+
+  // Verschachtelte Patterns:
+  let pair = (Some(1), Some(2));
+  match pair {
+      (Some(x), Some(y)) => println!("Beide: {x} {y}"),
+      (Some(x), None)    => println!("Nur erstes: {x}"),
+      (None, Some(y))    => println!("Nur zweites: {y}"),
+      (None, None)       => println!("Keins"),
+  }
+
+  // Enum-Felder destrukturieren:
+  struct Punkt { x: i32, y: i32 }
+  let p = Punkt { x: 0, y: 7 };
+  match p {
+      Punkt { x: 0, y } => println!("Auf Y-Achse bei {y}"),
+      Punkt { x, y: 0 } => println!("Auf X-Achse bei {x}"),
+      Punkt { x, y }    => println!("Sonstiger Punkt ({x}, {y})"),
+  }
+
+  // let-Destrukturierung (außerhalb von match):
+  let Punkt { x, y } = p;   // Destrukturierung mit let
+  let (a, b, c) = (1, 2, 3);
+
+  // @ Bindings in Mustern:
+  let num = 7;
+  match num {
+      n @ 1..=10 => println!("{n} ist klein"),
+      n @ 11..=20 => println!("{n} ist mittel"),
+      n => println!("{n} ist groß"),
+  }
+
+  // Referenzen in Mustern mit ref:
+  let referenz = &4;
+  match referenz {
+      &val => println!("Got: {val}"),  // &val destrukturiert die Referenz
+  }
+  // Moderner: match *referenz { val => ... }
+
+  // matches! Makro:
+  let c = 'f';
+  let ist_buchstabe = matches!(c, 'a'..='z' | 'A'..='Z');   // true
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+1. Definiere ein Enum Tier { Hund(String), Katze(String), Vogel } wobei
+   der String der Name ist.
+   Schreibe eine Funktion begruessung(t: &Tier) -> String die ausgibt:
+   "Wau! Ich bin [Name]" / "Miau! Ich bin [Name]" / "Piep!"
+
+2. Schreibe eine Funktion sicher_dividieren(a: f64, b: f64) -> Option<f64>
+   die None zurückgibt wenn b == 0.
+
+3. Nutze map(), unwrap_or() und and_then() um:
+   Option<String> → Option<usize> (Länge) → usize (0 als Fallback)
+
+4. Definiere eine Enum Ampelphase { Rot, GelbNachRot, Gruen, GelbNachGruen }
+   Implementiere fn naechste_phase(&self) -> Ampelphase
+   Schreibe eine Schleife die durch alle Phasen iteriert (nutze loop + match).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Collections — Vec, HashMap, HashSet
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Vec<T> — der dynamische Array
+------------------------------------------------------------------------
+
+  // Erstellen:
+  let v1: Vec<i32> = Vec::new();
+  let v2 = vec![1, 2, 3, 4, 5];     // vec! Makro
+  let v3 = vec![0; 10];              // 10 Nullen
+
+  // Elemente hinzufügen:
+  let mut v = Vec::new();
+  v.push(5);
+  v.push(6);
+  v.push(7);
+
+  // Zugriff — Index (Panic bei out-of-bounds):
+  let drittes = &v[2];   // &i32 — Referenz!
+
+  // Sicherer Zugriff — get() gibt Option:
+  match v.get(2) {
+      Some(dritte) => println!("Drittes: {dritte}"),
+      None => println!("Kein drittes Element"),
+  }
+
+  // Iterieren:
+  for i in &v {          // borgen
+      println!("{i}");
+  }
+  for i in &mut v {      // mutable borgen
+      *i += 50;          // Dereferenzierung nötig!
+  }
+
+  // Nützliche Methoden:
+  v.len()                // Anzahl Elemente
+  v.is_empty()           // leer?
+  v.pop()                // letztes Element entfernen und zurückgeben: Option<T>
+  v.remove(1)            // Element an Index entfernen (verschiebt rest)
+  v.insert(1, 42)        // Element an Index einfügen
+  v.extend([8, 9, 10])   // Mehrere hinzufügen
+  v.retain(|&x| x > 3)  // nur Elemente behalten die Bedingung erfüllen
+  v.sort()               // sortieren (ändert v!)
+  v.sort_by(|a, b| b.cmp(a))  // absteigend
+  v.sort_by_key(|n| n.abs())  // nach Absolutwert
+  v.dedup()              // aufeinanderfolgende Duplikate entfernen (erst sort!)
+  v.contains(&5)         // enthält 5?
+  v.iter().position(|&x| x == 5)  // Index von 5 (Option<usize>)
+
+  // Enums in Vecs — verschiedene Typen "simulieren":
+  #[derive(Debug)]
+  enum Zelle { Int(i32), Float(f64), Text(String) }
+  let v = vec![
+      Zelle::Int(3),
+      Zelle::Float(10.12),
+      Zelle::Text(String::from("Blau")),
+  ];
+
+------------------------------------------------------------------------
+12.2  HashMap<K, V>
+------------------------------------------------------------------------
+
+  use std::collections::HashMap;
+
+  // Erstellen:
+  let mut punkte = HashMap::new();
+
+  // Einfügen:
+  punkte.insert(String::from("Alice"), 10);
+  punkte.insert(String::from("Bob"), 50);
+  punkte.insert(String::from("Alice"), 25);  // Überschreibt alten Wert!
+
+  // Aus zwei Vektoren erstellen:
+  let teams = vec!["Blau", "Gelb"];
+  let ergebnisse = vec![10, 50];
+  let punkte: HashMap<_, _> = teams.iter().zip(ergebnisse.iter()).collect();
+
+  // Zugriff:
+  let p = punkte.get("Alice");          // Option<&i32>
+  let p = punkte.get("Alice").copied(); // Option<i32>
+  let p = punkte["Alice"];              // i32 (Panic wenn nicht vorhanden)
+
+  // entry() — einfügen wenn nicht vorhanden:
+  punkte.entry(String::from("Charlie")).or_insert(0);
+  // Wenn "Charlie" nicht da: füge 0 ein
+  // Wenn "Charlie" schon da: nichts tun
+
+  // Wert basierend auf altem Wert updaten:
+  let text = "Hallo Welt Hallo";
+  let mut wort_zaehler = HashMap::new();
+  for wort in text.split_whitespace() {
+      let count = wort_zaehler.entry(wort).or_insert(0);
+      *count += 1;   // Dereferenzierung nötig!
+  }
+  // {"Hallo": 2, "Welt": 1}
+
+  // Iterieren:
+  for (key, value) in &punkte {
+      println!("{key}: {value}");
+  }
+
+  // Sortiert iterieren:
+  let mut eintraege: Vec<_> = punkte.iter().collect();
+  eintraege.sort_by_key(|&(k, _)| k);
+  for (k, v) in eintraege { println!("{k}: {v}"); }
+
+  // Enthält Key?:
+  punkte.contains_key("Alice")   // true
+  punkte.get("Alice").is_some()  // dasselbe
+
+  // Entfernen:
+  punkte.remove("Alice");        // entfernt und gibt Option<V> zurück
+
+------------------------------------------------------------------------
+12.3  HashSet<T> und BTreeMap/BTreeSet
+------------------------------------------------------------------------
+
+  use std::collections::HashSet;
+
+  let mut s1: HashSet<i32> = HashSet::new();
+  s1.insert(1); s1.insert(2); s1.insert(3);
+  s1.insert(2);   // Duplikat — wird ignoriert!
+
+  let mut s2: HashSet<i32> = [2, 3, 4, 5].iter().cloned().collect();
+
+  // Mengenoperationen:
+  let union: HashSet<_> = s1.union(&s2).collect();          // Vereinigung
+  let intersect: HashSet<_> = s1.intersection(&s2).collect(); // Schnittmenge
+  let diff: HashSet<_> = s1.difference(&s2).collect();       // Differenz
+  let sym_diff: HashSet<_> = s1.symmetric_difference(&s2).collect();
+
+  s1.contains(&3)   // true
+  s1.is_subset(&s2) // false
+
+  // BTreeMap — wie HashMap aber SORTIERT nach Keys:
+  use std::collections::BTreeMap;
+  let mut map = BTreeMap::new();
+  map.insert(3, "drei");
+  map.insert(1, "eins");
+  map.insert(2, "zwei");
+  for (k, v) in &map { println!("{k}: {v}"); }  // immer 1,2,3 — sortiert!
+
+  // VecDeque — doppelseitige Queue:
+  use std::collections::VecDeque;
+  let mut dq: VecDeque<i32> = VecDeque::new();
+  dq.push_back(1);   // hinten einfügen
+  dq.push_front(0);  // vorne einfügen
+  dq.pop_front();    // vorne entfernen
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+1. Schreibe eine Funktion haeufigste_buchstaben(s: &str) -> Vec<(char, usize)>
+   die die 5 häufigsten Buchstaben und ihre Anzahl zurückgibt (absteigend).
+   Nur Buchstaben (kein Leerzeichen/Satzzeichen).
+
+2. Duplikat-Check: Schreibe eine Funktion hat_duplikate<T: Eq + Hash>(v: &[T]) -> bool
+   Nutze HashSet.
+
+3. Gruppen-Funktion: fn nach_laenge(wörter: &[&str]) -> HashMap<usize, Vec<&str>>
+   Gruppiert Wörter nach ihrer Länge.
+
+4. Wähle die richtige Collection und begründe:
+   - Spielerscores in einer Rangliste (schneller Zugriff per Name)
+   - Liste von aufgaben in FIFO-Reihenfolge
+   - Alphabetisch sortierte Konfigurationseinträge
+   - Einzigartige Tags für Blog-Posts
+--------------------------------------------------------------------------------
+
+================================================================================
+MODUL 13: Fehlerbehandlung — Result<T, E> und Option<T>
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Rusts Philosophie der Fehlerbehandlung
+------------------------------------------------------------------------
+
+Rust hat KEINE Exceptions (keine try/catch wie Java/Python).
+Fehler werden durch Typen ausgedrückt. Das zwingt dich, Fehler zu behandeln.
+
+  Zwei Kategorien:
+    Recoverable (behandelbar): Datei nicht gefunden, ungültige Eingabe →  Result<T, E>
+    Unrecoverable (fatal):     Bug im Code, Logikfehler → panic!
+
+  Result<T, E> — wie Option, aber mit Fehlerbeschreibung:
+    enum Result<T, E> {
+        Ok(T),    // Erfolg mit Wert vom Typ T
+        Err(E),   // Fehler vom Typ E
+    }
+
+------------------------------------------------------------------------
+13.2  Result verwenden
+------------------------------------------------------------------------
+
+  use std::fs::File;
+
+  let f = File::open("hallo.txt");   // Gibt Result<File, io::Error>
+
+  // 1. Match (vollständige Behandlung):
+  let f = match f {
+      Ok(datei) => datei,
+      Err(fehler) => panic!("Problem beim Öffnen: {:?}", fehler),
+  };
+
+  // 2. Verschachtelte Fehlerbehandlung:
+  use std::io::ErrorKind;
+  let f = match File::open("hallo.txt") {
+      Ok(datei) => datei,
+      Err(fehler) => match fehler.kind() {
+          ErrorKind::NotFound => match File::create("hallo.txt") {
+              Ok(neue_datei) => neue_datei,
+              Err(e) => panic!("Kann nicht erstellen: {:?}", e),
+          },
+          andere => panic!("Anderer Fehler: {:?}", andere),
+      },
+  };
+
+  // 3. Closures (eleganter):
+  let f = File::open("hallo.txt").unwrap_or_else(|fehler| {
+      if fehler.kind() == ErrorKind::NotFound {
+          File::create("hallo.txt").unwrap_or_else(|e| {
+              panic!("Kann nicht erstellen: {e:?}")
+          })
+      } else {
+          panic!("Anderer Fehler: {fehler:?}")
+      }
+  });
+
+  // 4. unwrap und expect (nur wenn du sicher bist oder es ein Prototyp ist):
+  let f = File::open("hallo.txt").unwrap();              // Panic mit generischer Meldung
+  let f = File::open("hallo.txt").expect("Fehler!");     // Panic mit deiner Meldung
+
+------------------------------------------------------------------------
+13.3  Der ? Operator — elegantes Fehler-Propagieren
+------------------------------------------------------------------------
+
+  use std::fs;
+  use std::io;
+
+  // Ohne ?: umständlich
+  fn datei_lesen_v1() -> Result<String, io::Error> {
+      let f = match fs::File::open("hallo.txt") {
+          Ok(f) => f,
+          Err(e) => return Err(e),
+      };
+      let mut s = String::new();
+      match io::Read::read_to_string(&mut f, &mut s) {
+          Ok(_) => Ok(s),
+          Err(e) => Err(e),
+      }
+  }
+
+  // Mit ? — viel eleganter:
+  fn datei_lesen() -> Result<String, io::Error> {
+      let inhalt = fs::read_to_string("hallo.txt")?;
+      Ok(inhalt)
+  }
+  // ? bedeutet: wenn Err → return Err(e), wenn Ok → den Wert auspacken
+
+  // ? Kette:
+  fn komplexe_operation() -> Result<String, io::Error> {
+      let mut s = String::new();
+      fs::File::open("a.txt")?.read_to_string(&mut s)?;
+      Ok(s)
+  }
+
+  // ? funktioniert auch für Option:
+  fn erste_zeile(text: &str) -> Option<&str> {
+      text.lines().next()   // Option<&str>
+  }
+  fn erste_zeile_mit_fragezeichen(text: &str) -> Option<String> {
+      let zeile = text.lines().next()?;  // wenn None → return None
+      Some(zeile.trim().to_string())
+  }
+
+  // main kann Result zurückgeben:
+  use std::error::Error;
+  fn main() -> Result<(), Box<dyn Error>> {
+      let inhalt = fs::read_to_string("hallo.txt")?;
+      println!("{inhalt}");
+      Ok(())
+  }
+
+------------------------------------------------------------------------
+13.4  Eigene Fehlertypen
+------------------------------------------------------------------------
+
+  use std::fmt;
+  use std::num::ParseIntError;
+
+  // Einfacher eigener Fehlertyp:
+  #[derive(Debug)]
+  enum MeinFehler {
+      ParseFehler(ParseIntError),
+      WertZuGross(i32),
+      Leer,
+  }
+
+  impl fmt::Display for MeinFehler {
+      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+          match self {
+              MeinFehler::ParseFehler(e) => write!(f, "Parse-Fehler: {e}"),
+              MeinFehler::WertZuGross(n) => write!(f, "Wert {n} ist zu groß"),
+              MeinFehler::Leer => write!(f, "Leerer String"),
+          }
+      }
+  }
+
+  // Damit ? funktioniert — From-Trait implementieren:
+  impl From<ParseIntError> for MeinFehler {
+      fn from(e: ParseIntError) -> Self {
+          MeinFehler::ParseFehler(e)
+      }
+  }
+
+  fn parse_und_validiere(s: &str) -> Result<i32, MeinFehler> {
+      if s.is_empty() { return Err(MeinFehler::Leer); }
+      let n: i32 = s.parse()?;   // ParseIntError → MeinFehler via From!
+      if n > 100 { return Err(MeinFehler::WertZuGross(n)); }
+      Ok(n)
+  }
+
+  // Für Prototypen/Anwendungen — Box<dyn Error>:
+  // Nimmt BELIEBIGE Fehlertypen an:
+  fn main() -> Result<(), Box<dyn std::error::Error>> {
+      let n = "42".parse::<i32>()?;   // ParseIntError
+      let f = std::fs::read_to_string("x.txt")?;  // io::Error
+      Ok(())
+  }
+
+  // Tipp: Die "thiserror" Crate vereinfacht eigene Fehlertypen:
+  // Die "anyhow" Crate vereinfacht Fehler-Propagierung in Anwendungen.
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+1. Schreibe eine Funktion teile(a: f64, b: f64) -> Result<f64, String>
+   die Err zurückgibt wenn b == 0.0.
+
+2. Nutze ? um Fehler zu propagieren:
+   fn lies_und_parse_zahl(pfad: &str) -> Result<i32, Box<dyn std::error::Error>>
+   Die Datei enthält eine Zahl in der ersten Zeile.
+
+3. Definiere einen Fehler-Enum EingabeFehler mit:
+   - LeerString
+   - ZuKurz(usize)      // enthält Mindestlänge
+   - UngueltigesZeichen(char)
+   Implementiere Display und Error.
+   Schreibe eine Validierungsfunktion die ihn benutzt.
+
+4. Wann benutzt du panic!, wann Result? Erkläre an je einem Beispiel.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 14: Traits — Rusts Interfaces
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Traits definieren und implementieren
+------------------------------------------------------------------------
+
+Ein Trait definiert ein Interface — welche Methoden ein Typ anbieten muss.
+
+  // Trait definieren:
+  trait Zusammenfassen {
+      fn zusammenfassung(&self) -> String;
+
+      // Default-Implementierung:
+      fn autor(&self) -> String {
+          String::from("(Unbekannt)")
+      }
+  }
+
+  // Trait implementieren:
+  struct ArtikelZusammenfassung {
+      titel: String,
+      autor: String,
+      inhalt: String,
+  }
+
+  impl Zusammenfassen for ArtikelZusammenfassung {
+      fn zusammenfassung(&self) -> String {
+          format!("{} von {} - {}", self.titel, self.autor,
+                  &self.inhalt[..50.min(self.inhalt.len())])
+      }
+  }
+
+  struct Tweet { benutzername: String, inhalt: String }
+
+  impl Zusammenfassen for Tweet {
+      fn zusammenfassung(&self) -> String {
+          format!("{}: {}", self.benutzername, self.inhalt)
+      }
+      // autor() nutzt Default-Implementierung
+  }
+
+------------------------------------------------------------------------
+14.2  Traits als Parameter und Rückgabewerte
+------------------------------------------------------------------------
+
+  // Trait als Parameter — impl Trait Syntax (Syntaxzucker):
+  fn benachrichtige(item: &impl Zusammenfassen) {
+      println!("Neuigkeit: {}", item.zusammenfassung());
+  }
+
+  // Äquivalent mit Trait Bound Syntax:
+  fn benachrichtige<T: Zusammenfassen>(item: &T) {
+      println!("Neuigkeit: {}", item.zusammenfassung());
+  }
+
+  // Mehrere Traits:
+  fn benachrichtige2(item: &(impl Zusammenfassen + std::fmt::Debug)) {
+      println!("{:?}", item);
+      println!("{}", item.zusammenfassung());
+  }
+
+  // Where-Klausel (bei komplexen Bounds lesbarer):
+  fn benachrichtige3<T>(item: &T)
+  where
+      T: Zusammenfassen + std::fmt::Debug + Clone,
+  {
+      println!("{}", item.zusammenfassung());
+  }
+
+  // Trait als Rückgabewert — impl Trait:
+  fn erstelle_zusammenfassung() -> impl Zusammenfassen {
+      Tweet {
+          benutzername: String::from("trafkhop"),
+          inhalt: String::from("Hallo!"),
+      }
+  }
+  // EINSCHRÄNKUNG: Die Funktion muss IMMER denselben konkreten Typ zurückgeben!
+
+------------------------------------------------------------------------
+14.3  Trait-Objekte — dynamischer Dispatch
+------------------------------------------------------------------------
+
+  // Wenn du zur Laufzeit verschiedene Typen haben willst:
+  trait Zeichnen { fn zeichnen(&self); }
+
+  struct Kreis { radius: f64 }
+  struct Rechteck { breite: f64, hoehe: f64 }
+
+  impl Zeichnen for Kreis {
+      fn zeichnen(&self) { println!("Kreis r={}", self.radius); }
+  }
+  impl Zeichnen for Rechteck {
+      fn zeichnen(&self) { println!("Rechteck {}x{}", self.breite, self.hoehe); }
+  }
+
+  // dyn Trait — dynamischer Dispatch (Laufzeit-Kosten!):
+  let formen: Vec<Box<dyn Zeichnen>> = vec![
+      Box::new(Kreis { radius: 5.0 }),
+      Box::new(Rechteck { breite: 3.0, hoehe: 4.0 }),
+  ];
+
+  for form in &formen {
+      form.zeichnen();   // Welche zeichnen() aufgerufen wird, entscheidet sich zur LAUFZEIT
+  }
+
+  // Box<dyn Trait> — Trait-Objekt auf dem Heap
+  // impl Trait    — statischer Dispatch (zur COMPILE-ZEIT, schneller)
+
+------------------------------------------------------------------------
+14.4  Wichtige Standard-Traits
+------------------------------------------------------------------------
+
+  Display und Debug:
+    impl fmt::Display for MeinTyp { fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result }
+    #[derive(Debug)]  ← für {:?}
+
+  Clone und Copy:
+    #[derive(Clone)]   ← .clone() ermöglichen
+    #[derive(Copy)]    ← automatisch kopieren statt moven (nur für kleine Stack-Typen)
+
+  PartialEq, Eq, PartialOrd, Ord:
+    #[derive(PartialEq)]   ← ==, !=
+    #[derive(Eq)]          ← vollständige Gleichheit (braucht PartialEq)
+    #[derive(PartialOrd)]  ← <, >, <=, >= (für f32/f64 nur Partial!)
+    #[derive(Ord)]         ← vollständige Ordnung (kein NaN → kein f64!)
+
+  Hash:
+    #[derive(Hash)]    ← als HashMap-Key verwendbar (braucht Eq)
+
+  From und Into:
+    impl From<i32> for MeinTyp {
+        fn from(n: i32) -> Self { MeinTyp { wert: n } }
+    }
+    // Into wird automatisch implementiert wenn From vorhanden ist!
+    let m: MeinTyp = 42.into();
+    let m = MeinTyp::from(42);
+
+  Iterator:
+    impl Iterator for MeinTyp {
+        type Item = i32;  // Assoziierter Typ!
+        fn next(&mut self) -> Option<Self::Item> { ... }
+    }
+    // Dann bekommst du .map(), .filter(), .collect() usw. kostenlos!
+
+  Default:
+    #[derive(Default)]  ← MeinTyp::default() gibt Null-Werte zurück
+    // Oder:
+    impl Default for Einstellungen {
+        fn default() -> Self {
+            Self { farbe: String::from("blau"), groesse: 12 }
+        }
+    }
+
+--------------------------------------------------------------------------------
+ÜBUNG 13:
+1. Definiere einen Trait Berechnen { fn ergebnis(&self) -> f64; }
+   Implementiere ihn für:
+   - Addiere { a: f64, b: f64 }
+   - Multipliziere { a: f64, b: f64 }
+   - Quadratwurzel { wert: f64 }
+
+   Schreibe eine Funktion berechne_alle(ops: &[Box<dyn Berechnen>]) -> Vec<f64>
+
+2. Implementiere From<&str> für eine Struct Farbe { r: u8, g: u8, b: u8 }
+   sodass Farbe::from("#FF5500") funktioniert.
+
+3. Implementiere den Iterator-Trait für einen FibIter struct der
+   die Fibonacci-Zahlen zurückgibt. Nutze then .take(10).collect().
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 15: Generics — Typen als Parameter
+================================================================================
+
+------------------------------------------------------------------------
+15.1  Generische Funktionen und Structs
+------------------------------------------------------------------------
+
+  // Ohne Generics — Code-Duplizierung:
+  fn groesstes_i32(list: &[i32]) -> &i32 { ... }
+  fn groesstes_f64(list: &[f64]) -> &f64 { ... }
+
+  // Mit Generics — einmal schreiben, überall benutzen:
+  fn groesstes<T: PartialOrd>(list: &[T]) -> &T {
+      let mut largest = &list[0];
+      for item in list.iter() {
+          if item > largest { largest = item; }
+      }
+      largest
+  }
+
+  let zahlen = vec![34, 50, 25, 100, 65];
+  println!("{}", groesstes(&zahlen));   // 100
+
+  let zeichen = vec!['y', 'm', 'a', 'q'];
+  println!("{}", groesstes(&zeichen));  // y
+
+  // Generische Structs:
+  struct Paar<T> {
+      erster: T,
+      zweiter: T,
+  }
+
+  impl<T> Paar<T> {
+      fn neu(erster: T, zweiter: T) -> Self {
+          Self { erster, zweiter }
+      }
+  }
+
+  // Conditional Methods — nur wenn T bestimmte Traits implementiert:
+  impl<T: std::fmt::Display + PartialOrd> Paar<T> {
+      fn groesstens_anzeigen(&self) {
+          if self.erster >= self.zweiter {
+              println!("Größtes: {}", self.erster);
+          } else {
+              println!("Größtes: {}", self.zweiter);
+          }
+      }
+  }
+
+------------------------------------------------------------------------
+15.2  Generische Enums und die Standard-Library
+------------------------------------------------------------------------
+
+  // Option<T> und Result<T,E> die du schon kennst sind generische Enums:
+  enum Option<T> { Some(T), None }
+  enum Result<T, E> { Ok(T), Err(E) }
+
+  // Eigener generischer Enum:
+  #[derive(Debug)]
+  enum Entweder<A, B> {
+      Links(A),
+      Rechts(B),
+  }
+
+  let l: Entweder<i32, &str> = Entweder::Links(42);
+  let r: Entweder<i32, &str> = Entweder::Rechts("Hallo");
+
+------------------------------------------------------------------------
+15.3  Monomorphisierung — warum Generics keine Laufzeitkosten haben
+------------------------------------------------------------------------
+
+  Wenn Rust Generics kompiliert, erstellt es für jeden konkreten Typ
+  eine eigene Version der Funktion — das nennt sich Monomorphisierung.
+
+  groesstes::<i32>   → eine Funktion
+  groesstes::<char>  → eine andere Funktion
+
+  Du zahlst also keine Laufzeitkosten für Generics (Zero-Cost-Abstraction)!
+  Der Nachteil: Längere Compile-Zeit und größere Binaries.
+
+------------------------------------------------------------------------
+15.4  Assoziierte Typen in Traits
+------------------------------------------------------------------------
+
+  // Statt generischen Traits manchmal besser: Assoziierte Typen
+  trait Konvertieren {
+      type Ausgabe;   // assoziierter Typ
+      fn konvertiere(&self) -> Self::Ausgabe;
+  }
+
+  struct Celsius(f64);
+
+  impl Konvertieren for Celsius {
+      type Ausgabe = f64;  // Fahrenheit
+      fn konvertiere(&self) -> f64 {
+          self.0 * 9.0/5.0 + 32.0
+      }
+  }
+
+  // Iterator benutzt auch assoziierte Typen:
+  trait Iterator {
+      type Item;
+      fn next(&mut self) -> Option<Self::Item>;
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 14:
+1. Schreibe eine generische Funktion erste_und_letzte<T: Clone>(v: &[T]) -> Option<(T, T)>
+   die erstes und letztes Element eines Slices zurückgibt (wenn vorhanden).
+
+2. Definiere einen generischen Stack<T> Struct mit:
+   - push(item: T)
+   - pop() -> Option<T>
+   - peek() -> Option<&T>
+   - is_empty() -> bool
+   - len() -> usize
+
+3. Was ist der Unterschied zwischen:
+   fn f<T: Display>(x: T)     // statischer Dispatch
+   fn f(x: &dyn Display)      // dynamischer Dispatch
+   Wann benutzt du welches?
+--------------------------------------------------------------------------------
+
+================================================================================
+MODUL 16: Closures und Iteratoren
+================================================================================
+
+------------------------------------------------------------------------
+16.1  Closures — anonyme Funktionen die die Umgebung erfassen
+------------------------------------------------------------------------
+
+  // Closure-Syntax:
+  let addiere_eins = |x| x + 1;          // Typen inferiert
+  let addiere_x = |x: i32| -> i32 { x + 1 };  // mit Typen
+
+  // Mehrzeiliger Closure:
+  let verdoppeln = |n: i32| {
+      let doppelt = n * 2;
+      doppelt
+  };
+
+  // Umgebung erfassen (Capture):
+  let faktor = 3;
+  let multipliziere = |n| n * faktor;   // faktor aus Umgebung!
+  println!("{}", multipliziere(5));      // 15
+
+  // Drei Capture-Moden:
+  //   &T  → borgen (Fn)      — Standard wenn möglich
+  //   &mut T → mutable borgen (FnMut) — wenn Closure ändert
+  //   T   → besitzen (FnOnce) — wenn Ownership nötig
+
+  // move — Ownership in Closure zwingen:
+  let text = String::from("Hallo");
+  let drucke = move || println!("{text}");  // text ist in Closure bewegt
+  // text ist hier nicht mehr gültig!
+  drucke();
+
+  // Die Fn-Traits:
+  fn anwende<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 { f(x) }
+  fn anwende_mut<F: FnMut() -> i32>(mut f: F) -> i32 { f() }
+  fn einmal<F: FnOnce() -> String>(f: F) -> String { f() }
+
+------------------------------------------------------------------------
+16.2  Iterator-Methoden — das Herzstück von funktionalem Rust
+------------------------------------------------------------------------
+
+  let zahlen = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  // map — transformieren:
+  let quadrate: Vec<i32> = zahlen.iter().map(|&x| x * x).collect();
+  // [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+
+  // filter — filtern:
+  let gerade: Vec<&i32> = zahlen.iter().filter(|&&x| x % 2 == 0).collect();
+  // [2, 4, 6, 8, 10]
+
+  // filter_map — filtern und transformieren in einem:
+  let ergebnisse: Vec<i32> = vec!["1", "zwei", "3", "vier"]
+      .iter()
+      .filter_map(|s| s.parse::<i32>().ok())
+      .collect();
+  // [1, 3]
+
+  // fold (reduce) — zu einem Wert zusammenfassen:
+  let summe = zahlen.iter().fold(0, |acc, &x| acc + x);  // 55
+  // Kürzere Alternative:
+  let summe: i32 = zahlen.iter().sum();
+  let produkt: i32 = zahlen.iter().product();
+  let max = zahlen.iter().max();   // Option<&i32>
+  let min = zahlen.iter().min();
+
+  // take und skip:
+  let erste_drei: Vec<&i32> = zahlen.iter().take(3).collect();
+  let ab_vier: Vec<&i32> = zahlen.iter().skip(3).collect();
+
+  // chain — Iteratoren verketten:
+  let a = vec![1, 2, 3];
+  let b = vec![4, 5, 6];
+  let combined: Vec<i32> = a.iter().chain(b.iter()).copied().collect();
+
+  // flat_map — map + flatten:
+  let wörter = vec!["Hallo Welt", "Rust macht Spaß"];
+  let buchstaben: Vec<&str> = wörter.iter()
+      .flat_map(|s| s.split_whitespace())
+      .collect();
+  // ["Hallo", "Welt", "Rust", "macht", "Spaß"]
+
+  // enumerate — mit Index:
+  for (i, &n) in zahlen.iter().enumerate() {
+      println!("{i}: {n}");
+  }
+
+  // zip — zwei Iteratoren parallel:
+  let namen = vec!["Alice", "Bob"];
+  let punkte = vec![95, 87];
+  let paare: Vec<_> = namen.iter().zip(punkte.iter()).collect();
+
+  // any und all — Kurzschluss-Prüfungen:
+  zahlen.iter().any(|&x| x > 5)    // true (7,8,9,10 sind >5)
+  zahlen.iter().all(|&x| x > 0)    // true (alle positiv)
+
+  // find und position:
+  zahlen.iter().find(|&&x| x > 5)         // Some(&6)
+  zahlen.iter().position(|&x| x > 5)      // Some(5)
+
+  // count:
+  zahlen.iter().filter(|&&x| x % 2 == 0).count()   // 5
+
+  // Iterator-Implementierung chaining — lazy evaluation:
+  // Iteratoren in Rust sind LAZY — .map(), .filter() etc. tun noch nichts!
+  // .collect() oder .sum() etc. starten die Berechnung erst.
+
+  let teuer: Vec<i32> = (0..1_000_000)
+      .filter(|x| x % 2 == 0)
+      .map(|x| x * x)
+      .take(5)
+      .collect();
+  // Nur 5 Berechnungen — nicht eine Million!
+
+------------------------------------------------------------------------
+16.3  collect() und FromIterator
+------------------------------------------------------------------------
+
+  // collect() kann zu vielen verschiedenen Collections umwandeln:
+  let v: Vec<i32> = (0..10).collect();
+  let s: HashSet<i32> = vec![1,2,2,3,3,3].into_iter().collect();
+  let m: HashMap<i32, i32> = (0..5).map(|x| (x, x*x)).collect();
+  let text: String = vec!['R', 'u', 's', 't'].into_iter().collect();
+
+  // Ergebnis-Sammlung — Result in Vec einsammeln:
+  let zahlen: Result<Vec<i32>, _> = vec!["1", "2", "3"]
+      .iter()
+      .map(|s| s.parse::<i32>())
+      .collect();  // Ok([1, 2, 3])
+
+  let fehler: Result<Vec<i32>, _> = vec!["1", "abc", "3"]
+      .iter()
+      .map(|s| s.parse::<i32>())
+      .collect();  // Err(ParseIntError)
+
+------------------------------------------------------------------------
+16.4  Eigene Iteratoren implementieren
+------------------------------------------------------------------------
+
+  struct Zaehler { count: u32 }
+
+  impl Zaehler {
+      fn new() -> Zaehler { Zaehler { count: 0 } }
+  }
+
+  impl Iterator for Zaehler {
+      type Item = u32;
+
+      fn next(&mut self) -> Option<Self::Item> {
+          if self.count < 5 {
+              self.count += 1;
+              Some(self.count)
+          } else {
+              None
+          }
+      }
+  }
+
+  let z = Zaehler::new();
+  // Jetzt hat Zaehler ALLE Iterator-Methoden kostenlos!
+  let summe: u32 = z.zip(Zaehler::new().skip(1)).map(|(a, b)| a * b).sum();
+
+--------------------------------------------------------------------------------
+ÜBUNG 15:
+1. Schreibe mit Iterator-Methoden (KEINE Schleifen!):
+   - Summe aller geraden Zahlen von 1 bis 100
+   - Alle Wörter aus einem String die mit 'R' anfangen
+   - Die ersten 10 Fibonacci-Zahlen als Vec (nutze scan oder einen eigenen Iterator)
+
+2. Schreibe eine Pipeline die:
+   - Einen Vec<&str> von Dateinamen nimmt
+   - Nur .rs Dateien filtert
+   - Den Dateinamen (ohne Extension) extrahiert
+   - Alles großschreibt
+   - Als Vec<String> zurückgibt
+
+3. Implementiere einen unendlichen Iterator Range2D { x, y, max_x }
+   der über alle Punkte (x,y) in einem Raster iteriert:
+   (0,0), (1,0), (2,0), (0,1), (1,1), ...
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 17: Module, Crates und Projekt-Organisation
+================================================================================
+
+------------------------------------------------------------------------
+17.1  Module — Code organisieren
+------------------------------------------------------------------------
+
+  // Alles in einer Datei:
+  mod vorderseite {
+      pub mod hosting {
+          pub fn sitzplatznummer() -> u32 { 1 }
+      }
+      mod bedienung {
+          fn reihenfolge_nehmen() {}
+          fn reihenfolge_erstellen() {}
+      }
+  }
+
+  // Aufrufen:
+  use crate::vorderseite::hosting;
+  hosting::sitzplatznummer();
+
+  // oder direkt:
+  crate::vorderseite::hosting::sitzplatznummer();
+
+  // pub vs. privat:
+  // Standardmäßig ist alles PRIVAT (anders als Java!)
+  // pub macht es öffentlich
+  // pub(crate) macht es im ganzen Crate sichtbar, aber nicht außen
+  // pub(super) macht es im Eltern-Modul sichtbar
+
+  // use — Pfade abkürzen:
+  use std::collections::HashMap;
+  use std::collections::{BTreeMap, HashSet};   // mehrere auf einmal
+  use std::collections::*;                      // alle (vermeiden!)
+  use std::io::{self, Write};                   // io selbst und Write
+
+  // Umbenennungen:
+  use std::io::Error as IoError;
+  use std::fmt::Result as FmtResult;
+
+------------------------------------------------------------------------
+17.2  Module in verschiedene Dateien aufteilen
+------------------------------------------------------------------------
+
+  // src/main.rs:
+  mod vorderseite;        // sucht src/vorderseite.rs oder src/vorderseite/mod.rs
+  use vorderseite::hosting;
+
+  // src/vorderseite.rs:
+  pub mod hosting {
+      pub fn sitzplatznummer() -> u32 { 1 }
+  }
+
+  // Für größere Module — Ordner-Struktur:
+  // src/
+  // ├── main.rs
+  // ├── vorderseite/
+  // │   ├── mod.rs          ← altes System
+  // │   └── hosting.rs
+  // └── vorderseite.rs      ← neues System (Rust 2018+)
+
+  // Modernes System (empfohlen):
+  // src/vorderseite.rs:
+  pub mod hosting;     // sucht src/vorderseite/hosting.rs
+
+  // src/vorderseite/hosting.rs:
+  pub fn sitzplatznummer() -> u32 { 1 }
+
+------------------------------------------------------------------------
+17.3  Libraries vs. Binaries
+------------------------------------------------------------------------
+
+  // Binary (Programm das man ausführt):
+  // src/main.rs → cargo run
+
+  // Library (Bibliothek die andere nutzen können):
+  // src/lib.rs → cargo build --lib
+
+  // Beides in einem Projekt (häufig!):
+  // src/main.rs  → Binary
+  // src/lib.rs   → Library (kann von main.rs und Tests benutzt werden)
+
+  // Mehrere Binaries:
+  // src/bin/tool1.rs  → cargo run --bin tool1
+  // src/bin/tool2.rs  → cargo run --bin tool2
+
+  // Workspace — mehrere Crates in einem Repo:
+  // Cargo.toml (workspace root):
+  // [workspace]
+  // members = ["server", "client", "shared"]
+
+------------------------------------------------------------------------
+17.4  Crates.io und Abhängigkeiten benutzen
+------------------------------------------------------------------------
+
+  // In Cargo.toml:
+  [dependencies]
+  serde = { version = "1.0", features = ["derive"] }
+  serde_json = "1.0"
+  rand = "0.8"
+  chrono = "0.4"
+  clap = { version = "4.0", features = ["derive"] }
+
+  // Im Code:
+  use serde::{Serialize, Deserialize};
+  use rand::Rng;
+
+  #[derive(Serialize, Deserialize, Debug)]
+  struct Punkt { x: f64, y: f64 }
+
+  let punkt = Punkt { x: 1.0, y: 2.0 };
+  let json = serde_json::to_string(&punkt).unwrap();
+  // {"x":1.0,"y":2.0}
+
+  let p2: Punkt = serde_json::from_str(&json).unwrap();
+
+  // Zufallszahlen mit rand:
+  let mut rng = rand::thread_rng();
+  let n: i32 = rng.gen_range(1..=100);
+
+--------------------------------------------------------------------------------
+ÜBUNG 16:
+1. Teile ein Projekt in Module auf:
+   src/
+   ├── main.rs
+   ├── mathe/
+   │   ├── mod.rs (re-exportiert)
+   │   ├── grundlagen.rs (addieren, subtrahieren, multiplizieren, dividieren)
+   │   └── statistik.rs (mittelwert, median, standardabweichung)
+   └── text/
+       └── mod.rs (wörter_zählen, sätze_zählen, häufigste_wörter)
+
+2. Füge serde und serde_json hinzu.
+   Erstelle eine Config-Struct die serialisiert und deserialisiert werden kann.
+   Schreibe Funktionen config_speichern(pfad, config) und config_laden(pfad).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: Dateien, I/O und die Standardbibliothek
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Dateien lesen und schreiben
+------------------------------------------------------------------------
+
+  use std::fs;
+  use std::io::{self, Read, Write, BufRead, BufReader, BufWriter};
+
+  // Einfaches Lesen — ganze Datei:
+  let inhalt = fs::read_to_string("datei.txt")?;
+
+  // Einfaches Schreiben:
+  fs::write("datei.txt", "Inhalt")?;
+  fs::write("datei.txt", inhalt.as_bytes())?;
+
+  // Anhängen:
+  use std::fs::OpenOptions;
+  let mut datei = OpenOptions::new()
+      .append(true)
+      .open("log.txt")?;
+  writeln!(datei, "Neue Zeile")?;
+
+  // Zeilenweise lesen (speichereffizient für große Dateien):
+  let datei = fs::File::open("grosse.txt")?;
+  let leser = BufReader::new(datei);
+  for zeile in leser.lines() {
+      let zeile = zeile?;
+      println!("{zeile}");
+  }
+
+  // Gepuffertes Schreiben:
+  let datei = fs::File::create("ausgabe.txt")?;
+  let mut schreiber = BufWriter::new(datei);
+  for i in 0..1000 {
+      writeln!(schreiber, "Zeile {i}")?;
+  }  // BufWriter flusht beim Drop
+
+  // Bytes lesen:
+  let bytes = fs::read("bild.png")?;
+
+------------------------------------------------------------------------
+18.2  Pfade und Verzeichnisse
+------------------------------------------------------------------------
+
+  use std::path::{Path, PathBuf};
+
+  // Path — analogielos zu &str: nur ein Verweis
+  // PathBuf — wie String: owned, veränderlich
+
+  let pfad = Path::new("src/main.rs");
+  pfad.exists()         // bool
+  pfad.is_file()        // bool
+  pfad.is_dir()         // bool
+  pfad.extension()      // Option<&OsStr>  → Some("rs")
+  pfad.file_name()      // Option<&OsStr>  → Some("main.rs")
+  pfad.file_stem()      // Option<&OsStr>  → Some("main")
+  pfad.parent()         // Option<&Path>   → Some("src")
+
+  // PathBuf konstruieren:
+  let mut pb = PathBuf::from("/home/benutzer");
+  pb.push("dokumente");
+  pb.push("datei.txt");
+  // /home/benutzer/dokumente/datei.txt
+
+  // Plattformübergreifend:
+  let home = std::env::var("HOME").unwrap_or_default();
+  let config_pfad = PathBuf::from(&home).join(".config").join("mein_programm");
+
+  // Verzeichnis erstellen:
+  fs::create_dir("neuer_ordner")?;
+  fs::create_dir_all("tiefer/verschachtelter/ordner")?;  // wie mkdir -p
+
+  // Verzeichnis lesen:
+  for eintrag in fs::read_dir(".")? {
+      let eintrag = eintrag?;
+      println!("{}", eintrag.path().display());
+  }
+
+  // Rekursiv mit walkdir (externe Crate):
+  // cargo add walkdir
+  use walkdir::WalkDir;
+  for eintrag in WalkDir::new("src") {
+      let eintrag = eintrag?;
+      println!("{}", eintrag.path().display());
+  }
+
+------------------------------------------------------------------------
+18.3  Kommandozeilen-Argumente und Umgebungsvariablen
+------------------------------------------------------------------------
+
+  // Einfache Argumente:
+  use std::env;
+  let args: Vec<String> = env::args().collect();
+  // args[0] = Programmname, args[1] = erstes Argument
+
+  // Umgebungsvariablen:
+  let pfad = env::var("PATH").unwrap_or_default();
+  let home = env::var("HOME")?;
+  env::set_var("MEINE_VAR", "wert");   // nur im aktuellen Prozess!
+
+  // Elegante CLI mit clap (externe Crate):
+  // cargo add clap --features derive
+  use clap::Parser;
+
+  #[derive(Parser)]
+  #[command(name = "mein_tool", about = "Macht tolle Dinge")]
+  struct Cli {
+      #[arg(short, long)]
+      datei: String,
+
+      #[arg(short, long, default_value = "10")]
+      anzahl: usize,
+
+      #[arg(short, long)]
+      verbose: bool,
+  }
+
+  fn main() {
+      let cli = Cli::parse();
+      println!("Datei: {}", cli.datei);
+      println!("Anzahl: {}", cli.anzahl);
+  }
+  // Automatisch: --help, --version, Fehlerbehandlung
+
+------------------------------------------------------------------------
+18.4  stdin / stdout / stderr
+------------------------------------------------------------------------
+
+  use std::io::{self, BufRead, Write};
+
+  // Von stdin lesen:
+  let stdin = io::stdin();
+  for zeile in stdin.lock().lines() {
+      let zeile = zeile?;
+      println!("{zeile}");
+  }
+
+  // Einzelne Zeile:
+  let mut eingabe = String::new();
+  io::stdin().read_line(&mut eingabe)?;
+  let eingabe = eingabe.trim();
+
+  // Auf stdout schreiben (gepuffert):
+  let stdout = io::stdout();
+  let mut handle = io::BufWriter::new(stdout.lock());
+  writeln!(handle, "Ausgabe")?;
+
+  // Auf stderr:
+  eprintln!("Fehler: etwas ist schief gelaufen");
+  io::stderr().write_all(b"Fehler!\n")?;
+
+--------------------------------------------------------------------------------
+ÜBUNG 17:
+1. Schreibe ein CLI-Tool das:
+   - Eine Datei als Argument nimmt
+   - Zeilen, Wörter und Bytes zählt (wie wc)
+   - Mit --verbose eine Statistik anzeigt
+
+2. Schreibe eine Funktion kopiere_verzeichnis(von: &Path, nach: &Path) -> Result<()>
+   die ein Verzeichnis rekursiv kopiert.
+
+3. Lese alle .txt-Dateien in einem Verzeichnis und sammle alle einzigartigen
+   Wörter in einem HashSet. Gib die häufigsten 20 Wörter aus.
+--------------------------------------------------------------------------------
+
+================================================================================
+MODUL 19: Concurrency — Fearless Parallelismus
+================================================================================
+
+------------------------------------------------------------------------
+19.1  Threads erstellen
+------------------------------------------------------------------------
+
+  use std::thread;
+  use std::time::Duration;
+
+  // Einfacher Thread:
+  let handle = thread::spawn(|| {
+      for i in 0..10 {
+          println!("hi number {i} from spawned thread!");
+          thread::sleep(Duration::from_millis(1));
+      }
+  });
+
+  for i in 0..5 {
+      println!("hi number {i} from main thread!");
+      thread::sleep(Duration::from_millis(1));
+  }
+
+  handle.join().unwrap();  // warte bis Thread fertig
+
+  // move-Closure für Threads:
+  let v = vec![1, 2, 3];
+  let handle = thread::spawn(move || {
+      println!("{:?}", v);  // v wird in den Thread bewegt
+  });
+  // v hier nicht mehr gültig!
+  handle.join().unwrap();
+
+  // Thread mit Rückgabewert:
+  let handle = thread::spawn(|| {
+      42
+  });
+  let ergebnis = handle.join().unwrap();  // 42
+
+------------------------------------------------------------------------
+19.2  Message Passing — Kanäle
+------------------------------------------------------------------------
+
+  use std::sync::mpsc;  // multi-producer, single-consumer
+
+  // Kanal erstellen:
+  let (sender, empfaenger) = mpsc::channel();
+
+  let handle = thread::spawn(move || {
+      let nachrichten = vec!["hi", "from", "thread"];
+      for nachricht in nachrichten {
+          sender.send(nachricht).unwrap();
+          thread::sleep(Duration::from_millis(100));
+      }
+  });
+
+  // Im Hauptthread empfangen:
+  for empfangen in empfaenger {   // iteriert bis Kanal geschlossen
+      println!("Empfangen: {empfangen}");
+  }
+  handle.join().unwrap();
+
+  // Mehrere Sender (clone):
+  let (sender, empfaenger) = mpsc::channel();
+  let sender2 = sender.clone();
+
+  thread::spawn(move || { sender.send("von Thread 1").unwrap(); });
+  thread::spawn(move || { sender2.send("von Thread 2").unwrap(); });
+
+  for empfangen in empfaenger { println!("{empfangen}"); }
+
+------------------------------------------------------------------------
+19.3  Shared State — Arc und Mutex
+------------------------------------------------------------------------
+
+  use std::sync::{Arc, Mutex};
+
+  // Mutex — Mutual Exclusion:
+  let mutex = Mutex::new(5);
+  {
+      let mut wert = mutex.lock().unwrap();   // Lock aquirieren
+      *wert = 6;
+  }  // Lock wird hier freigegeben (RAII)
+  println!("{:?}", mutex);  // Mutex { data: 6 }
+
+  // Arc — Atomic Reference Counting:
+  // Wie Rc, aber thread-safe (atomic = garantiert korrekt bei parallelem Zugriff)
+
+  let zaehler = Arc::new(Mutex::new(0));
+  let mut handles = vec![];
+
+  for _ in 0..10 {
+      let zaehler = Arc::clone(&zaehler);  // Clone des Arc-Pointers
+      let handle = thread::spawn(move || {
+          let mut num = zaehler.lock().unwrap();
+          *num += 1;
+      });
+      handles.push(handle);
+  }
+
+  for handle in handles {
+      handle.join().unwrap();
+  }
+  println!("Ergebnis: {}", *zaehler.lock().unwrap());  // 10
+
+  // RwLock — Reader/Writer Lock (mehrere Leser, ein Schreiber):
+  use std::sync::RwLock;
+  let rwlock = RwLock::new(5);
+  let r1 = rwlock.read().unwrap();   // Lese-Lock (mehrere gleichzeitig ok)
+  let r2 = rwlock.read().unwrap();
+  drop(r1); drop(r2);
+  let mut w = rwlock.write().unwrap();  // Schreib-Lock (exklusiv)
+  *w = 10;
+
+------------------------------------------------------------------------
+19.4  Rayon — einfache Datenparallelität
+------------------------------------------------------------------------
+
+  // cargo add rayon
+  use rayon::prelude::*;
+
+  // par_iter() statt iter() → automatisch parallelisiert!
+  let zahlen: Vec<i32> = (0..1_000_000).collect();
+  let summe: i32 = zahlen.par_iter().map(|&x| x * x).sum();
+
+  // Praktisch keine Änderung am Code für Parallelisierung!
+  // Rayon nutzt einen Thread-Pool automatisch.
+
+--------------------------------------------------------------------------------
+ÜBUNG 18:
+1. Producer-Consumer Pattern:
+   - Producer-Thread generiert 100 Zufallszahlen und sendet sie über einen Kanal
+   - Consumer-Thread empfängt und berechnet Summe, Min, Max
+   - Nutze mpsc::channel
+
+2. Implementiere einen Thread-Safe Counter mit Arc<Mutex<>>:
+   - 5 Threads inkrementieren einen gemeinsamen Zähler je 1000 Mal
+   - Am Ende soll der Zähler 5000 sein
+
+3. Erkläre den Unterschied zwischen Mutex<T> und RwLock<T>.
+   Wann ist welches sinnvoller?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Smart Pointers
+================================================================================
+
+------------------------------------------------------------------------
+20.1  Box<T> — Heap-Allokation
+------------------------------------------------------------------------
+
+  // Box<T> legt einen Wert auf den Heap:
+  let b = Box::new(5);
+  println!("{b}");   // 5 (automatisch dereferenziert)
+
+  // Wann Box benutzen?
+  // 1. Für rekursive Typen (Compile-Zeit-Größe sonst unbekannt):
+  enum Liste {
+      Cons(i32, Box<Liste>),   // Box macht Größe bekannt
+      Nil,
+  }
+  let liste = Liste::Cons(1,
+                 Box::new(Liste::Cons(2,
+                    Box::new(Liste::Cons(3,
+                       Box::new(Liste::Nil))))));
+
+  // 2. Große Werte auf Heap (statt Stack-Overflow):
+  let grosser_wert = Box::new([0u8; 1_000_000]);
+
+  // 3. Trait-Objekte:
+  let t: Box<dyn std::fmt::Display> = Box::new(42);
+  println!("{t}");
+
+------------------------------------------------------------------------
+20.2  Rc<T> und Arc<T> — Reference Counting
+------------------------------------------------------------------------
+
+  use std::rc::Rc;
+
+  // Rc — mehrere Besitzer (nur single-threaded!):
+  let a = Rc::new(5);
+  let b = Rc::clone(&a);    // b und a zeigen auf denselben Wert
+  let c = Rc::clone(&a);    // drei Besitzer!
+
+  println!("Ref-Count: {}", Rc::strong_count(&a));  // 3
+  drop(b);
+  println!("Ref-Count: {}", Rc::strong_count(&a));  // 2
+
+  // Wenn der letzte Rc stirbt → Wert freigegeben
+  // Rc kann NICHT zwischen Threads geteilt werden!
+  // Für Threads → Arc (atomic reference counting)
+
+  use std::sync::Arc;
+  let a = Arc::new(5);
+  let b = Arc::clone(&a);
+  thread::spawn(move || println!("{b}"));  // Arc ist thread-safe!
+
+------------------------------------------------------------------------
+20.3  RefCell<T> — Interior Mutability
+------------------------------------------------------------------------
+
+  // RefCell erlaubt Mutation auch wenn du nur &T hast
+  // Borrow-Checking zur LAUFZEIT statt Compile-Zeit
+
+  use std::cell::RefCell;
+
+  let daten = RefCell::new(vec![1, 2, 3]);
+
+  // Lesen:
+  let r = daten.borrow();        // Ref<Vec<i32>>
+  println!("{:?}", *r);
+
+  // Schreiben:
+  let mut w = daten.borrow_mut();  // RefMut<Vec<i32>>
+  w.push(4);
+
+  // VORSICHT: Zwei borrow_mut() gleichzeitig → PANIC zur Laufzeit!
+  // Rust-Regeln gelten noch — nur zur Laufzeit geprüft.
+
+  // Häufig: Rc<RefCell<T>> — gemeinsamer mutierbarer Zustand:
+  use std::rc::Rc;
+  use std::cell::RefCell;
+
+  let wert = Rc::new(RefCell::new(5));
+  let a = Rc::clone(&wert);
+  let b = Rc::clone(&wert);
+
+  *a.borrow_mut() += 10;
+  *b.borrow_mut() += 5;
+  println!("{}", wert.borrow());  // 20
+
+------------------------------------------------------------------------
+20.4  Cow<T> — Clone on Write
+------------------------------------------------------------------------
+
+  use std::borrow::Cow;
+
+  // Cow ist entweder ein Borrow (&T) oder Owned (T)
+  // Clone passiert nur wenn nötig — sehr nützlich für Performance!
+
+  fn verarbeite<'a>(s: &'a str) -> Cow<'a, str> {
+      if s.contains("schlecht") {
+          // Muss ändern → clone
+          Cow::Owned(s.replace("schlecht", "gut"))
+      } else {
+          // Keine Änderung nötig → borrow (kein Clone!)
+          Cow::Borrowed(s)
+      }
+  }
+
+  let s1 = verarbeite("guter Text");  // Borrowed
+  let s2 = verarbeite("schlechter Text");  // Owned, geclont
+
+------------------------------------------------------------------------
+20.5  Drop Trait und RAII
+------------------------------------------------------------------------
+
+  // Drop wird aufgerufen wenn Wert Scope verlässt:
+  struct Wichtig { name: String }
+
+  impl Drop for Wichtig {
+      fn drop(&mut self) {
+          println!("Lösche: {}", self.name);
+      }
+  }
+
+  {
+      let a = Wichtig { name: String::from("a") };
+      let b = Wichtig { name: String::from("b") };
+  }  // b wird zuerst gedroppt, dann a (LIFO!)
+
+  // Explizit droppen:
+  drop(a);   // std::mem::drop — erzwingtes frühe Freigabe
+
+  // Das ist Rust's RAII — Resource Acquisition Is Initialization
+  // Dateien, Locks, Sockets — alles wird beim Drop sauber geschlossen!
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+1. Implementiere eine doppelt verknüpfte Liste mit Rc<RefCell<Knoten<T>>>:
+   struct Knoten<T> { wert: T, nächster: Option<Rc<RefCell<Knoten<T>>>> }
+
+2. Schreibe eine Funktion die Cow<str> benutzt:
+   fn normalise(s: &str) -> Cow<str>
+   Wenn s schon nur Kleinbuchstaben hat → Borrowed zurück.
+   Sonst → Owned mit Kleinbuchstaben.
+   Warum ist das effizienter als immer zu klonen?
+
+3. Erkläre: Was ist der Unterschied zwischen
+   Rc<Mutex<T>>, Arc<Mutex<T>>, Rc<RefCell<T>>, und Arc<RefCell<T>>?
+   Wann ist welche Kombination sinnvoll?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 21: Async/Await und Tokio
+================================================================================
+
+------------------------------------------------------------------------
+21.1  Was ist asynchrone Programmierung?
+------------------------------------------------------------------------
+
+  // Synchron (blockierend):
+  fn lade_seite(url: &str) -> String {
+      // blockiert bis Antwort kommt — kein anderer Code läuft!
+      reqwest::blocking::get(url).unwrap().text().unwrap()
+  }
+
+  // Asynchron (nicht-blockierend):
+  async fn lade_seite_async(url: &str) -> String {
+      reqwest::get(url).await.unwrap().text().await.unwrap()
+  }
+
+  // async fn gibt ein Future zurück — es tut noch NICHTS!
+  // .await führt das Future aus und pausiert bis es fertig ist.
+  // Während der Pause kann anderer Code laufen (auf demselben Thread!).
+
+  Warum?
+    Wenn ein Programm 100 HTTP-Anfragen macht:
+    Synchron: 100 Threads oder warten bis jede fertig ist → langsam
+    Async: Tausende "Aufgaben" auf wenigen Threads → sehr effizient
+
+------------------------------------------------------------------------
+21.2  Tokio — der wichtigste async Runtime
+------------------------------------------------------------------------
+
+  // Cargo.toml:
+  // tokio = { version = "1", features = ["full"] }
+
+  use tokio::time::{sleep, Duration};
+
+  #[tokio::main]
+  async fn main() {
+      let ergebnis = aufgabe().await;
+      println!("{ergebnis}");
+  }
+
+  async fn aufgabe() -> String {
+      sleep(Duration::from_millis(100)).await;   // warte, ohne zu blockieren
+      String::from("Fertig!")
+  }
+
+  // Parallele Ausführung mit tokio::join!:
+  #[tokio::main]
+  async fn main() {
+      let (r1, r2, r3) = tokio::join!(
+          lade("https://beispiel1.de"),
+          lade("https://beispiel2.de"),
+          lade("https://beispiel3.de"),
+      );
+      // Alle drei gleichzeitig — nicht nacheinander!
+  }
+
+  async fn lade(url: &str) -> String {
+      // reqwest::get(url).await...
+      String::from(url)
+  }
+
+  // tokio::spawn — Task im Hintergrund:
+  let handle = tokio::spawn(async {
+      sleep(Duration::from_secs(1)).await;
+      42
+  });
+  let ergebnis = handle.await.unwrap();  // 42
+
+------------------------------------------------------------------------
+21.3  Channels in async (tokio::sync)
+------------------------------------------------------------------------
+
+  use tokio::sync::mpsc;
+
+  #[tokio::main]
+  async fn main() {
+      let (tx, mut rx) = mpsc::channel(100);   // Puffer-Größe 100
+
+      tokio::spawn(async move {
+          for i in 0..10 {
+              tx.send(i).await.unwrap();
+          }
+      });
+
+      while let Some(wert) = rx.recv().await {
+          println!("{wert}");
+      }
+  }
+
+  // Weitere tokio::sync Primitive:
+  // Mutex, RwLock — async-aware Versionen
+  // broadcast::channel — ein Sender, viele Empfänger
+  // oneshot::channel — einmalige Nachricht
+
+------------------------------------------------------------------------
+21.4  async Traits und Streams
+------------------------------------------------------------------------
+
+  // async Traits brauchen async-trait Crate (in Rust < 1.75):
+  // cargo add async-trait
+
+  use async_trait::async_trait;
+
+  #[async_trait]
+  trait Datenbankzugriff {
+      async fn abfragen(&self, sql: &str) -> Vec<String>;
+      async fn einfuegen(&mut self, daten: String) -> bool;
+  }
+
+  // Ab Rust 1.75 funktioniert async in Traits direkt:
+  trait NeueDatenbank {
+      fn abfragen(&self, sql: &str) -> impl Future<Output = Vec<String>> + Send;
+  }
+
+  // Streams — async Iterator:
+  use tokio_stream::{self as stream, StreamExt};
+  let mut s = stream::iter(vec![1, 2, 3]);
+  while let Some(n) = s.next().await {
+      println!("{n}");
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 20:
+1. Schreibe ein async Programm das:
+   - 5 "Tasks" parallel ausführt (tokio::join! oder tokio::spawn)
+   - Jede Task wartet eine zufällige Zeit (0-500ms)
+   - Gibt aus in welcher Reihenfolge sie fertig werden
+
+2. Implementiere einen async Channel-basierten Worker-Pool:
+   - N Worker-Tasks empfangen Jobs aus einem Channel
+   - M Producer-Tasks senden Jobs
+   - Nutze mpsc Channel
+
+3. Was ist der Unterschied zwischen:
+   tokio::join!(a(), b())    → ?
+   tokio::spawn(a()); tokio::spawn(b());  → ?
+--------------------------------------------------------------------------------
+
+================================================================================
+MODUL 22: Unsafe Rust
+================================================================================
+
+------------------------------------------------------------------------
+22.1  Was Unsafe erlaubt und warum es existiert
+------------------------------------------------------------------------
+
+  unsafe-Blöcke erlauben fünf Dinge die normales Rust nicht erlaubt:
+
+    1. Raw Pointer dereferenzieren
+    2. Unsafe Funktionen aufrufen
+    3. Mutable statische Variablen benutzen
+    4. Unsafe Traits implementieren
+    5. Auf Union-Felder zugreifen
+
+  Warum gibt es unsafe?
+  - Manchmal ist sicherer Code nicht ausdruckbar (z.B. doppelt verknüpfte Listen)
+  - Interaktion mit C-Bibliotheken (FFI)
+  - Bestimmte Optimierungen
+
+  WICHTIG: unsafe heißt nicht "ohne Regeln". Es heißt:
+  "Der Programmierer garantiert die Sicherheit, nicht der Compiler."
+  Alle anderen Rust-Regeln (Typsystem, Lifetimes) gelten weiterhin!
+
+------------------------------------------------------------------------
+22.2  Raw Pointers
+------------------------------------------------------------------------
+
+  let mut zahl = 5;
+
+  let r1 = &zahl as *const i32;      // const raw pointer
+  let r2 = &mut zahl as *mut i32;    // mutable raw pointer
+
+  // Erstellen ist safe! Dereferenzieren ist unsafe:
+  unsafe {
+      println!("r1 zeigt auf: {}", *r1);
+      *r2 = 10;
+      println!("Nach Änderung: {}", *r2);
+  }
+
+  // Roher Pointer aus beliebiger Adresse (sehr gefährlich!):
+  let adresse = 0x012345usize;
+  let r = adresse as *const i32;
+  // unsafe { *r }   ← würde wahrscheinlich segfault!
+
+------------------------------------------------------------------------
+22.3  Unsafe Funktionen und FFI
+------------------------------------------------------------------------
+
+  // Unsafe Funktion:
+  unsafe fn gefaehrlich() {
+      // Körper ist implizit unsafe
+  }
+
+  // Aufruf braucht unsafe:
+  unsafe { gefaehrlich(); }
+
+  // Safe Abstraktion über unsafe Code:
+  fn sicher_teile(slice: &mut [i32]) -> (&mut [i32], &mut [i32]) {
+      let len = slice.len();
+      let mitte = len / 2;
+      let ptr = slice.as_mut_ptr();
+      unsafe {
+          (
+              std::slice::from_raw_parts_mut(ptr, mitte),
+              std::slice::from_raw_parts_mut(ptr.add(mitte), len - mitte),
+          )
+      }
+  }
+  // Diese Funktion ist SAFE nach außen — aber implementiert mit unsafe innen
+
+  // FFI — Foreign Function Interface (C-Bibliotheken aufrufen):
+  extern "C" {
+      fn abs(input: i32) -> i32;   // aus libc
+  }
+
+  unsafe {
+      println!("{}", abs(-3));    // 3
+  }
+
+  // Rust-Funktionen für C zugänglich machen:
+  #[no_mangle]
+  pub extern "C" fn rust_funktion(x: i32) -> i32 {
+      x * 2
+  }
+
+------------------------------------------------------------------------
+22.4  Unsafe Traits
+------------------------------------------------------------------------
+
+  // Send und Sync sind unsafe Traits:
+  // Send:  Typ kann sicher zwischen Threads gesendet werden
+  // Sync:  Typ kann sicher von mehreren Threads gleichzeitig referenziert werden
+
+  // Manuelle Implementierung (nur wenn du weißt was du tust!):
+  struct MeinSpezieller { ptr: *mut i32 }
+  unsafe impl Send for MeinSpezieller { }
+  unsafe impl Sync for MeinSpezieller { }
+
+--------------------------------------------------------------------------------
+ÜBUNG 21:
+1. Schreibe eine safe Funktion swap<T>(a: &mut T, b: &mut T) ohne unsafe.
+   Dann schreibe sie mit unsafe raw pointers.
+   Erkläre warum die safe Version in den meisten Fällen ausreicht.
+
+2. Einfaches FFI:
+   Nutze libc (cargo add libc) um strlen() aus C aufzurufen.
+   Vergleiche das Ergebnis mit Rusts .len() auf einem String.
+
+3. Was ist falsch an diesem Code?
+   let v1 = vec![1, 2, 3];
+   let p = v1.as_ptr();
+   drop(v1);
+   unsafe { println!("{}", *p); }   // Use-after-free!
+   Erkläre was passiert und wie Rust uns normalerweise davor schützt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 23: Makros
+================================================================================
+
+------------------------------------------------------------------------
+23.1  Deklarative Makros — macro_rules!
+------------------------------------------------------------------------
+
+  // Makros erweitern sich zur Compile-Zeit zu Code
+
+  macro_rules! sag_hallo {
+      () => {
+          println!("Hallo!");
+      };
+      ($name:expr) => {
+          println!("Hallo, {}!", $name);
+      };
+  }
+
+  sag_hallo!();          // → println!("Hallo!")
+  sag_hallo!("Trafk");   // → println!("Hallo, Trafk!")
+
+  // Variadic Makro:
+  macro_rules! mein_vec {
+      ( $( $x:expr ),* ) => {
+          {
+              let mut temp_vec = Vec::new();
+              $(
+                  temp_vec.push($x);
+              )*
+              temp_vec
+          }
+      };
+  }
+
+  let v = mein_vec![1, 2, 3];  // wie vec![1, 2, 3]
+
+  // Metavariablen-Typen:
+  $name:expr     → Ausdruck (5, x+1, func())
+  $name:ident    → Bezeichner (Variablenname, Funktionsname)
+  $name:ty       → Typ (i32, Vec<String>)
+  $name:literal  → Literal ("Hallo", 42)
+  $name:stmt     → Statement
+  $name:block    → Block { ... }
+  $name:path     → Pfad (std::collections::HashMap)
+  $name:tt       → Token Tree (alles!)
+
+------------------------------------------------------------------------
+23.2  Prozedurale Makros — derive und attribute
+------------------------------------------------------------------------
+
+  // Prozedurale Makros sind Rust-Programme die Rust-Code transformieren
+  // Du kennst sie schon: #[derive(Debug, Clone, PartialEq)]
+
+  // Eigene derive-Makros (in einem separaten Crate!):
+  // Dies ist fortgeschritten — hier das Konzept:
+
+  // hello_macro/hello_macro_derive/src/lib.rs:
+  use proc_macro::TokenStream;
+  use quote::quote;
+  use syn;
+
+  #[proc_macro_derive(HelloMacro)]
+  pub fn hello_macro_derive(input: TokenStream) -> TokenStream {
+      let ast = syn::parse(input).unwrap();
+      let name = &ast.ident;
+      let gen = quote! {
+          impl HelloMacro for #name {
+              fn hello_macro() {
+                  println!("Hallo! Ich bin {}", stringify!(#name));
+              }
+          }
+      };
+      gen.into()
+  }
+
+  // Attribute-Makros (#[mein_attribut]):
+  #[proc_macro_attribute]
+  pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream { ... }
+
+  // Function-like Makros (wie println!):
+  #[proc_macro]
+  pub fn sql(input: TokenStream) -> TokenStream { ... }
+
+------------------------------------------------------------------------
+23.3  Häufige eingebaute Makros
+------------------------------------------------------------------------
+
+  // Du kennst: println!, format!, vec!, panic!, assert!
+
+  // Weitere nützliche:
+  assert!(bedingung);
+  assert!(bedingung, "Nachricht: {}", wert);
+  assert_eq!(a, b);               // a == b, oder Panic mit Werten
+  assert_ne!(a, b);               // a != b
+  debug_assert!(bedingung);       // nur im Debug-Modus aktiv!
+
+  include_str!("datei.txt")       // Datei einbinden als &str zur Compile-Zeit
+  include_bytes!("bild.png")      // Datei als &[u8]
+  env!("CARGO_PKG_VERSION")       // Umgebungsvariable zur Compile-Zeit
+  concat!("Hello", " ", "World")  // Strings zusammensetzen zur Compile-Zeit
+
+  // dbg! — Debug-Ausgabe mit Datei/Zeile:
+  let a = 2;
+  let b = dbg!(a * 2) + 1;
+  // → [src/main.rs:3] a * 2 = 4
+  // b = 5
+
+  // todo!, unimplemented!, unreachable!
+  // (schon in Modul 6 besprochen)
+
+  // std::mem Makros:
+  std::mem::size_of::<i32>()   // 4 (Bytes)
+  std::mem::size_of_val(&x)    // Größe einer Variable
+  std::mem::swap(&mut a, &mut b);  // Zwei Variablen tauschen
+
+--------------------------------------------------------------------------------
+ÜBUNG 22:
+1. Schreibe ein Makro min! das mit beliebig vielen Argumenten funktioniert:
+   min!(3, 1, 4, 1, 5)  → 1
+
+2. Schreibe ein Makro karte! das eine HashMap aus Schlüssel-Wert-Paaren erstellt:
+   let m = karte! { "eins" => 1, "zwei" => 2, "drei" => 3 };
+
+3. Erkläre den Unterschied zwischen:
+   macro_rules! (deklarativ) und proc_macro (prozedural).
+   Wann benutzt du welches?
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 24: Testing, Dokumentation und Publishing
+================================================================================
+
+------------------------------------------------------------------------
+24.1  Unit Tests schreiben
+------------------------------------------------------------------------
+
+  // Tests werden in dieselbe Datei geschrieben:
+
+  fn addiere(a: i32, b: i32) -> i32 { a + b }
+
+  #[cfg(test)]
+  mod tests {
+      use super::*;    // alles aus dem Eltern-Modul importieren
+
+      #[test]
+      fn addiere_klappt() {
+          assert_eq!(addiere(2, 3), 5);
+      }
+
+      #[test]
+      fn addiere_negative() {
+          assert_eq!(addiere(-1, -1), -2);
+      }
+
+      #[test]
+      #[should_panic(expected = "Division durch Null")]
+      fn division_panik() {
+          teile(5, 0);
+      }
+
+      #[test]
+      fn result_test() -> Result<(), String> {
+          if addiere(2, 2) == 4 {
+              Ok(())
+          } else {
+              Err(String::from("Addieren funktioniert nicht"))
+          }
+      }
+  }
+
+  // cargo test          → alle Tests ausführen
+  // cargo test addiere  → nur Tests die "addiere" enthalten
+  // cargo test -- --nocapture   → println! Ausgaben zeigen
+
+------------------------------------------------------------------------
+24.2  Integration Tests
+------------------------------------------------------------------------
+
+  // tests/ Verzeichnis (neben src/):
+  // tests/integration_test.rs:
+
+  use mein_crate::addiere;   // nur pub-Funktionen!
+
+  #[test]
+  fn integration_test() {
+      assert_eq!(addiere(2, 3), 5);
+  }
+
+  // cargo test --test integration_test   → nur Integrationstests
+
+------------------------------------------------------------------------
+24.3  Doc Tests
+------------------------------------------------------------------------
+
+  /// Addiert zwei Zahlen.
+  ///
+  /// # Beispiele
+  ///
+  /// ```
+  /// let ergebnis = mein_crate::addiere(2, 3);
+  /// assert_eq!(ergebnis, 5);
+  /// ```
+  pub fn addiere(a: i32, b: i32) -> i32 { a + b }
+
+  // cargo test          → führt AUCH die Beispiele in Dokumentation aus!
+  // cargo doc --open    → generiert HTML-Dokumentation
+
+------------------------------------------------------------------------
+24.4  Benchmarks
+------------------------------------------------------------------------
+
+  // Mit Criterion (externe Crate — empfohlen):
+  // cargo add criterion --dev
+
+  // benches/meine_benchmarks.rs:
+  use criterion::{criterion_group, criterion_main, Criterion};
+
+  fn benchmark_addiere(c: &mut Criterion) {
+      c.bench_function("addiere", |b| {
+          b.iter(|| addiere(2, 3))
+      });
+  }
+
+  criterion_group!(benches, benchmark_addiere);
+  criterion_main!(benches);
+
+  // cargo bench
+
+------------------------------------------------------------------------
+24.5  Dokumentation schreiben und publizieren
+------------------------------------------------------------------------
+
+  // Dokumentations-Kommentare:
+  /// Einzelne Zeile (für das nächste Item)
+  //! Modulebene (für das aktuelle Modul)
+
+  /// # Kurzname
+  ///
+  /// Längere Beschreibung.
+  ///
+  /// # Argumente
+  ///
+  /// * `a` - Erstes Argument
+  /// * `b` - Zweites Argument
+  ///
+  /// # Panics
+  ///
+  /// Panics wenn `b` null ist.
+  ///
+  /// # Errors
+  ///
+  /// Gibt `Err` zurück wenn...
+  ///
+  /// # Beispiele
+  ///
+  /// ```
+  /// let result = mein_crate::mache_was(2, 3);
+  /// ```
+  pub fn mache_was(a: i32, b: i32) -> i32 { a + b }
+
+  // Auf crates.io publizieren:
+  // 1. cargo login (mit crates.io Account)
+  // 2. Cargo.toml vollständig ausfüllen (name, version, description, license)
+  // 3. cargo publish
+  // 4. Neue Version → version in Cargo.toml erhöhen → cargo publish
+
+  // Semantic Versioning:
+  // 1.0.0 → major (breaking changes), minor (neue Features), patch (bugfixes)
+  // ^1.0  → kompatibel mit 1.x.y (nicht 2.0.0)
+  // ~1.2  → kompatibel mit 1.2.x (nicht 1.3.0)
+  // =1.2.3 → exakt diese Version
+
+------------------------------------------------------------------------
+24.6  Code-Qualität: Clippy und Rustfmt
+------------------------------------------------------------------------
+
+  // Rustfmt — automatische Code-Formatierung:
+  cargo fmt           // formatiert alles
+  cargo fmt --check   // prüft nur (für CI/CD)
+
+  // rustfmt.toml:
+  max_width = 100
+  tab_spaces = 4
+  edition = "2021"
+
+  // Clippy — Lint-Tool mit Hunderten von Hinweisen:
+  cargo clippy
+  cargo clippy -- -D warnings   // Warnings als Fehler (für CI/CD)
+
+  // Clippy-Warnungen erlauben/verbieten:
+  #[allow(clippy::needless_pass_by_value)]
+  fn f(s: String) { }
+
+  #[warn(clippy::all)]
+  #[deny(clippy::unwrap_used)]    // nie unwrap() benutzen!
+
+--------------------------------------------------------------------------------
+ÜBUNG 23:
+1. Schreibe vollständige Tests für deine Implementierungen aus Übung 9
+   (Kreis und Konto Structs). Teste:
+   - Normale Fälle
+   - Grenzfälle (Radius = 0, Konto überziehen)
+   - should_panic Fälle
+
+2. Füge vollständige Dokumentation zu deiner Statistik-Funktion aus Übung 5 hinzu.
+   Führe cargo doc --open aus und schau dir das Ergebnis an.
+
+3. Schreibe einen einfachen Benchmark der vergleicht:
+   - Summe mit einer for-Schleife
+   - Summe mit Iterator .sum()
+   - Summe mit rayon par_iter().sum()
+   Welches ist am schnellsten?
+--------------------------------------------------------------------------------
+
+================================================================================
+SCHNELLREFERENZ — Rust Komplettkurs
+================================================================================
+
+TYPEN:
+  i8 i16 i32 i64 i128 isize    vorzeichenbehaftete Integer
+  u8 u16 u32 u64 u128 usize    vorzeichenlose Integer
+  f32 f64                       Fließkomma
+  bool                          true / false
+  char                          Unicode-Skalarwert ('A', '🦀')
+  ()                            Unit-Typ (leeres Tupel)
+  &str                          String-Slice (Verweis, unveränderlich)
+  String                        Owned String (veränderlich, Heap)
+  &[T] / [T; N]                 Slice / Array
+  Vec<T>                        Dynamischer Array
+  HashMap<K,V>                  Hash-Map
+  Option<T>                     Some(T) | None
+  Result<T,E>                   Ok(T) | Err(E)
+
+VARIABLEN:
+  let x = 5;                    immutable (Standard!)
+  let mut x = 5;                mutable
+  const MAX: u32 = 100;         Konstante (immer unveränderlich)
+  let x = x + 1;                Shadowing
+
+OWNERSHIP:
+  let s2 = s1;                  Move (s1 ungültig danach)
+  let s2 = s1.clone();          Tiefe Kopie
+  let r = &s;                   Immutable Referenz (Borrow)
+  let r = &mut s;                Mutable Referenz (nur eine gleichzeitig!)
+  Regel: beliebig viele & ODER genau eine &mut, nie beides!
+
+KONTROLLFLUSS:
+  if cond { } else if { } else { }
+  loop { break wert; }          Endlosschleife mit optionalem Rückgabewert
+  while cond { }
+  for item in collection { }
+  for i in 0..10 { }            Exklusiv
+  for i in 0..=10 { }           Inklusiv
+  match wert { pattern => ausdruck, _ => ... }
+
+FUNKTIONEN:
+  fn name(param: Typ) -> Rückgabe { ... }
+  fn name(param: impl Trait) -> impl Trait { ... }
+  fn name<T: Trait>(param: T) -> T { ... }
+  letzter_ausdruck_ohne_semikolon  // ist Rückgabewert
+
+STRUCTS:
+  struct Name { feld: Typ }
+  let s = Name { feld: wert };
+  s.feld
+  impl Name { fn methode(&self) -> Rückgabe { } }
+  #[derive(Debug, Clone, PartialEq)]
+
+ENUMS:
+  enum Name { Variant, Variant(Typ), Variant { feld: Typ } }
+  match name { Name::Variant => ... }
+  Option<T>: Some(T), None
+  Result<T,E>: Ok(T), Err(E)
+
+FEHLER:
+  fn f() -> Result<T, E> { ... }
+  let x = riskant()?;           Fehler propagieren (? Operator)
+  .unwrap()                     Panic bei Fehler
+  .expect("Meldung")            Panic mit Meldung
+  .unwrap_or(default)           Fallback
+  .map(|x| ...)                 Transformieren wenn Ok/Some
+
+TRAITS:
+  trait Name { fn methode(&self) -> Typ; }
+  impl Name for MeinTyp { fn methode(&self) -> Typ { } }
+  Box<dyn Trait>                Trait-Objekt (dynamischer Dispatch)
+  impl Trait / T: Trait         Statischer Dispatch
+
+ITERATOREN:
+  iter()            Borgt als &T
+  iter_mut()        Borgt als &mut T
+  into_iter()       Konsumiert als T
+  .map(|x| ...)    .filter(|x| ...).collect::<Vec<_>>()
+  .sum() .count() .any() .all() .find() .fold() .flatten()
+
+SMART POINTERS:
+  Box<T>            Heap-Allokation
+  Rc<T>             Ref-Counting (single-thread)
+  Arc<T>            Atomic Ref-Counting (multi-thread)
+  RefCell<T>        Interior Mutability (Laufzeit-Borrow-Check)
+  Mutex<T>          Thread-sicherer Mutex
+
+CONCURRENCY:
+  thread::spawn(|| { })
+  Arc::clone(&arc)
+  Mutex::lock().unwrap()
+  mpsc::channel() → (sender, receiver)
+  sender.send(wert)
+  receiver.recv() / for val in receiver { }
+
+ASYNC:
+  async fn name() -> T { ... }
+  name().await
+  tokio::join!(a(), b(), c())
+  tokio::spawn(async { })
+  #[tokio::main] async fn main() { }
+
+CARGO:
+  cargo new / cargo init
+  cargo build / cargo build --release
+  cargo run / cargo run -- args
+  cargo test / cargo test name
+  cargo check
+  cargo fmt / cargo clippy
+  cargo add crate / cargo remove crate
+  cargo doc --open
+
+MODULE:
+  mod name { }                  Inline-Modul
+  mod name;                     Externes Modul (name.rs oder name/mod.rs)
+  pub                           Öffentlich
+  use crate::modul::Name;
+  use super::Name;
+  use std::collections::{HashMap, HashSet};
+
+MAKROS (wichtigste):
+  println!("{} {:?} {:#?}")
+  format!(...) → String
+  vec![1, 2, 3]
+  panic!("Meldung")
+  assert_eq!(a, b)
+  dbg!(ausdruck)
+  todo!() / unimplemented!()
+  include_str!("datei")
+  env!("VAR")
+
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN
+================================================================================
+
+Das offizielle Rust-Buch (kostenlos online):
+  https://doc.rust-lang.org/book/
+
+Rust by Example (interaktive Beispiele):
+  https://doc.rust-lang.org/rust-by-example/
+
+Rustlings (kleine Übungsaufgaben):
+  https://github.com/rust-lang/rustlings
+  cargo install rustlings && rustlings watch
+
+Rust-Playground (im Browser ausprobieren):
+  https://play.rust-lang.org/
+
+Standardbibliothek-Dokumentation:
+  https://doc.rust-lang.org/std/
+
+The Rustonomicon (Unsafe Rust):
+  https://doc.rust-lang.org/nomicon/
+
+Async Rust:
+  https://rust-lang.github.io/async-book/
+
+Crates.io (Paket-Registry):
+  https://crates.io/
+
+Awesome Rust (kuratierte Liste):
+  https://github.com/rust-unofficial/awesome-rust
+
+Wichtige Crates die du kennen solltest:
+  serde / serde_json   → Serialisierung (JSON, TOML, etc.)
+  tokio                → Async Runtime
+  reqwest              → HTTP-Client
+  clap                 → Kommandozeilen-Argumente
+  anyhow / thiserror   → Fehlerbehandlung
+  rayon                → Datenparallelität
+  log / tracing        → Logging
+  rand                 → Zufallszahlen
+  chrono               → Datum und Zeit
+  regex                → Reguläre Ausdrücke
+  itertools            → Erweiterte Iterator-Methoden
+  crossbeam            → Fortgeschrittene Concurrency
+  criterion            → Benchmarks
+  proptest             → Property-Based Testing
+
+
+================================================================================
+Ende des Rust-Komplettkurses
+================================================================================
+
+Glückwunsch! Du hast jetzt das gesamte Fundament von Rust kennen gelernt —
+von einfachen Variablen und Typen über das einzigartige Ownership-System,
+Traits und Generics bis hin zu Concurrency, Async/Await, Unsafe und Makros.
+
+Rust ist eine Sprache, die man am besten durch Schreiben lernt.
+Die Fehlermeldungen des Compilers sind dein bester Lehrmeister —
+lese sie genau, sie erklären das Problem oft besser als jedes Tutorial.
+
+Nächste Schritte:
+  1. Rustlings-Übungen (https://github.com/rust-lang/rustlings)
+  2. Ein echtes Projekt starten: CLI-Tool, kleiner Webserver, Game
+  3. Versuche eine C-Bibliothek via FFI einzubinden
+  4. Implementiere etwas in Async mit Tokio
+  5. Publiziere deine erste Crate auf crates.io
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

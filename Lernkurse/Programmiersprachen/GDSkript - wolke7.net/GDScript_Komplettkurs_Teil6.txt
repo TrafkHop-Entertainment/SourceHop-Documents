@@ -1,0 +1,885 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 6 von 9)
+================================================================================
+
+Voraussetzung: Teil 5 abgeschlossen. Du weißt wie ENet-Verbindungen
+aufgebaut werden, wie RPCs funktionieren und was Server Authority bedeutet.
+
+In diesem Teil gehen wir tiefer: ein echter dedizierter Server (ohne
+Grafik, läuft auf Linux-VPS), Anti-Cheat-Grundlagen, Steam-Integration
+für P2P, und die Grundlagen von Lag Compensation für Shooter.
+
+
+################################################################################
+TEIL 6 — ADVANCED MULTIPLAYER
+################################################################################
+
+
+================================================================================
+MODUL 25: Dedizierter Server — headless auf einem VPS
+================================================================================
+
+------------------------------------------------------------------------
+25.1  Was ein dedizierter Server ist und wann du ihn brauchst
+------------------------------------------------------------------------
+
+Ein Listen-Server (Teil 5) läuft auf dem Rechner eines Spielers — der
+spielt selbst mit. Ein dedizierter Server läuft auf einem eigenen Rechner,
+niemand spielt darauf, er hat keine Grafik und kein Fenster.
+
+Du brauchst einen dedizierten Server wenn:
+  - Du competitive Spiele machst (Host-Advantage ist unfair)
+  - Dein Spiel 24/7 laufen soll (Spieler können kommen und gehen)
+  - Du mehr als ~8 Spieler hast (Listen-Server hat Bandbreiten-Limit)
+  - Du Persistenz willst (Welt bleibt bestehen wenn Spieler gehen — MMO)
+
+Kosten: Ein VPS mit 2 CPU-Kernen und 2 GB RAM reicht für ~32 gleichzeitige
+Spieler. Kosten: ~5-10€/Monat (Hetzner, DigitalOcean, etc.).
+
+------------------------------------------------------------------------
+25.2  Headless-Export und Server-Modus
+------------------------------------------------------------------------
+
+Godot kann headless exportiert werden — ohne Fenster, ohne Renderer.
+Das spart Ressourcen und ist für Server perfekt.
+
+Beim Export:
+  Export → Linux → "Export With Debug" → Haken bei "Headless" (--headless)
+  Oder beim Starten: ./mein_spiel.x86_64 --headless
+
+In GDScript erkennen ob wir im Server-Modus laufen:
+  func _ready() -> void:
+      if DisplayServer.get_name() == "headless":
+          print("Server-Modus aktiv")
+          server_initialisieren()
+      else:
+          client_initialisieren()
+
+Oder über ein Kommandozeilen-Argument:
+  func _ready() -> void:
+      if "--server" in OS.get_cmdline_args():
+          server_modus()
+      elif "--client" in OS.get_cmdline_args():
+          client_modus()
+      else:
+          # Im Editor: beides zeigen
+          hauptmenu_zeigen()
+
+Das ist wichtig: Dein Spiel ist eine einzige Binary die je nach Argument
+entweder als Server oder als Client startet. Du exportierst EINMAL,
+deployst die Binary auf den VPS und rufst sie mit --server auf.
+
+------------------------------------------------------------------------
+25.3  Server-Hauptschleife ohne Szenen
+------------------------------------------------------------------------
+
+Ein headless Server braucht keine Szenen oder Grafik. Er kann direkt
+über SceneTree-Nodes laufen, aber du kannst auch alles über reine
+GDScript-Nodes ohne visuellen Overhead machen:
+
+  # ServerMain.gd — das Wurzel-Skript des Servers
+  extends Node
+
+  const PORT: int = 7777
+  const TICK_RATE: int = 20   # 20 Hz Physik-Updates (spart CPU)
+
+  var verbundene_spieler: Dictionary = {}
+  var spiel_laeuft: bool = false
+  var welt_state: Dictionary = {}
+
+  func _ready() -> void:
+      if not "--server" in OS.get_cmdline_args():
+          return
+
+      # Tick-Rate reduzieren (Server braucht keine 60 FPS):
+      Engine.physics_ticks_per_second = TICK_RATE
+      Engine.max_fps = TICK_RATE
+
+      var peer := ENetMultiplayerPeer.new()
+      var fehler := peer.create_server(PORT, 32)
+      if fehler != OK:
+          push_error("Server-Start fehlgeschlagen!")
+          get_tree().quit()
+          return
+
+      multiplayer.multiplayer_peer = peer
+      multiplayer.peer_connected.connect(_on_spieler_beitritt)
+      multiplayer.peer_disconnected.connect(_on_spieler_verlassen)
+
+      print("[SERVER] Gestartet auf Port ", PORT, " | ", Time.get_datetime_string_from_system())
+
+      # Heartbeat-Timer für Status-Ausgabe:
+      var heartbeat := Timer.new()
+      heartbeat.wait_time = 30.0
+      heartbeat.timeout.connect(status_ausgeben)
+      heartbeat.autostart = true
+      add_child(heartbeat)
+
+  func _on_spieler_beitritt(id: int) -> void:
+      verbundene_spieler[id] = {
+          "id": id,
+          "name": "Spieler_%d" % id,
+          "beigetreten": Time.get_unix_time_from_system(),
+          "position": Vector3.ZERO,
+          "hp": 100
+      }
+      print("[SERVER] Spieler %d verbunden. Gesamt: %d" % [id, verbundene_spieler.size()])
+      # Neuen Spieler willkommen heißen:
+      rpc_id(id, "server_willkommen", id, welt_state)
+
+  func _on_spieler_verlassen(id: int) -> void:
+      var name: String = verbundene_spieler.get(id, {}).get("name", "?")
+      verbundene_spieler.erase(id)
+      print("[SERVER] %s (%d) getrennt. Gesamt: %d" % [name, id, verbundene_spieler.size()])
+      # Alle anderen informieren:
+      rpc("spieler_verlassen_broadcast", id)
+
+  func status_ausgeben() -> void:
+      print("[SERVER] %d Spieler verbunden | Uptime: %d Sek." % [
+          verbundene_spieler.size(),
+          Time.get_ticks_msec() / 1000
+      ])
+
+------------------------------------------------------------------------
+25.4  Server-Konfiguration aus Datei
+------------------------------------------------------------------------
+
+  # config/server.cfg — ini-ähnliches Format, Godot kann das lesen
+  [server]
+  port=7777
+  max_players=32
+  tick_rate=20
+  map=level_1
+  password=
+
+  [gameplay]
+  round_time=300
+  friendly_fire=false
+  respawn_time=5
+
+  # In GDScript lesen:
+  func server_config_laden() -> void:
+      var config := ConfigFile.new()
+      var err := config.load("res://config/server.cfg")
+      if err != OK:
+          push_warning("Keine server.cfg gefunden, nutze Defaults")
+          return
+
+      PORT = config.get_value("server", "port", 7777)
+      MAX_SPIELER = config.get_value("server", "max_players", 32)
+      TICK_RATE = config.get_value("server", "tick_rate", 20)
+      print("[SERVER] Config geladen: Port %d, Max %d, Tick %d Hz" % [PORT, MAX_SPIELER, TICK_RATE])
+
+  # Kommandozeilen-Overrides (nützlich für mehrere Server-Instanzen):
+  func cmdline_args_verarbeiten() -> void:
+      var args := OS.get_cmdline_args()
+      for i in range(args.size()):
+          match args[i]:
+              "--port":
+                  if i + 1 < args.size():
+                      PORT = int(args[i + 1])
+              "--maxplayers":
+                  if i + 1 < args.size():
+                      MAX_SPIELER = int(args[i + 1])
+              "--map":
+                  if i + 1 < args.size():
+                      start_karte = args[i + 1]
+
+  # Auf VPS: mehrere Instanzen für verschiedene Lobbys:
+  # ./spiel --server --port 7777 --map level_1
+  # ./spiel --server --port 7778 --map level_2
+
+------------------------------------------------------------------------
+25.5  Server auf Linux VPS deployen
+------------------------------------------------------------------------
+
+Schritt für Schritt:
+
+  1. In Godot exportieren:
+     Export → Hinzufügen → Linux → "Linux Server" Template wählen
+     Dateiname: mein_spiel_server.x86_64
+     Export!
+
+  2. Auf VPS hochladen:
+     scp mein_spiel_server.x86_64 user@mein-vps.de:/home/user/server/
+
+  3. Ausführbar machen und starten:
+     ssh user@mein-vps.de
+     chmod +x /home/user/server/mein_spiel_server.x86_64
+     /home/user/server/mein_spiel_server.x86_64 --server
+
+  4. Als Service einrichten (läuft nach Reboot weiter):
+     # /etc/systemd/system/mein-spiel.service
+     [Unit]
+     Description=Mein Spiel Server
+     After=network.target
+
+     [Service]
+     Type=simple
+     User=gameserver
+     WorkingDirectory=/home/gameserver/server
+     ExecStart=/home/gameserver/server/mein_spiel_server.x86_64 --server
+     Restart=always
+     RestartSec=5
+
+     [Install]
+     WantedBy=multi-user.target
+
+     # Aktivieren:
+     systemctl enable mein-spiel
+     systemctl start mein-spiel
+     journalctl -u mein-spiel -f   # Logs live lesen
+
+  5. Firewall öffnen:
+     ufw allow 7777/udp   # ENet nutzt UDP!
+
+------------------------------------------------------------------------
+25.6  Server-Browser — Spieler finden sich
+------------------------------------------------------------------------
+
+Für einen eigenen Server-Browser brauchst du einen "Master Server"
+der weiß welche Spiel-Server gerade laufen.
+
+Einfachste Variante: REST-API mit einem kleinen HTTP-Server (Python Flask
+oder Node.js) auf deinem VPS:
+
+  # Auf dem Spiel-Server: beim Start beim Master registrieren
+  func beim_master_registrieren() -> void:
+      var http := HTTPRequest.new()
+      add_child(http)
+      var daten := JSON.stringify({
+          "ip": eigene_ip_holen(),
+          "port": PORT,
+          "map": aktuelle_karte,
+          "spieler": verbundene_spieler.size(),
+          "max": MAX_SPIELER,
+          "name": "Epischer Server"
+      })
+      http.request("https://mein-master.de/api/register",
+          ["Content-Type: application/json"],
+          HTTPClient.METHOD_POST,
+          daten)
+
+  # Vom Client: Server-Liste holen
+  func server_liste_laden() -> void:
+      var http := HTTPRequest.new()
+      add_child(http)
+      http.request_completed.connect(_on_serverliste_empfangen)
+      http.request("https://mein-master.de/api/servers")
+
+  func _on_serverliste_empfangen(_result, _code, _headers, body: PackedByteArray) -> void:
+      var server_liste: Array = JSON.parse_string(body.get_string_from_utf8())
+      for server in server_liste:
+          server_browser_ui.eintrag_hinzufuegen(server)
+
+--------------------------------------------------------------------------------
+ÜBUNG 25:
+1. Exportiere dein Multiplayer-Spiel als headless Linux-Server.
+   Starte es mit --server und beobachte die Konsole.
+2. Implementiere server_config_laden() mit ConfigFile und mindestens
+   3 konfigurierbaren Werten (Port, MaxPlayers, Map).
+3. Baue einen Heartbeat-Timer: Server gibt alle 30 Sek. Status aus
+   (Spieleranzahl, Uptime, durchschnittliche Latenz der Spieler).
+4. Implementiere --port als Kommandozeilen-Argument.
+   Starte zwei Server-Instanzen auf Port 7777 und 7778.
+5. Bonus: Implementiere einen einfachen Server-Browser in der Client-UI
+   (statische JSON-Datei als "Master Server" reicht für den Test).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 26: Lag Compensation — faire Shooter
+================================================================================
+
+Lag Compensation ist der Grund warum du in einem FPS Spieler treffen kannst
+die sich "hinter einer Ecke" befinden — der Server spult zurück.
+
+------------------------------------------------------------------------
+26.1  Das Problem ohne Lag Compensation
+------------------------------------------------------------------------
+
+Ohne Lag Compensation:
+  - Spieler A (100ms Latenz) zielt auf Spieler B und drückt Feuer
+  - Schuss-Request kommt 50ms später beim Server an
+  - In diesen 50ms hat Spieler B sich 30 Pixel bewegt
+  - Server macht Raycast mit aktuellen Positionen → verfehlt!
+  - Spieler A: "Ich hab eindeutig getroffen!!" (hatte er auch — zu seiner Zeit)
+
+Mit Lag Compensation:
+  - Server empfängt Schuss-Request mit Zeitstempel "von vor 50ms"
+  - Server spult alle Spieler-Positionen 50ms zurück
+  - Macht Raycast → trifft!
+  - Spult zurück zur Gegenwart
+
+------------------------------------------------------------------------
+26.2  State-Buffer — Vergangenheit aufzeichnen
+------------------------------------------------------------------------
+
+Der Server muss eine kurze Vergangenheit aller Spieler-Positionen speichern:
+
+  # Auf dem Server:
+  const BUFFER_GROESSE: int = 32   # ~0.5 Sek. bei 60Hz, ~1.6 Sek. bei 20Hz
+
+  # Pro Spieler: Ring-Buffer der letzten Positionen
+  var state_buffer: Dictionary = {}
+  # Format: {peer_id: [{"frame": int, "position": Vector3, "rotation": float}, ...]}
+
+  func _physics_process(delta: float) -> void:
+      if not multiplayer.is_server():
+          return
+      var frame := Engine.get_physics_frames()
+
+      # Aktuellen State aller Spieler aufzeichnen:
+      for peer_id in verbundene_spieler:
+          var spieler: Node3D = spieler_nodes.get(peer_id)
+          if not spieler:
+              continue
+
+          if not state_buffer.has(peer_id):
+              state_buffer[peer_id] = []
+
+          state_buffer[peer_id].append({
+              "frame": frame,
+              "zeit": Time.get_ticks_msec(),
+              "position": spieler.global_position,
+              "hitbox_transform": spieler.get_node("Hitbox").global_transform
+          })
+
+          # Buffer begrenzen (Ring-Buffer-Verhalten):
+          if state_buffer[peer_id].size() > BUFFER_GROESSE:
+              state_buffer[peer_id].pop_front()
+
+------------------------------------------------------------------------
+26.3  Zurückspulen und Raycast
+------------------------------------------------------------------------
+
+  @rpc("any_peer", "unreliable")
+  func schuss_request(schuss_zeit_ms: int, ursprung: Vector3, richtung: Vector3) -> void:
+      if not multiplayer.is_server():
+          return
+
+      var shooter_id := multiplayer.get_remote_sender_id()
+      var aktuelle_zeit_ms := Time.get_ticks_msec()
+      var latenz := aktuelle_zeit_ms - schuss_zeit_ms   # Wie alt ist der Request?
+
+      # Sicherheits-Check: Latenz darf nicht unrealistisch groß sein
+      if latenz > 500 or latenz < 0:
+          return   # Möglicher Cheat oder Verbindungsproblem
+
+      # Positionen aller Spieler zur Schuss-Zeit wiederherstellen:
+      var original_positionen: Dictionary = {}
+      for peer_id in spieler_nodes:
+          if peer_id == shooter_id:
+              continue   # Eigene Position nicht zurückspulen
+
+          var spieler: Node3D = spieler_nodes[peer_id]
+          original_positionen[peer_id] = spieler.global_position
+
+          # Ältesten State finden der zeitlich passt:
+          var historischer_state := state_in_der_vergangenheit_finden(peer_id, schuss_zeit_ms)
+          if historischer_state:
+              spieler.global_position = historischer_state["position"]
+
+      # Raycast mit zurückgespulten Positionen:
+      var space := get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(
+          ursprung,
+          ursprung + richtung * 200.0
+      )
+      var schütze: Node = spieler_nodes.get(shooter_id)
+      if schütze:
+          query.exclude = [schütze]
+
+      var treffer := space.intersect_ray(query)
+
+      # Positionen zurücksetzen BEVOR wir auf den Treffer reagieren:
+      for peer_id in original_positionen:
+          spieler_nodes[peer_id].global_position = original_positionen[peer_id]
+
+      # Treffer auswerten:
+      if treffer and treffer["collider"].has_method("schaden_nehmen"):
+          treffer["collider"].schaden_nehmen(25, shooter_id)
+          rpc_id(shooter_id, "schuss_bestaetigt", treffer["position"])
+
+  func state_in_der_vergangenheit_finden(peer_id: int, ziel_zeit_ms: int) -> Dictionary:
+      if not state_buffer.has(peer_id):
+          return {}
+      var buffer: Array = state_buffer[peer_id]
+      # Nächsten State zur Zielzeit finden:
+      for i in range(buffer.size() - 1, -1, -1):
+          if buffer[i]["zeit"] <= ziel_zeit_ms:
+              return buffer[i]
+      return buffer[0] if buffer.size() > 0 else {}
+
+------------------------------------------------------------------------
+26.4  Client-seitige Schuss-Abgabe mit Zeitstempel
+------------------------------------------------------------------------
+
+  func _unhandled_input(event: InputEvent) -> void:
+      if event.is_action_just_pressed("attack"):
+          var schuss_zeit := Time.get_ticks_msec()
+          var kamera := get_viewport().get_camera_3d()
+          var ursprung := kamera.global_position
+          var richtung := -kamera.global_transform.basis.z
+
+          # Lokal sofort Mündungsblitz zeigen (Client Prediction):
+          muendungsblitz_zeigen()
+
+          # Server informieren:
+          rpc_id(1, "schuss_request", schuss_zeit, ursprung, richtung)
+
+  @rpc("authority", "unreliable")
+  func schuss_bestaetigt(treffer_pos: Vector3) -> void:
+      # Server hat Treffer bestätigt → Treffer-Effekt zeigen:
+      treffer_partikel_spawnen(treffer_pos)
+
+------------------------------------------------------------------------
+26.5  Anti-Cheat Grundlagen
+------------------------------------------------------------------------
+
+Vollständiges Anti-Cheat ist ein eigenes Fachgebiet. Für Indie-Spiele
+reichen diese Grundsätze:
+
+NIEMALS client-seitigen Aussagen vertrauen für:
+  ✗ "Ich hab getroffen" (Server macht immer eigenen Raycast)
+  ✗ "Ich hab 1000 Münzen" (Server verwaltet Münzen, Client fragt ab)
+  ✗ "Ich bin an Position X" ohne Plausibilitätsprüfung
+  ✗ "Ich habe Waffe Y" (Server prüft ob Spieler sie hat)
+
+Speed-Hack-Erkennung:
+  func spieler_position_pruefen(peer_id: int, neue_position: Vector3) -> bool:
+      var letzter_state := letzte_bestaetigte_position.get(peer_id)
+      if not letzter_state:
+          return true
+
+      var verstrichene_zeit: float = (Time.get_ticks_msec() - letzter_state["zeit"]) / 1000.0
+      var max_distanz: float = MAX_SPEED * verstrichene_zeit * 1.3  # 30% Toleranz
+
+      if neue_position.distance_to(letzter_state["pos"]) > max_distanz:
+          push_warning("[SERVER] Möglicher Speed-Hack: Spieler %d" % peer_id)
+          return false   # Position ablehnen
+
+      letzte_bestaetigte_position[peer_id] = {"pos": neue_position, "zeit": Time.get_ticks_msec()}
+      return true
+
+Kick-System:
+  func spieler_warnen(peer_id: int, grund: String) -> void:
+      warnungen[peer_id] = warnungen.get(peer_id, 0) + 1
+      print("[ANTI-CHEAT] Spieler %d: %s (Warnung %d)" % [peer_id, grund, warnungen[peer_id]])
+      if warnungen[peer_id] >= 3:
+          spieler_kicken(peer_id, "Verdächtiges Verhalten")
+
+  func spieler_kicken(peer_id: int, grund: String) -> void:
+      rpc_id(peer_id, "gekickt_werden", grund)
+      await get_tree().create_timer(0.5).timeout
+      multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+
+  @rpc("authority", "reliable")
+  func gekickt_werden(grund: String) -> void:
+      $KickPopup.text = "Du wurdest gekickt: " + grund
+      $KickPopup.visible = true
+      await get_tree().create_timer(3.0).timeout
+      get_tree().change_scene_to_file("res://scenes/Hauptmenu.tscn")
+
+--------------------------------------------------------------------------------
+ÜBUNG 26:
+1. Implementiere einen State-Buffer (Ring-Buffer, Größe 32) der jedes
+   Physik-Frame alle Spieler-Positionen aufzeichnet.
+2. Schreibe state_in_der_vergangenheit_finden() und teste es mit einem
+   Zeitstempel der 200ms in der Vergangenheit liegt.
+3. Implementiere server-seitige Speed-Hack-Erkennung mit 30% Toleranz.
+4. Baue ein Warn/Kick-System: 3 Warnungen → Kick mit Nachricht.
+5. Bonus: Implementiere vollständige Lag Compensation für einen
+   Raycast-Schuss. Teste mit zwei Clients: Spieler sollte treffen auch
+   wenn er mit 150ms Latenz spielt.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 27: Steam-Integration und P2P
+================================================================================
+
+Steam ist für viele Indie-Entwickler die primäre Plattform. Steam bietet
+eigene Netzwerk-Services: P2P über Steam Relay (keine offenen Ports nötig!),
+Matchmaking, Lobbys, Achievements.
+
+------------------------------------------------------------------------
+27.1  GodotSteam einrichten
+------------------------------------------------------------------------
+
+GodotSteam ist das Standard-Addon für Godot 4 Steam-Integration.
+Es ist ein GDExtension das die Steamworks SDK einbindet.
+
+Download: https://godotsteam.com
+
+Einrichten:
+  1. GodotSteam-Binary von godotsteam.com herunterladen
+     (passend zur Godot-Version — wichtig: muss exakt stimmen)
+  2. Entpacken in dein Projekt
+  3. steam_appid.txt erstellen mit deiner App-ID (480 = Spacewar zum Testen)
+  4. Steam muss im Hintergrund laufen!
+
+  # In _ready() des Autoloads:
+  func _ready() -> void:
+      if not Steam.steamInitEx():
+          push_error("Steam konnte nicht initialisiert werden!")
+          return
+      print("Steam initialisiert. AppID: ", Steam.getAppID())
+      print("Spieler: ", Steam.getPersonaName())
+
+------------------------------------------------------------------------
+27.2  Steam-Lobbys
+------------------------------------------------------------------------
+
+  # LobbyManager mit Steam
+  extends Node
+
+  var lobby_id: int = 0
+  var lobby_mitglieder: Array = []
+
+  func _ready() -> void:
+      Steam.lobby_created.connect(_on_lobby_erstellt)
+      Steam.lobby_joined.connect(_on_lobby_beigetreten)
+      Steam.lobby_match_list.connect(_on_lobbyliste_empfangen)
+
+  func lobby_erstellen(max_spieler: int = 4) -> void:
+      Steam.createLobby(Steam.LOBBY_TYPE_PUBLIC, max_spieler)
+
+  func _on_lobby_erstellt(result: int, neue_lobby_id: int) -> void:
+      if result == Steam.RESULT_OK:
+          lobby_id = neue_lobby_id
+          Steam.setLobbyData(lobby_id, "name", "Meine coole Lobby")
+          Steam.setLobbyData(lobby_id, "map", "level_1")
+          Steam.setLobbyData(lobby_id, "version", "1.0")
+          print("Lobby erstellt: ", lobby_id)
+
+  func lobby_suchen() -> void:
+      Steam.addRequestLobbyListStringFilter("version", "1.0", Steam.LOBBY_COMPARISON_EQUAL)
+      Steam.addRequestLobbyListNumericalFilter("spieler", 1, Steam.LOBBY_COMPARISON_GREATER_THAN)
+      Steam.requestLobbyList()
+
+  func _on_lobbyliste_empfangen(anzahl: int, lobbies: Array, lobbies_dict: Array) -> void:
+      for lobby_info in lobbies_dict:
+          var name: String = Steam.getLobbyData(lobby_info["lobby_id"], "name")
+          var mitglieder: int = Steam.getNumLobbyMembers(lobby_info["lobby_id"])
+          var max_m: int = Steam.getLobbyMemberLimit(lobby_info["lobby_id"])
+          lobby_browser_ui.eintrag_hinzufuegen(lobby_info["lobby_id"], name, mitglieder, max_m)
+
+  func lobby_beitreten(ziel_lobby_id: int) -> void:
+      Steam.joinLobby(ziel_lobby_id)
+
+  func _on_lobby_beigetreten(joined_lobby_id: int, permissions: int, locked: bool, response: int) -> void:
+      if response == Steam.CHAT_ROOM_ENTER_RESPONSE_SUCCESS:
+          lobby_id = joined_lobby_id
+          steam_p2p_verbinden()
+
+------------------------------------------------------------------------
+27.3  Steam P2P — Verbindung ohne offene Ports
+------------------------------------------------------------------------
+
+Steam Relay leitet den Traffic durch Steams Server — keine Portweiterleitung,
+keine NAT-Probleme. Perfekt für Indie-Spiele.
+
+  # Steam P2P als Godot Multiplayer Peer nutzen:
+  func steam_p2p_verbinden() -> void:
+      var steam_peer := SteamMultiplayerPeer.new()
+      # Lobby-Owner ist der Host:
+      var owner_id: int = Steam.getLobbyOwner(lobby_id)
+      if Steam.getSteamID() == owner_id:
+          # Ich bin Host:
+          steam_peer.create_host(0)   # 0 = virtueller Kanal
+      else:
+          # Ich bin Client:
+          steam_peer.create_client(owner_id, 0)
+
+      multiplayer.multiplayer_peer = steam_peer
+      print("Steam P2P Verbindung hergestellt!")
+
+      # Ab hier: genauso wie ENet (RPCs, MultiplayerSpawner, etc.)
+      multiplayer.peer_connected.connect(_on_spieler_verbunden)
+
+------------------------------------------------------------------------
+27.4  Steam Achievements und Stats
+------------------------------------------------------------------------
+
+  # Achievement freischalten:
+  func achievement_freischalten(achievement_id: String) -> void:
+      Steam.setAchievement(achievement_id)
+      Steam.storeStats()
+      print("Achievement freigeschaltet: ", achievement_id)
+      achievement_popup_zeigen(achievement_id)
+
+  # Stats aufzeichnen (für Leaderboards):
+  func kills_erhöhen() -> void:
+      var aktuelle_kills: int = Steam.getStatInt("total_kills")
+      Steam.setStatInt("total_kills", aktuelle_kills + 1)
+      Steam.storeStats()
+
+  # Leaderboard-Eintrag:
+  func score_auf_leaderboard_eintragen(score: int) -> void:
+      Steam.findLeaderboard("highscores")
+      await Steam.leaderboard_find_result
+      Steam.uploadLeaderboardScore(score)
+
+  # In _ready() die Stats initialisieren:
+  func _ready() -> void:
+      Steam.requestCurrentStats()
+
+------------------------------------------------------------------------
+27.5  Spieler-Inventar mit Steam (DLC, Items)
+------------------------------------------------------------------------
+
+  # Steam Inventory für In-Game-Items (Free-to-Play Modell):
+  func item_generieren_request() -> void:
+      Steam.addPromoItem(itemdef_id)   # Reward-Item für Spielzeit etc.
+
+  func inventar_laden() -> void:
+      Steam.getAllItems()
+      await Steam.inventory_result_ready
+      var result: Array = Steam.getResultItems(Steam.getInventoryResult())
+      for item in result:
+          print("Item: ", item["item_id"], " Menge: ", item["quantity"])
+
+--------------------------------------------------------------------------------
+ÜBUNG 27:
+1. Installiere GodotSteam und initialisiere Steam in deinem Projekt.
+   Gib Spieler-Namen und AppID aus.
+2. Implementiere Lobby-Erstellen + Beitreten mit Steam-Lobbys.
+3. Nutze SteamMultiplayerPeer: Verbinde Host und Client über Steam P2P
+   (kein ENet mehr nötig). Teste mit derselben Lobby.
+4. Schalte ein Achievement frei wenn der Spieler zum ersten Mal stirbt.
+5. Bonus: Implementiere einen einfachen Lobby-Browser der öffentliche
+   Lobbys sucht, anzeigt und den Beitritt ermöglicht.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 28: Matchmaking und erweiterte Netzwerk-Muster
+================================================================================
+
+------------------------------------------------------------------------
+28.1  Einfaches Matchmaking ohne externe Services
+------------------------------------------------------------------------
+
+Matchmaking verbindet Spieler automatisch die zusammen spielen wollen.
+Einfachste Variante: ein HTTP-basierter Warteschlangen-Server.
+
+  # Client: Matchmaking-Request
+  func matchmaking_suchen(spielmodus: String) -> void:
+      var http := HTTPRequest.new()
+      add_child(http)
+      http.request_completed.connect(_on_match_gefunden)
+
+      var daten := JSON.stringify({
+          "spieler_id": Steam.getSteamID() if Steam.isSteamRunning() else str(randi()),
+          "modus": spielmodus,
+          "skill_rating": spieler_rating
+      })
+      http.request("https://mein-matchmaking.de/api/queue",
+          ["Content-Type: application/json"],
+          HTTPClient.METHOD_POST,
+          daten)
+
+      $SuchStatus.text = "Suche Spieler..."
+
+  func _on_match_gefunden(_result, code, _headers, body: PackedByteArray) -> void:
+      if code == 200:
+          var match_daten: Dictionary = JSON.parse_string(body.get_string_from_utf8())
+          var server_ip: String = match_daten["server_ip"]
+          var server_port: int = match_daten["server_port"]
+          NetworkManager.als_client_verbinden(server_ip, server_port)
+      elif code == 202:
+          # Noch in der Queue — nochmal in 2 Sek. nachfragen:
+          await get_tree().create_timer(2.0).timeout
+          matchmaking_status_pruefen()
+
+------------------------------------------------------------------------
+28.2  Snapshot Interpolation — sanfte Bewegung bei Latenz
+------------------------------------------------------------------------
+
+Problem: Server schickt Positionen nur 20x pro Sekunde (um Bandwidth zu sparen).
+Zwischen den Updates ruckelt die Bewegung anderer Spieler.
+
+Lösung: Interpolation zwischen gespeicherten Snapshots.
+
+  extends Node3D   # Fremder Spieler (nicht mein eigener)
+
+  var snapshot_buffer: Array = []   # Array von {zeit: int, pos: Vector3, rot: float}
+  const INTERPOLATION_VERZOEGERUNG: int = 100   # 100ms hinter der Gegenwart
+
+  @rpc("authority", "unreliable")
+  func state_empfangen(server_zeit: int, pos: Vector3, rot: float) -> void:
+      snapshot_buffer.append({"zeit": server_zeit, "pos": pos, "rot": rot})
+      # Buffer bei zu vielen Einträgen bereinigen:
+      while snapshot_buffer.size() > 20:
+          snapshot_buffer.pop_front()
+
+  func _process(delta: float) -> void:
+      if snapshot_buffer.size() < 2:
+          return
+
+      # Zielzeit: 100ms in der Vergangenheit
+      var ziel_zeit: int = Time.get_ticks_msec() - INTERPOLATION_VERZOEGERUNG
+
+      # Zwei Snapshots finden zwischen denen wir interpolieren:
+      var vor_state: Dictionary = {}
+      var nach_state: Dictionary = {}
+
+      for i in range(snapshot_buffer.size() - 1):
+          if snapshot_buffer[i]["zeit"] <= ziel_zeit and snapshot_buffer[i+1]["zeit"] >= ziel_zeit:
+              vor_state = snapshot_buffer[i]
+              nach_state = snapshot_buffer[i+1]
+              break
+
+      if vor_state.is_empty() or nach_state.is_empty():
+          return
+
+      # Interpolations-Faktor:
+      var zeitspanne: float = nach_state["zeit"] - vor_state["zeit"]
+      var t: float = (ziel_zeit - vor_state["zeit"]) / max(zeitspanne, 1.0)
+      t = clamp(t, 0.0, 1.0)
+
+      # Sanft interpolieren:
+      global_position = vor_state["pos"].lerp(nach_state["pos"], t)
+      rotation.y = lerp_angle(vor_state["rot"], nach_state["rot"], t)
+
+------------------------------------------------------------------------
+28.3  Bandbreiten-Optimierung — nur senden was sich ändert
+------------------------------------------------------------------------
+
+  # Delta Compression: Nur veränderte Felder senden
+  var letzter_gesendeter_state: Dictionary = {}
+
+  func state_senden_wenn_geaendert() -> void:
+      var aktueller_state := {
+          "pos": global_position,
+          "rot": rotation.y,
+          "hp": hp,
+          "anim": aktueller_anim_frame
+      }
+
+      # Nur Felder senden die sich geändert haben:
+      var delta: Dictionary = {}
+      for key in aktueller_state:
+          var alter_wert = letzter_gesendeter_state.get(key)
+          var neuer_wert = aktueller_state[key]
+          if alter_wert == null or not ist_annaehernd_gleich(alter_wert, neuer_wert):
+              delta[key] = neuer_wert
+
+      if not delta.is_empty():
+          rpc("state_delta_empfangen", delta)
+          letzter_gesendeter_state = aktueller_state
+
+  func ist_annaehernd_gleich(a: Variant, b: Variant) -> bool:
+      if a is float and b is float:
+          return absf(a - b) < 0.01
+      if a is Vector3 and b is Vector3:
+          return a.distance_squared_to(b) < 0.0001
+      return a == b
+
+  # Sendefrequenz je nach Entfernung vom Beobachter anpassen:
+  func update_sendefrequenz(spieler_pos: Vector3) -> void:
+      var dist := global_position.distance_to(spieler_pos)
+      if dist < 20:
+          sync_rate = 20   # 20 Hz nah
+      elif dist < 50:
+          sync_rate = 10   # 10 Hz mittel
+      else:
+          sync_rate = 5    # 5 Hz weit
+
+------------------------------------------------------------------------
+28.4  Instanzen-Pooling im Multiplayer
+------------------------------------------------------------------------
+
+Wenn viele Projektile oder Effekte gespawnt werden, ist ständiges
+rpc("spawn") / rpc("despawn") teuer. Besser: Object Pooling über Netzwerk.
+
+  # Server verwaltet Pool-IDs:
+  func projektil_spawnen(pos: Vector3, richtung: Vector3) -> void:
+      if not multiplayer.is_server():
+          return
+
+      var pool_id := naechste_freie_pool_id()
+      aktive_projektile[pool_id] = {
+          "pos": pos,
+          "richtung": richtung,
+          "zeit": Time.get_ticks_msec()
+      }
+      # Alle mit der Pool-ID informieren statt spawn/despawn:
+      rpc("projektil_aktivieren", pool_id, pos, richtung)
+
+  @rpc("authority", "unreliable", "call_local")
+  func projektil_aktivieren(pool_id: int, pos: Vector3, richtung: Vector3) -> void:
+      var kugel: Node3D = kugel_pool.holen()
+      kugel.pool_id = pool_id
+      kugel.global_position = pos
+      kugel.richtung = richtung
+      kugel.visible = true
+      aktive_kugeln[pool_id] = kugel
+
+  @rpc("authority", "unreliable", "call_local")
+  func projektil_deaktivieren(pool_id: int) -> void:
+      if aktive_kugeln.has(pool_id):
+          kugel_pool.zurueckgeben(aktive_kugeln[pool_id])
+          aktive_kugeln.erase(pool_id)
+
+--------------------------------------------------------------------------------
+ÜBUNG 28:
+1. Implementiere Snapshot-Interpolation für fremde Spieler.
+   Teste mit einem künstlich eingeführten Delay von 100ms.
+2. Implementiere Delta-Compression: Sende Position nur wenn sie sich
+   um mehr als 0.01 Einheiten geändert hat.
+3. Reduziere Sync-Rate basierend auf Entfernung: nah=20Hz, weit=5Hz.
+4. Baue einen Netzwerk-Debug-Overlay: Bytes gesendet/empfangen pro Sek.,
+   aktuelle Latenz, Paket-Verlust-Rate.
+5. Bonus: Implementiere Projektil-Pooling über Netzwerk (Pool-ID-Konzept).
+   100 gleichzeitige Projektile ohne ruckeln.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 6
+################################################################################
+
+DEDIZIERTER SERVER:
+  DisplayServer.get_name() == "headless"   → Im Server-Modus?
+  "--server" in OS.get_cmdline_args()      → Cmdline-Check
+  Engine.physics_ticks_per_second = 20     → Tick-Rate senken
+  ConfigFile → server.cfg laden
+  systemd-Service für Auto-Restart
+
+LAG COMPENSATION:
+  State-Buffer: Ring-Buffer der letzten 32 Frames pro Spieler speichern
+  Beim Schuss-RPC: Zeitstempel mitschicken
+  Server: Positionen zurückspulen → Raycast → zurücksetzen
+  Sicherheit: Latenz > 500ms → ignorieren
+
+ANTI-CHEAT:
+  Niemals Client-Aussagen zu Schaden/Position vertrauen
+  Server macht eigenen Raycast
+  Speed-Check: distanz > speed * zeit * 1.3 → Warnung
+  3 Warnungen → Kick
+
+STEAM (GodotSteam):
+  Steam.steamInitEx()                    → Initialisieren
+  Steam.createLobby(TYPE_PUBLIC, max)    → Lobby erstellen
+  Steam.requestLobbyList()               → Suchen
+  Steam.joinLobby(id)                    → Beitreten
+  SteamMultiplayerPeer                   → Ersetzt ENetMultiplayerPeer
+  Steam.setAchievement("id")             → Achievement freischalten
+  Steam.storeStats()                     → Stats speichern
+
+INTERPOLATION:
+  100ms Puffer → immer leicht hinter Echtzeit
+  Zwei Snapshots finden → t = (ziel - vor) / (nach - vor)
+  lerp(vor_pos, nach_pos, t)
+
+BANDBREITE:
+  Delta Compression: nur geänderte Felder senden
+  Sendefrequenz nach Entfernung: nah=20Hz, weit=5Hz
+  Projektil-Pool mit IDs statt spawn/despawn-RPCs
+
+================================================================================
+ENDE TEIL 6 — Weiter mit Teil 7: Performance & Multithreading
+  (Profiler, Occlusion, Threads für Voxel-Welten, Chunk-Generierung)
+================================================================================

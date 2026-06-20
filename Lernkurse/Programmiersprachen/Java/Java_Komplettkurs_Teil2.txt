@@ -1,0 +1,1396 @@
+================================================================================
+JAVA KOMPLETTKURS — TEIL 2 von 4
+Klassen · Vererbung · Interfaces · Generics · Enums · Records
+================================================================================
+
+================================================================================
+MODUL 7: Klassen und Objekte — OOP von Grund auf
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Warum Objektorientierung?
+------------------------------------------------------------------------
+
+Stell dir vor, du modellierst ein Bankkonto. Prozedural würdest du
+vielleicht schreiben:
+  double kontostand = 1000.0;
+  String inhaber = "Anna";
+
+  // überall im Code:
+  kontostand += 200.0;  // Einzahlen
+  kontostand -= 50.0;   // Abheben
+
+Probleme: Was wenn du 50 Konten verwaltest? Der Code ist überall verstreut.
+Wer ändert den Kontostand? Du verlierst die Kontrolle.
+
+OOP-Lösung: Bündel Daten (Felder) und Operationen (Methoden) in einer Klasse.
+  class Konto {
+      double kontostand;
+      String inhaber;
+
+      void einzahlen(double betrag) { kontostand += betrag; }
+      void abheben(double betrag)   { kontostand -= betrag; }
+  }
+
+Jetzt hat jedes Konto seinen eigenen Zustand, und du kannst 50 Konto-Objekte
+erstellen. Die Logik ist genau einmal definiert.
+
+------------------------------------------------------------------------
+7.2  Klassen definieren — alle Bestandteile
+------------------------------------------------------------------------
+
+  public class Konto {
+
+      // ---- FELDER (Instanzvariablen) ----
+      private double kontostand;    // private: nur innerhalb der Klasse sichtbar
+      private String inhaber;
+      private String kontonummer;
+
+      // ---- KONSTRUKTOR ----
+      public Konto(String inhaber, String kontonummer) {
+          this.inhaber = inhaber;
+          this.kontonummer = kontonummer;
+          this.kontostand = 0.0;    // Startwert
+      }
+
+      // ---- METHODEN ----
+      public void einzahlen(double betrag) {
+          if (betrag <= 0) throw new IllegalArgumentException("Betrag muss positiv sein");
+          kontostand += betrag;
+      }
+
+      public boolean abheben(double betrag) {
+          if (betrag <= 0) throw new IllegalArgumentException("Betrag muss positiv sein");
+          if (betrag > kontostand) return false;  // nicht genug Geld
+          kontostand -= betrag;
+          return true;
+      }
+
+      // ---- GETTER (Zugriff von außen — lesen) ----
+      public double getKontostand() { return kontostand; }
+      public String getInhaber()    { return inhaber; }
+      public String getKontonummer() { return kontonummer; }
+
+      // ---- SETTER (falls änderbar) ----
+      public void setInhaber(String neuerInhaber) {
+          if (neuerInhaber == null || neuerInhaber.isBlank())
+              throw new IllegalArgumentException("Name darf nicht leer sein");
+          this.inhaber = neuerInhaber;
+      }
+
+      // ---- toString — für menschenlesbare Ausgabe ----
+      @Override
+      public String toString() {
+          return String.format("Konto[%s, Inhaber=%s, Stand=%.2f€]",
+              kontonummer, inhaber, kontostand);
+      }
+  }
+
+------------------------------------------------------------------------
+7.3  Objekte erstellen und benutzen
+------------------------------------------------------------------------
+
+  Konto k1 = new Konto("Anna", "DE1234");
+  Konto k2 = new Konto("Ben", "DE5678");
+
+  k1.einzahlen(1000.0);
+  k1.einzahlen(500.0);
+  k1.abheben(200.0);
+
+  System.out.println(k1.getKontostand());  // 1300.0
+  System.out.println(k1);                  // Konto[DE1234, Inhaber=Anna, Stand=1300,00€]
+
+  // k1 und k2 sind völlig unabhängig — jedes hat seinen eigenen Zustand
+  System.out.println(k2.getKontostand());  // 0.0
+
+null — die leere Referenz:
+  Konto k = null;   // k zeigt auf kein Objekt
+  k.einzahlen(100); // NullPointerException! (NPE)
+
+  Immer prüfen vor Benutzung:
+  if (k != null) {
+      k.einzahlen(100);
+  }
+
+------------------------------------------------------------------------
+7.4  Kapselung (Encapsulation) — private, Getter, Setter
+------------------------------------------------------------------------
+
+Kapselung bedeutet: Felder sind private, Zugriff NUR über Methoden.
+
+  private double kontostand;   // außen nicht direkt änderbar
+
+WARUM?
+- Du kannst Validierung einbauen (kein negativer Betrag)
+- Du kannst die interne Darstellung ändern ohne den Code der Nutzer zu brechen
+- Du kannst read-only Felder erstellen (Getter ohne Setter)
+- Du kannst Logging oder Benachrichtigungen einbauen
+
+Ohne Kapselung:
+  konto.kontostand = -999999;  // erlaubt! Konsistenz weg.
+
+Mit Kapselung:
+  konto.kontostand = -999999;  // COMPILE-FEHLER: kontostand ist private
+  konto.abheben(999999999);    // die Methode prüft es — kontrolliert
+
+Getter-Konvention:
+  public Typ getFeldname() { return feldname; }     // für Objekte
+  public boolean isFeldname() { return feldname; }  // für booleans!
+
+  boolean aktiv;
+  public boolean isAktiv() { return aktiv; }   // nicht getAktiv()!
+
+------------------------------------------------------------------------
+7.5  Konstruktoren im Detail
+------------------------------------------------------------------------
+
+Konstruktor wird mit new aufgerufen. Name MUSS identisch zum Klassennamen sein.
+KEIN Rückgabetyp (auch nicht void).
+
+  public Konto(String inhaber, String kontonummer) {
+      this.inhaber = inhaber;
+      this.kontonummer = kontonummer;
+      this.kontostand = 0.0;
+  }
+
+Mehrere Konstruktoren (Überladung):
+  public Konto(String inhaber, String kontonummer) {
+      this(inhaber, kontonummer, 0.0);  // Delegation zum 3-Parameter-Konstruktor
+  }
+
+  public Konto(String inhaber, String kontonummer, double startguthaben) {
+      this.inhaber = inhaber;
+      this.kontonummer = kontonummer;
+      this.kontostand = startguthaben;
+  }
+
+  this(args) muss ERSTE Anweisung im Konstruktor sein!
+
+Default-Konstruktor:
+  Wenn du KEINEN Konstruktor definierst, erzeugt Java automatisch einen
+  parameterlosen: public Konto() {}
+  Felder werden mit Standardwerten initialisiert (0, null, false).
+  
+  SOBALD du einen Konstruktor definierst, gibt es KEINEN automatischen
+  Default-Konstruktor mehr! Dann musst du ihn bei Bedarf explizit schreiben.
+
+Konstruktor vs. Methode — alle Unterschiede:
+  - Konstruktor hat denselben Namen wie die Klasse
+  - Konstruktor hat KEINEN Rückgabetyp (kein void, kein int...)
+  - Konstruktor wird NUR mit new aufgerufen
+  - Kann nicht manuell nochmal aufgerufen werden
+
+------------------------------------------------------------------------
+7.6  this — der Selbstverweis
+------------------------------------------------------------------------
+
+this bezieht sich auf das aktuelle Objekt.
+
+1. Zur Unterscheidung Feld vs. Parameter (wenn gleicher Name):
+   public void setInhaber(String inhaber) {
+       this.inhaber = inhaber;  // this.inhaber = Feld, inhaber = Parameter
+   }
+
+2. Zur Übergabe des aktuellen Objekts:
+   public Konto copy() {
+       Konto kopie = new Konto(this.inhaber, this.kontonummer, this.kontostand);
+       return kopie;
+   }
+
+3. Zum Delegieren an anderen Konstruktor:
+   public Konto(String inhaber) {
+       this(inhaber, "AUTO-" + System.currentTimeMillis());
+   }
+
+------------------------------------------------------------------------
+7.7  static — Klassen-Felder und Klassen-Methoden
+------------------------------------------------------------------------
+
+static Felder gehören zur KLASSE, nicht zu einem Objekt:
+  class Konto {
+      private static int anzahlKonten = 0;  // geteilt von allen Konto-Objekten
+      private double kontostand;            // jedes Objekt hat seine eigene
+
+      public Konto(...) {
+          anzahlKonten++;   // wird bei jedem new erhöht
+      }
+
+      public static int getAnzahlKonten() {
+          return anzahlKonten;
+      }
+  }
+
+  Konto.getAnzahlKonten()  // Zugriff über Klassenname (empfohlen)
+  k1.getAnzahlKonten()     // auch möglich, aber irreführend
+
+static Methoden:
+  - Können NUR static Felder und Methoden der eigenen Klasse benutzen
+  - Können KEIN this benutzen
+  - Haben keinen Zugriff auf Instanzfelder/-methoden
+
+Statische Initialisierungsblöcke (static initializer):
+  class Config {
+      static final Map<String, String> DEFAULTS;
+
+      static {
+          DEFAULTS = new HashMap<>();
+          DEFAULTS.put("color", "blue");
+          DEFAULTS.put("size", "medium");
+      }
+  }
+
+  Wird einmal ausgeführt wenn die Klasse geladen wird.
+
+Instanz-Initialisierungsblöcke (instance initializer):
+  class Konto {
+      private List<String> log;
+
+      {   // wird vor JEDEM Konstruktor ausgeführt
+          log = new ArrayList<>();
+          log.add("Konto erstellt am " + LocalDate.now());
+      }
+  }
+
+------------------------------------------------------------------------
+7.8  Objekt-Methoden, die jede Klasse hat
+------------------------------------------------------------------------
+
+Jede Klasse erbt von java.lang.Object. Diese Methoden kommen daher:
+
+  toString()
+    Standard: "Klassenname@hashcode" (z.B. "Konto@7852e922")
+    Überschreiben: @Override public String toString() { ... }
+    Wird automatisch bei println, String-Konkatenation usw. genutzt.
+
+  equals(Object o)
+    Standard: Referenzgleichheit (== Verhalten)
+    Überschreiben für Wertgleichheit:
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;                    // Selbstvergleich
+        if (o == null) return false;                   // null-Sicherheit
+        if (getClass() != o.getClass()) return false;  // Typsicherheit
+        Konto konto = (Konto) o;
+        return Objects.equals(kontonummer, konto.kontonummer);  // Feldvergleich
+    }
+
+  hashCode()
+    Muss konsistent mit equals() überschrieben werden!
+    Wenn a.equals(b), dann MUSS a.hashCode() == b.hashCode()!
+    (Andersherum muss nicht gelten)
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(kontonummer);  // alle Felder die equals benutzt
+    }
+
+    Warum? HashMap, HashSet und andere Collections nutzen hashCode.
+    Wenn du equals überschreibst aber nicht hashCode, funktioniert
+    new HashSet<Konto>().contains(einKonto) NICHT korrekt.
+
+  clone()
+    Erzeugt eine flache Kopie. Selten direkt benutzt.
+    Muss Cloneable implementiert werden.
+    Besser: Copy-Konstruktor oder eigene copy()-Methode.
+
+  getClass()
+    Gibt das Class-Objekt zurück:
+    k1.getClass().getName()          → "Konto"
+    k1.getClass().getSimpleName()    → "Konto" (ohne Package)
+    k1 instanceof Konto              → true (besser für Typcheck)
+
+  finalize()
+    Veraltet seit Java 9, entfernt in Java 18. Nicht benutzen.
+
+  wait(), notify(), notifyAll()
+    Für Thread-Synchronisation (Modul 17).
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+Erstelle eine Klasse Person mit:
+- Feldern: name (String), alter (int), email (String)
+- Validierung im Konstruktor: Alter zwischen 0-150, Email muss "@" enthalten
+- Getter für alle Felder, Setter für email (mit Validierung)
+- toString(), equals() (nur name und email), hashCode() korrekt
+- Eine Methode istVolljährig() → boolean
+- Eine statische Methode altersUnterschied(Person a, Person b) → int
+Erstelle in main mindestens 3 Personen, teste alle Methoden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Vererbung — Klassen erweitern
+================================================================================
+
+------------------------------------------------------------------------
+8.1  extends — Unterklassen erstellen
+------------------------------------------------------------------------
+
+Vererbung: Eine Klasse (Unterklasse) übernimmt Felder und Methoden einer
+anderen (Oberklasse) und kann sie erweitern oder überschreiben.
+
+  class Tier {
+      protected String name;    // protected: in dieser Klasse + Unterklassen
+      protected int alter;
+
+      public Tier(String name, int alter) {
+          this.name = name;
+          this.alter = alter;
+      }
+
+      public void fressen() {
+          System.out.println(name + " frisst.");
+      }
+
+      public String toString() {
+          return name + " (Tier, " + alter + " Jahre)";
+      }
+  }
+
+  class Hund extends Tier {
+      private String rasse;
+
+      public Hund(String name, int alter, String rasse) {
+          super(name, alter);    // MUSS zuerst aufgerufen werden!
+          this.rasse = rasse;
+      }
+
+      public void bellen() {
+          System.out.println(name + " bellt!");
+      }
+
+      @Override
+      public String toString() {
+          return name + " (Hund, " + rasse + ", " + alter + " Jahre)";
+      }
+  }
+
+  Hund h = new Hund("Rex", 3, "Labrador");
+  h.fressen();     // geerbt von Tier
+  h.bellen();      // eigene Methode
+  System.out.println(h);  // überschriebenes toString()
+
+------------------------------------------------------------------------
+8.2  super — auf die Oberklasse zugreifen
+------------------------------------------------------------------------
+
+super() im Konstruktor:
+  - Ruft den Konstruktor der Oberklasse auf
+  - MUSS erste Anweisung sein (wenn benutzt)
+  - Ohne explizites super() ruft Java super() ohne Parameter auf
+    → gibt Fehler wenn Oberklasse keinen parameterlosen Konstruktor hat!
+
+super.methode():
+  class Hund extends Tier {
+      @Override
+      public void fressen() {
+          System.out.println("(Hund schaut gierig...)");
+          super.fressen();    // ruft Tier.fressen() auf
+          System.out.println("(Hund leckt Napf sauber)");
+      }
+  }
+
+super.feld:
+  super.name    // Oberklassenfeld (wenn gleicher Name in Unterklasse)
+  (selten nötig, eher schlechter Stil)
+
+------------------------------------------------------------------------
+8.3  @Override — Methoden überschreiben
+------------------------------------------------------------------------
+
+@Override ist eine Annotation (ein Hinweis an den Compiler):
+  class Katze extends Tier {
+      @Override
+      public void fressen() {
+          System.out.println(name + " frisst vornehm.");
+      }
+  }
+
+@Override ist technisch optional, aber IMMER benutzen weil:
+- Compiler gibt Fehler wenn du in Wirklichkeit keine Methode überschreibst
+  (falscher Name, falsche Parameter → du hast nur eine neue Methode erstellt)
+- Macht den Code lesbarer ("diese Methode kommt aus der Oberklasse")
+
+Covariant Return Types (seit Java 5):
+  Überschreibende Methode darf spezifischeren Typ zurückgeben:
+  class Tier { public Tier kopie() { ... } }
+  class Hund extends Tier {
+      @Override
+      public Hund kopie() { ... }  // Hund ist spezifischer als Tier — OK!
+  }
+
+------------------------------------------------------------------------
+8.4  final — keine weitere Vererbung
+------------------------------------------------------------------------
+
+  final class Unveränderlich { ... }
+  // keine Klasse kann extends Unveränderlich benutzen
+
+  class Konto {
+      public final void abheben(double betrag) { ... }
+      // diese Methode kann in Unterklassen NICHT überschrieben werden
+  }
+
+  final sichert kritische Methoden (z.B. sicherheitskritische Logik,
+  die nie verändert werden darf).
+
+------------------------------------------------------------------------
+8.5  Polymorphismus — viele Formen
+------------------------------------------------------------------------
+
+Der Schlüssel zu OOP: Du kannst mit Oberklassen-Referenz auf Unterklassen-
+Objekte zeigen. Die Methode die aufgerufen wird, wird zur LAUFZEIT entschieden.
+
+  Tier t1 = new Hund("Rex", 3, "Lab");   // Hund ist ein Tier
+  Tier t2 = new Katze("Mimi", 5);        // Katze ist ein Tier
+
+  t1.fressen();   // ruft Hund.fressen() auf — nicht Tier.fressen()!
+  t2.fressen();   // ruft Katze.fressen() auf
+
+  // Array/Liste von Tieren — alle unterschiedlich:
+  Tier[] tiere = { new Hund("A", 1, "Mops"), new Katze("B", 2), new Tier("C", 3) };
+  for (Tier t : tiere) {
+      t.fressen();  // jedes verhält sich anders! Das ist Polymorphismus.
+  }
+
+Dynamic Dispatch — Methodenauflösung zur Laufzeit:
+  Welche Methode aufgerufen wird, hängt vom TATSÄCHLICHEN Typ des Objekts ab,
+  nicht vom deklarierten Typ der Referenz.
+
+Casting — Unterklasse wieder sichtbar machen:
+  Tier t = new Hund("Rex", 3, "Lab");
+  t.bellen();     // COMPILE-FEHLER: Tier hat keine bellen()-Methode!
+
+  // Downcast (Oberklasse → Unterklasse):
+  Hund h = (Hund) t;   // expliziter Cast
+  h.bellen();           // jetzt OK
+
+  // Sicher casten mit instanceof:
+  if (t instanceof Hund) {
+      Hund h = (Hund) t;
+      h.bellen();
+  }
+
+  // Pattern Matching instanceof (seit Java 16 stabil):
+  if (t instanceof Hund h) {   // h ist sofort als Hund typisiert
+      h.bellen();               // kein separater Cast nötig!
+  }
+
+------------------------------------------------------------------------
+8.6  Vererbungshierarchie und java.lang.Object
+------------------------------------------------------------------------
+
+Jede Klasse erbt implizit von java.lang.Object. Das ist die Wurzel.
+  Object → Tier → Hund
+  
+  Tier t = new Hund(...);   // Hund ist Tier ist Object
+  Object o = new Hund(...); // auch das geht!
+
+  o.toString()   // Aufruf klappt — Object hat toString()
+  o.bellen()     // FEHLER — Object hat kein bellen()
+
+Java unterstützt NUR Einfachvererbung (eine Klasse kann nur eine Oberklasse
+haben). Mehrfachvererbung von Klassen ist NICHT möglich (anders als C++).
+Aber mehrere Interfaces implementieren ist möglich (dazu Modul 9).
+
+------------------------------------------------------------------------
+8.7  Abstrakte Klassen
+------------------------------------------------------------------------
+
+Eine abstrakte Klasse kann nicht direkt instanziiert werden (kein new).
+Sie dient als Blaupause für Unterklassen.
+
+  abstract class Form {
+      private String farbe;
+
+      public Form(String farbe) {
+          this.farbe = farbe;
+      }
+
+      public String getFarbe() { return farbe; }
+
+      // Abstrakte Methode — MUSS in Unterklassen implementiert werden
+      public abstract double fläche();
+
+      // Konkrete Methode — wird geerbt
+      public void info() {
+          System.out.printf("%s (%s), Fläche: %.2f%n",
+              getClass().getSimpleName(), farbe, fläche());
+      }
+  }
+
+  class Kreis extends Form {
+      private double radius;
+
+      public Kreis(double radius, String farbe) {
+          super(farbe);
+          this.radius = radius;
+      }
+
+      @Override
+      public double fläche() {
+          return Math.PI * radius * radius;
+      }
+  }
+
+  class Rechteck extends Form {
+      private double breite, höhe;
+
+      public Rechteck(double breite, double höhe, String farbe) {
+          super(farbe);
+          this.breite = breite;
+          this.höhe = höhe;
+      }
+
+      @Override
+      public double fläche() {
+          return breite * höhe;
+      }
+  }
+
+  // Form f = new Form("rot");  // FEHLER: abstract
+  Form k = new Kreis(5, "blau");
+  k.info();   // Kreis (blau), Fläche: 78.54
+
+  Regeln für abstrakte Klassen:
+  - Kann abstrakte und konkrete Methoden haben
+  - Kann Felder und Konstruktoren haben
+  - Unterklasse MUSS alle abstrakten Methoden implementieren
+    (oder selbst abstract sein)
+  - Kann NICHT direkt instantiiert werden
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+Erstelle eine Hierarchie:
+- Abstrakte Klasse Fahrzeug (felder: marke, geschwindigkeit; abstrakt: beschleunigen())
+- Klasse Auto extends Fahrzeug (extra: anzahlSitze)
+- Klasse Fahrrad extends Fahrzeug (extra: anzahlGänge, boolean istElektrisch)
+- Klasse LKW extends Auto (extra: nutzlastTonnen)
+- toString() in jeder Klasse, beschleunigen() sinnvoll implementiert
+- In main: Array vom Typ Fahrzeug[] mit verschiedenen Fahrzeugen,
+  alle beschleunigen lassen, alle ausgeben
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Interfaces — Verträge und Mehrfachimplementierung
+================================================================================
+
+------------------------------------------------------------------------
+9.1  Was ist ein Interface?
+------------------------------------------------------------------------
+
+Ein Interface ist ein "Vertrag": Wer dieses Interface implementiert,
+verspricht, diese Methoden bereitzustellen.
+
+  interface Schwimmend {
+      void schwimmen();     // abstrakt (implizit public abstract)
+      boolean kannTauchen(); // auch abstrakt
+  }
+
+  interface Fliegend {
+      void fliegen();
+  }
+
+  class Ente implements Schwimmend, Fliegend {
+      @Override
+      public void schwimmen() {
+          System.out.println("Ente paddelt.");
+      }
+
+      @Override
+      public boolean kannTauchen() { return true; }
+
+      @Override
+      public void fliegen() {
+          System.out.println("Ente fliegt!");
+      }
+  }
+
+  // Polymorphismus mit Interfaces:
+  Schwimmend s = new Ente();
+  s.schwimmen();   // OK
+  s.fliegen();     // FEHLER: Schwimmend kennt kein fliegen()
+  ((Ente) s).fliegen();  // mit Cast OK
+
+Wichtige Unterschiede Interface vs. abstrakte Klasse:
+  - Interface: kein Konstruktor, alle Felder sind implizit public static final
+  - Interface: Klasse kann MEHRERE Interfaces implementieren
+  - Interface: keine Instanzfelder (seit Java 8: Default-Methoden mit Implementierung)
+  - Abstrakte Klasse: kann Felder und Konstruktoren haben, nur eine Oberklasse
+
+------------------------------------------------------------------------
+9.2  Interface-Erweiterungen seit Java 8
+------------------------------------------------------------------------
+
+Default-Methoden (seit Java 8):
+  interface Sortierbar<T extends Comparable<T>> {
+      List<T> getElemente();
+
+      default void sortieren() {     // Default-Methode: hat eine Implementierung!
+          Collections.sort(getElemente());
+      }
+  }
+
+  Klassen die Sortierbar implementieren, erben sortieren() automatisch.
+  Sie können es aber überschreiben.
+
+  Wozu? Rückwärtskompatibilität: Wenn du eine Methode zu einem bestehenden
+  Interface hinzufügst ohne Default, müssen ALLE implementierenden Klassen
+  sofort die Methode implementieren. Mit Default-Methode: kein Bruch.
+
+Static-Methoden in Interfaces (seit Java 8):
+  interface StringUtils {
+      static boolean istLeer(String s) {
+          return s == null || s.isBlank();
+      }
+  }
+  StringUtils.istLeer("");   // Aufruf über Interface-Name
+
+Private Methoden in Interfaces (seit Java 9):
+  interface Logger {
+      default void logInfo(String msg) {
+          log("INFO", msg);
+      }
+
+      default void logError(String msg) {
+          log("ERROR", msg);
+      }
+
+      private void log(String level, String msg) {   // Hilfsmethode
+          System.out.println("[" + level + "] " + msg);
+      }
+  }
+
+Konstanten in Interfaces:
+  interface Farben {
+      String ROT = "#FF0000";     // implizit: public static final String ROT
+      String GRÜN = "#00FF00";
+      String BLAU = "#0000FF";
+  }
+
+  Farben.ROT   → "#FF0000"
+  
+  Aber: Besser als Enum umsetzen (Modul 11)!
+
+------------------------------------------------------------------------
+9.3  Wichtige eingebaute Interfaces
+------------------------------------------------------------------------
+
+Comparable<T> — natürliche Ordnung definieren:
+  class Person implements Comparable<Person> {
+      private String name;
+      private int alter;
+
+      @Override
+      public int compareTo(Person andere) {
+          return Integer.compare(this.alter, andere.alter);
+          // alternativ: this.alter - andere.alter (nur für kleine Zahlen sicher!)
+          // alternativ: this.name.compareTo(andere.name)
+          // Return: negativ wenn this < andere, 0 wenn gleich, positiv wenn this > andere
+      }
+  }
+
+  List<Person> personen = ...;
+  Collections.sort(personen);   // nutzt compareTo()
+
+Comparator<T> — Sortierung von außen definieren:
+  Comparator<Person> nachName = (a, b) -> a.getName().compareTo(b.getName());
+  Comparator<Person> nachAlter = Comparator.comparingInt(Person::getAlter);
+  Comparator<Person> nachAlterDannName = Comparator
+      .comparingInt(Person::getAlter)
+      .thenComparing(Person::getName);
+
+  personen.sort(nachName);
+  personen.sort(Comparator.reverseOrder());  // umgekehrt
+
+Iterable<T> — in for-each benutzbar:
+  class MeinContainer<T> implements Iterable<T> {
+      private List<T> daten = new ArrayList<>();
+
+      @Override
+      public Iterator<T> iterator() {
+          return daten.iterator();
+      }
+  }
+
+  MeinContainer<String> c = new MeinContainer<>();
+  for (String s : c) { ... }   // dank Iterable möglich!
+
+Cloneable — Objekte klonieren:
+  class Punkt implements Cloneable {
+      int x, y;
+      @Override
+      public Punkt clone() {
+          try {
+              return (Punkt) super.clone();
+          } catch (CloneNotSupportedException e) {
+              throw new AssertionError(); // kann nicht passieren
+          }
+      }
+  }
+
+Serializable — Objekte in Bytes umwandeln:
+  import java.io.Serializable;
+  class Konfiguration implements Serializable {
+      private static final long serialVersionUID = 1L;
+      String host = "localhost";
+      int port = 8080;
+  }
+
+AutoCloseable und Closeable — für try-with-resources:
+  class MeineRessource implements AutoCloseable {
+      @Override
+      public void close() {
+          System.out.println("Ressource wird geschlossen");
+      }
+  }
+
+  try (MeineRessource r = new MeineRessource()) {
+      // r wird automatisch geschlossen wenn Block endet
+  }   // close() wird hier automatisch aufgerufen (auch bei Exception)
+
+------------------------------------------------------------------------
+9.4  Functional Interfaces — die Brücke zu Lambdas
+------------------------------------------------------------------------
+
+Ein Functional Interface hat GENAU EINE abstrakte Methode:
+  @FunctionalInterface
+  interface Rechenoperation {
+      int berechne(int a, int b);
+  }
+
+  @FunctionalInterface macht den Compiler zur Prüfung — gibt Fehler wenn
+  mehr als eine abstrakte Methode vorhanden ist.
+
+Diese Interfaces können als Lambda-Ausdrücke geschrieben werden:
+  Rechenoperation addition = (a, b) -> a + b;
+  Rechenoperation multiplikation = (a, b) -> a * b;
+
+  addition.berechne(3, 4)        → 7
+  multiplikation.berechne(3, 4)  → 12
+
+Eingebaute Functional Interfaces aus java.util.function:
+  Predicate<T>      T → boolean           test(T t)
+  Function<T, R>    T → R                 apply(T t)
+  Consumer<T>       T → void              accept(T t)
+  Supplier<T>       () → T                get()
+  BiFunction<T,U,R> (T, U) → R            apply(T t, U u)
+  UnaryOperator<T>  T → T                 apply(T t)  (speziell für gleichem Typ)
+  BinaryOperator<T> (T, T) → T            apply(T t1, T t2)
+
+  Predicate<String> nichtLeer = s -> !s.isBlank();
+  nichtLeer.test("")       → false
+  nichtLeer.test("Hallo")  → true
+
+  Predicate<Integer> positiv = n -> n > 0;
+  Predicate<Integer> gerade = n -> n % 2 == 0;
+  positiv.and(gerade).test(4)   → true  (und-Verknüpfung)
+  positiv.or(gerade).test(-2)   → true  (oder-Verknüpfung)
+  positiv.negate().test(5)      → false (Negation)
+
+  Function<String, Integer> länge = String::length;  // Method Reference
+  länge.apply("Hallo")     → 5
+
+  Function<String, Integer> ersteZahl = s -> Integer.parseInt(s.trim());
+  Function<Integer, String> verdoppelt = n -> "Ergebnis: " + (n * 2);
+  Function<String, String> kombiniert = ersteZahl.andThen(verdoppelt);
+  kombiniert.apply("  7  ")   → "Ergebnis: 14"
+
+(Lambdas werden in Modul 14 vollständig behandelt)
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+- Definiere Interface Berechnung mit einer Methode führeAus(double a, double b) → double
+- Implementiere Addition, Subtraktion, Multiplikation, Division (als separate Klassen)
+- Auch als Lambdas direkt in main
+- Erstelle ein Interface Ausgabe mit Default-Methode ausgeben(String text)
+  (gibt "[OUTPUT] " + text aus)
+- Implementiere eine Klasse Protokoll die Ausgabe implementiert und
+  zusätzlich die letzten 10 Ausgaben in einer Liste speichert
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Enums und Records
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Enums — Aufzählungstypen
+------------------------------------------------------------------------
+
+  enum Wochentag {
+      MONTAG, DIENSTAG, MITTWOCH, DONNERSTAG, FREITAG, SAMSTAG, SONNTAG
+  }
+
+  Wochentag tag = Wochentag.MITTWOCH;
+  System.out.println(tag);          // "MITTWOCH"
+  System.out.println(tag.name());   // "MITTWOCH"
+  System.out.println(tag.ordinal()); // 2 (0-basierter Index)
+
+  Wochentag.values()    → alle Werte als Array
+  Wochentag.valueOf("MONTAG")  → Wochentag.MONTAG (oder IllegalArgumentException)
+
+  switch mit Enum:
+  switch (tag) {
+      case MONTAG, DIENSTAG, MITTWOCH, DONNERSTAG, FREITAG -> System.out.println("Wochentag");
+      case SAMSTAG, SONNTAG                                 -> System.out.println("Wochenende");
+  }
+
+Enums mit Feldern und Methoden:
+  enum Planet {
+      MERKUR(3.303e+23, 2.4397e6),
+      VENUS (4.869e+24, 6.0518e6),
+      ERDE  (5.976e+24, 6.37814e6),
+      MARS  (6.421e+23, 3.3972e6);
+
+      private final double masse;    // kg
+      private final double radius;   // m
+
+      Planet(double masse, double radius) {
+          this.masse = masse;
+          this.radius = radius;
+      }
+
+      static final double G = 6.67300E-11;
+
+      double oberflächenGravitation() {
+          return G * masse / (radius * radius);
+      }
+
+      double gewichtAuf(double gewichtAufErde) {
+          return gewichtAufErde * oberflächenGravitation() / ERDE.oberflächenGravitation();
+      }
+  }
+
+  double gewicht = 75.0;
+  for (Planet p : Planet.values()) {
+      System.out.printf("Dein Gewicht auf %s: %.2f N%n", p, p.gewichtAuf(gewicht));
+  }
+
+Enum mit abstrakter Methode (jeder Wert implementiert sie anders):
+  enum Operation {
+      PLUS   { @Override double anwenden(double x, double y) { return x + y; } },
+      MINUS  { @Override double anwenden(double x, double y) { return x - y; } },
+      MAL    { @Override double anwenden(double x, double y) { return x * y; } },
+      GETEILT{ @Override double anwenden(double x, double y) { return x / y; } };
+
+      abstract double anwenden(double x, double y);
+  }
+
+  Operation.PLUS.anwenden(3, 4)    → 7.0
+  Operation.GETEILT.anwenden(10, 4) → 2.5
+
+Enum implementiert Interfaces:
+  interface Beschreibbar { String beschreibung(); }
+
+  enum Status implements Beschreibbar {
+      OFFEN    { @Override public String beschreibung() { return "Noch offen"; } },
+      AKTIV    { @Override public String beschreibung() { return "In Bearbeitung"; } },
+      FERTIG   { @Override public String beschreibung() { return "Abgeschlossen"; } };
+  }
+
+EnumSet und EnumMap (effiziente Sammlungen für Enums):
+  import java.util.EnumSet;
+  import java.util.EnumMap;
+
+  EnumSet<Wochentag> wochenende = EnumSet.of(Wochentag.SAMSTAG, Wochentag.SONNTAG);
+  EnumSet<Wochentag> arbeitstage = EnumSet.complementOf(wochenende);
+
+  EnumMap<Wochentag, List<String>> termine = new EnumMap<>(Wochentag.class);
+  termine.put(Wochentag.MONTAG, List.of("Meeting", "Report"));
+
+------------------------------------------------------------------------
+10.2  Records — unveränderliche Datencontainer (seit Java 16)
+------------------------------------------------------------------------
+
+Records sind kompakte Klassen für unveränderliche Datenbehälter.
+Sie erzeugen automatisch: Konstruktor, Getter, toString, equals, hashCode.
+
+  record Punkt(double x, double y) { }
+
+  // Das erzeugt automatisch:
+  // - public Punkt(double x, double y) - kanonischer Konstruktor
+  // - public double x() - Getter (KEIN get-Präfix bei Records!)
+  // - public double y()
+  // - equals(), hashCode(), toString()
+
+  Punkt p = new Punkt(3.0, 4.0);
+  System.out.println(p.x());      // 3.0
+  System.out.println(p.y());      // 4.0
+  System.out.println(p);          // Punkt[x=3.0, y=4.0]
+
+  Punkt p2 = new Punkt(3.0, 4.0);
+  p.equals(p2)    → true  (Wertgleichheit, automatisch!)
+
+Records mit Validierung (kompakter Konstruktor):
+  record AlterPerson(String name, int alter) {
+      AlterPerson {   // kompakter Konstruktor: kein (String name, int alter) nötig!
+          if (alter < 0 || alter > 150)
+              throw new IllegalArgumentException("Ungültiges Alter: " + alter);
+          if (name == null || name.isBlank())
+              throw new IllegalArgumentException("Name darf nicht leer sein");
+          name = name.trim();   // kannst du Parameter vor Zuweisung modifizieren
+      }
+  }
+
+Records mit eigenen Methoden:
+  record Punkt(double x, double y) {
+      double distanz() {
+          return Math.sqrt(x * x + y * y);
+      }
+
+      Punkt plus(Punkt anderer) {
+          return new Punkt(x + anderer.x, y + anderer.y);
+      }
+
+      static Punkt ursprung() {   // statische Fabrikmethode
+          return new Punkt(0, 0);
+      }
+  }
+
+Records mit mehreren Konstruktoren:
+  record Punkt(double x, double y) {
+      Punkt() {   // zusätzlicher Konstruktor
+          this(0, 0);   // MUSS kanonischen Konstruktor aufrufen
+      }
+  }
+
+Einschränkungen von Records:
+  - Felder sind final (unveränderlich nach Konstruktion)
+  - Können keine anderen Klassen erweitern (kein extends)
+  - Können Interfaces implementieren
+  - Können nicht als abstrakt deklariert werden
+  - Können sealed-Interfaces implementieren
+
+Wann Record, wann normale Klasse?
+  Record:  wenn das Objekt reine Datenbehälter sind (Koordinaten, DTOs,
+           Antworten, Schlüssel), unveränderlich, keine komplexe Logik.
+  Klasse:  wenn Mutabilität, Vererbung, komplexer Zustand nötig ist.
+
+------------------------------------------------------------------------
+10.3  Sealed Classes und Interfaces (seit Java 17)
+------------------------------------------------------------------------
+
+Sealed = versiegelt. Legt explizit fest, welche Klassen erweitern dürfen.
+
+  sealed interface Form permits Kreis, Rechteck, Dreieck { }
+
+  record Kreis(double radius) implements Form { }
+  record Rechteck(double breite, double höhe) implements Form { }
+  final class Dreieck implements Form {
+      double a, b, c;
+      Dreieck(double a, double b, double c) { this.a = a; this.b = b; this.c = c; }
+  }
+
+  // Wer NICHT in der permits-Liste steht, kann Form nicht implementieren!
+
+  Vorteil: Der Compiler kann prüfen ob du ALLE möglichen Fälle abdeckst:
+  double fläche(Form f) {
+      return switch (f) {
+          case Kreis k     -> Math.PI * k.radius() * k.radius();
+          case Rechteck r  -> r.breite() * r.höhe();
+          case Dreieck d   -> {
+              double s = (d.a + d.b + d.c) / 2;  // Heron-Formel
+              yield Math.sqrt(s * (s-d.a) * (s-d.b) * (s-d.c));
+          }
+          // Kein default nötig — Compiler weiß, alle Fälle sind abgedeckt!
+      };
+  }
+
+Erlaubte Untertypen müssen im selben Package oder Modul sein.
+Untertypen müssen self: final, sealed oder non-sealed sein.
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+Erstelle ein kleines Kartenspiel-Modell:
+- Enum Farbe: KREUZ, PIK, HERZ, KARO (mit deutschem Symbol als Feld: ♣ ♠ ♥ ♦)
+- Enum Wert: ZWEI bis AS (mit int-Wert als Feld; AS kann 11 sein)
+- Record Karte(Farbe farbe, Wert wert) mit:
+  - Methode gesamtWert() → int
+  - toString() "As der Herzen", "Zehn der Pik" etc.
+- Erstelle ein Blatt (Hand) von 5 Karten, sortiere sie nach Wert
+- Berechne den Gesamtwert des Blatts
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 11: Generics — typsichere Container und Methoden
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Das Problem ohne Generics
+------------------------------------------------------------------------
+
+Vor Java 5 gab es keine Generics. Sammlungen hielten Object:
+  List liste = new ArrayList();
+  liste.add("Hallo");
+  liste.add(42);       // OK, aber gemischt!
+
+  String s = (String) liste.get(0);  // Cast nötig — fehleranfällig
+  String s2 = (String) liste.get(1); // ClassCastException zur LAUFZEIT!
+
+Generics lösen das:
+  List<String> liste = new ArrayList<String>();
+  liste.add("Hallo");
+  liste.add(42);  // COMPILE-FEHLER: nur String erlaubt!
+
+  String s = liste.get(0);   // KEIN Cast nötig!
+
+------------------------------------------------------------------------
+11.2  Generische Klassen
+------------------------------------------------------------------------
+
+  class Box<T> {           // T = Typparameter (Konvention: ein Großbuchstabe)
+      private T inhalt;
+
+      public Box(T inhalt) {
+          this.inhalt = inhalt;
+      }
+
+      public T getInhalt() { return inhalt; }
+
+      public void setInhalt(T inhalt) { this.inhalt = inhalt; }
+
+      @Override
+      public String toString() {
+          return "Box[" + inhalt + "]";
+      }
+  }
+
+  Box<String> stringBox = new Box<>("Hallo");
+  Box<Integer> intBox = new Box<>(42);   // autoboxing: int → Integer
+  Box<Punkt> punktBox = new Box<>(new Punkt(1, 2));
+
+  String s = stringBox.getInhalt();   // kein Cast
+  int i = intBox.getInhalt();         // autoboxing
+
+Mehrere Typparameter:
+  class Paar<A, B> {
+      private final A erster;
+      private final B zweiter;
+
+      public Paar(A erster, B zweiter) {
+          this.erster = erster;
+          this.zweiter = zweiter;
+      }
+
+      public A getErster() { return erster; }
+      public B getZweiter() { return zweiter; }
+
+      public static <X, Y> Paar<X, Y> von(X x, Y y) { return new Paar<>(x, y); }
+  }
+
+  Paar<String, Integer> p = Paar.von("Anna", 25);
+
+Diamond-Operator (seit Java 7):
+  Box<String> box = new Box<>("Hallo");   // Java schließt den rechten Typ aus dem linken
+  // statt: new Box<String>("Hallo")
+
+------------------------------------------------------------------------
+11.3  Generische Methoden
+------------------------------------------------------------------------
+
+  static <T> T ersteOdernull(List<T> liste) {
+      return liste.isEmpty() ? null : liste.get(0);
+  }
+
+  static <T> void tauschen(T[] arr, int i, int j) {
+      T temp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = temp;
+  }
+
+  static <T extends Comparable<T>> T maximum(T a, T b) {
+      return a.compareTo(b) >= 0 ? a : b;
+  }
+
+  maximum("Apfel", "Birne")  → "Birne"
+  maximum(3, 7)              → 7
+
+------------------------------------------------------------------------
+11.4  Bounds — Typgrenzen
+------------------------------------------------------------------------
+
+Upper Bound — T muss eine bestimmte Klasse/Interface sein:
+  <T extends Comparable<T>>   T muss Comparable implementieren
+  <T extends Number>          T muss Number oder Unterklasse sein
+
+  static <T extends Number> double summe(List<T> zahlen) {
+      double s = 0;
+      for (T z : zahlen) s += z.doubleValue();   // Number hat doubleValue()
+      return s;
+  }
+
+  summe(List.of(1, 2, 3))         → 6.0  (Integer extends Number)
+  summe(List.of(1.5, 2.5))        → 4.0  (Double extends Number)
+  summe(List.of("abc"))           // COMPILE-FEHLER: String extends Number? Nein!
+
+Multiple Bounds:
+  <T extends Comparable<T> & Cloneable>   T muss beides implementieren
+  Klassen zuerst, Interfaces danach. Nur eine Klasse erlaubt.
+
+Wildcards — wenn der Typparameter unbekannt ist:
+  ? — unbeschränkte Wildcard:
+    void druckeAlles(List<?> liste) {
+        for (Object o : liste) System.out.println(o);
+    }
+    // akzeptiert List<String>, List<Integer>, List<irgendetwas>
+
+  ? extends T — Upper Bounded Wildcard (lesen, nicht schreiben):
+    double summe(List<? extends Number> zahlen) {
+        return zahlen.stream().mapToDouble(Number::doubleValue).sum();
+    }
+    // akzeptiert List<Integer>, List<Double>, List<Number>
+
+  ? super T — Lower Bounded Wildcard (schreiben, nicht lesen):
+    void fügeHinzu(List<? super Integer> liste) {
+        liste.add(1);
+        liste.add(2);
+        liste.add(3);
+    }
+    // akzeptiert List<Integer>, List<Number>, List<Object>
+
+PECS — Producer Extends, Consumer Super:
+  Wenn du AUS der Sammlung LIEST → ? extends T
+  Wenn du IN die Sammlung SCHREIBST → ? super T
+
+------------------------------------------------------------------------
+11.5  Type Erasure — wie Generics intern funktionieren
+------------------------------------------------------------------------
+
+Generics existieren nur zur Compile-Zeit! Zur Laufzeit werden alle
+Typinformationen gelöscht (Type Erasure). Box<String> und Box<Integer>
+sind zur Laufzeit beide nur Box.
+
+Konsequenzen:
+  - instanceof mit Typ: if (obj instanceof List<String>) → FEHLER
+  - instanceof ohne Typ: if (obj instanceof List<?>) → OK
+  - new T() → FEHLER (Typ nicht bekannt zur Laufzeit)
+  - T[] arr = new T[10] → FEHLER
+  - static T feld; → FEHLER (statische Felder geteilt, kein Typ)
+
+Unbeschränkte Typparameter werden zu Object, beschränkte zum Bound:
+  <T>            → wird zu Object
+  <T extends Comparable<T>> → wird zu Comparable
+
+------------------------------------------------------------------------
+11.6  Generische Interfaces
+------------------------------------------------------------------------
+
+  interface Repository<T, ID> {
+      T findById(ID id);
+      List<T> findAll();
+      void save(T entity);
+      void delete(ID id);
+  }
+
+  class PersonRepository implements Repository<Person, Integer> {
+      private Map<Integer, Person> daten = new HashMap<>();
+
+      @Override
+      public Person findById(Integer id) { return daten.get(id); }
+
+      @Override
+      public List<Person> findAll() { return new ArrayList<>(daten.values()); }
+
+      @Override
+      public void save(Person p) { daten.put(p.getId(), p); }
+
+      @Override
+      public void delete(Integer id) { daten.remove(id); }
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 11:
+- Implementiere eine generische Klasse Stack<T> mit:
+  push(T), pop() → T, peek() → T, isEmpty(), size(), toString()
+  (Verwende intern LinkedList)
+- Schreibe eine generische Methode <T extends Comparable<T>> T[] sortierungsMerge(T[] arr)
+  die Merge-Sort implementiert
+- Schreibe eine Methode <T> Map<T, Long> häufigkeiten(List<T> liste)
+  die zählt wie oft jedes Element vorkommt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 12: Vertiefung Klassen — Innere Klassen und mehr
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Innere Klassen (Nested Classes)
+------------------------------------------------------------------------
+
+Java kennt vier Arten von inneren Klassen:
+
+1. STATISCHE NESTED CLASS — logisch gruppiert, kein Zugriff auf äußere Instanz:
+  class Drucker {
+      // ...
+
+      static class Konfiguration {   // static nested
+          int dpi = 300;
+          boolean duplex = false;
+      }
+  }
+
+  Drucker.Konfiguration config = new Drucker.Konfiguration();
+  config.dpi = 600;
+
+2. INNER CLASS (nicht-statisch) — Zugriff auf Instanzfelder der äußeren Klasse:
+  class Drucker {
+      private String name;
+
+      class DruckAuftrag {   // inner class
+          void starten() {
+              System.out.println(name + " druckt...");  // Zugriff auf Drucker.name!
+          }
+      }
+  }
+
+  Drucker d = new Drucker();
+  Drucker.DruckAuftrag auftrag = d.new DruckAuftrag();  // Syntax: instanz.new
+
+3. LOKALE KLASSE — innerhalb einer Methode definiert:
+  void methode() {
+      class LokalHilfe {
+          void tue() { System.out.println("lokal"); }
+      }
+      new LokalHilfe().tue();
+  }
+
+4. ANONYME KLASSE — ohne Namen, direkt instantiiert:
+  Comparator<String> komp = new Comparator<String>() {
+      @Override
+      public int compare(String a, String b) {
+          return b.compareTo(a);  // umgekehrte Reihenfolge
+      }
+  };
+  // Wird heute meist durch Lambdas ersetzt:
+  Comparator<String> komp2 = (a, b) -> b.compareTo(a);
+
+------------------------------------------------------------------------
+12.2  Autoboxing und Unboxing
+------------------------------------------------------------------------
+
+Java hat für jeden primitiven Typ eine Wrapper-Klasse:
+  byte    → Byte
+  short   → Short
+  int     → Integer
+  long    → Long
+  float   → Float
+  double  → Double
+  boolean → Boolean
+  char    → Character
+
+Autoboxing: primitiv → Wrapper (automatisch):
+  Integer i = 42;       // int → Integer (autoboxing)
+  List<Integer> l = new ArrayList<>();
+  l.add(5);              // int 5 → Integer (autoboxing)
+
+Unboxing: Wrapper → primitiv (automatisch):
+  int x = i;             // Integer → int (unboxing)
+  int summe = l.get(0) + l.get(1);  // Integer → int
+
+FALLE — NullPointerException beim Unboxing:
+  Integer i = null;
+  int x = i;    // NullPointerException! (unboxing von null)
+
+FALLE — == mit Integer:
+  Integer a = 127;
+  Integer b = 127;
+  a == b;   → true  (Integer-Cache von -128 bis 127)
+
+  Integer c = 128;
+  Integer d = 128;
+  c == d;   → false!  (außerhalb des Cache — verschiedene Objekte)
+
+  Immer a.equals(b) für Wrapper-Objekte!
+
+Nützliche Methoden der Wrapper-Klassen:
+  Integer.parseInt("42")        → int
+  Integer.toBinaryString(42)    → "101010"
+  Integer.toHexString(255)      → "ff"
+  Integer.toOctalString(8)      → "10"
+  Integer.max(3, 7)             → 7
+  Integer.min(3, 7)             → 3
+  Integer.compare(3, 7)         → negativ
+  Integer.MAX_VALUE             → 2147483647
+  Integer.MIN_VALUE             → -2147483648
+  Integer.BYTES                 → 4
+  Integer.SIZE                  → 32
+
+  Double.parseDouble("3.14")
+  Double.isNaN(x)
+  Double.isInfinite(x)
+  Double.compare(a, b)         → korrekte NaN-sichere Vergleichsmethode
+
+------------------------------------------------------------------------
+12.3  String-Konkatenation mit + — was dahinter steckt
+------------------------------------------------------------------------
+
+Seit Java 9 ist die + Konkatenation für Strings intern optimiert durch
+invokedynamic (kein StringBuilder mehr bei einfachen Fällen).
+
+Aber in Schleifen: StringBuilder ist immer noch empfohlen, da der Compiler
+nicht immer optimal optimiert.
+
+toString() aller Typen:
+  System.out.println(null)   → "null" (kein NPE!)
+  System.out.println(new int[]{1,2,3}) → "[I@7852e922" (Referenz, nicht Inhalt!)
+  Arrays.toString(arr)  für lesbare Ausgabe
+
+------------------------------------------------------------------------
+12.4  Objekte vergleichen — equals, hashCode, Comparable
+------------------------------------------------------------------------
+
+Der vollständige equals-Vertrag (Java Spezifikation):
+  1. Reflexiv: x.equals(x) immer true
+  2. Symmetrisch: wenn x.equals(y), dann y.equals(x)
+  3. Transitiv: wenn x.equals(y) und y.equals(z), dann x.equals(z)
+  4. Konsistent: mehrfacher Aufruf ohne Änderung → gleicher Wert
+  5. null: x.equals(null) immer false (kein NPE!)
+
+Vollständige Implementierung mit java.util.Objects:
+  @Override
+  public boolean equals(Object o) {
+      if (this == o) return true;
+      if (!(o instanceof Person person)) return false;  // Pattern Matching
+      return alter == person.alter
+          && Objects.equals(name, person.name)
+          && Objects.equals(email, person.email);
+  }
+
+  @Override
+  public int hashCode() {
+      return Objects.hash(name, email, alter);
+  }
+
+Objects.equals(a, b) ist null-sicher:
+  Objects.equals(null, "Hallo")  → false (kein NPE!)
+  Objects.equals(null, null)     → true
+
+--------------------------------------------------------------------------------
+ÜBUNG 12:
+Erstelle eine generische Klasse BegrenzteWarteschlange<T> (Bounded Queue):
+- Intern: Array der Größe capacity (generisches Array über Object[] und Cast)
+- Methoden: enqueue(T), dequeue() → T, peek() → T, isFull(), isEmpty(), size()
+- Wenn voll → Exception werfen
+- Iterator implementieren (Iterable<T>) damit man for-each benutzen kann
+- toString() zeigt alle Elemente
+- equals() und hashCode()
+--------------------------------------------------------------------------------
+
+================================================================================
+ENDE TEIL 2
+================================================================================
+
+Weiter in Teil 3:
+  Modul 13: Collections Framework — List, Set, Map, Deque
+  Modul 14: Exceptions und Fehlerbehandlung
+  Modul 15: Dateien und I/O
+  Modul 16: Lambdas, Method References
+  Modul 17: Streams API
+  Modul 18: Optional und defensive Programmierung
+
+================================================================================

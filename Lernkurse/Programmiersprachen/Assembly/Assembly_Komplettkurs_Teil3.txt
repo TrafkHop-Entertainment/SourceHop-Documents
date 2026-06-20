@@ -1,0 +1,1492 @@
+================================================================================
+ASSEMBLY KOMPLETTKURS — TEIL 3 von 4
+Strings · SIMD/SSE/AVX · Floating Point · Strukturen · Speicherverwaltung
+================================================================================
+
+Voraussetzung: Teil 1 und 2 (Register, Stack, Funktionen, Calling Conventions).
+Dieser Teil macht dich fit für Performance-kritischen Code — genau das,
+womit Chris Sawyer RollerCoaster Tycoon geschrieben hat.
+
+================================================================================
+MODUL 17: String-Operationen — tief und schnell
+================================================================================
+
+------------------------------------------------------------------------
+17.1  String-Instruktionen von x86 — MOVS, SCAS, CMPS, STOS, LODS
+------------------------------------------------------------------------
+
+x86 hat spezielle Instruktionen für Byte-Arrays (Strings).
+Sie nutzen implizit rsi (Quelle), rdi (Ziel), rcx (Zähler) und das DF-Flag.
+
+  DF-Flag (Direction Flag):
+    CLD → DF = 0 → rsi/rdi werden nach jeder Operation erhöht (vorwärts)
+    STD → DF = 1 → rsi/rdi werden nach jeder Operation erniedrigt (rückwärts)
+    Empfehlung: Immer CLD am Anfang, STD nur wenn wirklich nötig.
+
+  MOVS — Move String (memcpy für einen Schritt):
+    movsb        ; [rdi] = [rsi], rsi += 1, rdi += 1
+    movsw        ; [rdi] = [rsi], rsi += 2, rdi += 2 (Word)
+    movsd        ; [rdi] = [rsi], rsi += 4, rdi += 4 (Dword)
+    movsq        ; [rdi] = [rsi], rsi += 8, rdi += 8 (Qword)
+
+  REP-Präfix — wiederholen mit rcx als Zähler:
+    cld
+    mov  rcx, laenge     ; Anzahl der Elemente
+    rep movsb            ; laenge Bytes kopieren (wie memcpy)
+    rep movsq            ; laenge Qwords kopieren (8× schneller!)
+
+  STOS — Store String (memset für einen Schritt):
+    stosb        ; [rdi] = al,  rdi += 1
+    stosw        ; [rdi] = ax,  rdi += 2
+    stosd        ; [rdi] = eax, rdi += 4
+    stosq        ; [rdi] = rax, rdi += 8
+
+    ; memset(dest, 0, 1024) in Assembly:
+    cld
+    xor  rax, rax        ; Wert = 0
+    mov  rdi, dest       ; Ziel
+    mov  rcx, 128        ; 128 × 8 Bytes = 1024 Bytes
+    rep stosq            ; Qwords auf 0 setzen (schneller als rep stosb!)
+
+  SCAS — Scan String (sucht nach Wert in rdi):
+    scasb        ; vergleicht al  mit [rdi], rdi += 1
+    scasw        ; vergleicht ax  mit [rdi], rdi += 2
+    scasd        ; vergleicht eax mit [rdi], rdi += 4
+    scasq        ; vergleicht rax mit [rdi], rdi += 8
+    (Setzt Flags wie cmp, macht aber den Schritt automatisch)
+
+    ; strlen mit SCAS:
+    cld
+    xor  rcx, rcx
+    not  rcx             ; rcx = maximaler Wert (0xFFFFFFFFFFFFFFFF)
+    xor  al, al          ; Suche nach Null-Byte (al = 0)
+    repne scasb          ; wiederhole bis Null-Byte gefunden (SCAS bis ZF=1)
+    ; nach dem Loop: rdi zeigt auf Byte NACH dem Null-Byte
+    ; rcx = (ursprüngliches rcx) - (Anzahl Iterationen)
+    not  rcx             ; invertieren
+    dec  rcx             ; -1 für das Null-Byte selbst
+    ; rcx = Länge des Strings
+
+  CMPS — Compare String (vergleicht [rsi] mit [rdi]):
+    cmpsb        ; Vergleich und rsi += 1, rdi += 1
+    cmpsw, cmpsd, cmpsq  ; analog
+
+    ; strcmp mit CMPS:
+    cld
+    mov  rcx, max_laenge  ; Safety-Limit
+    repe cmpsb            ; Wiederhole solange gleich (ZF=1)
+    ; wenn Loop endet: ZF=1 → gleich bis max, ZF=0 → Unterschied gefunden
+    ; nach dem Loop: rsi-1 und rdi-1 zeigen auf das unterschiedliche Byte
+
+  LODS — Load String (lädt von [rsi] nach rax):
+    lodsb        ; al  = [rsi], rsi += 1
+    lodsw        ; ax  = [rsi], rsi += 2
+    lodsd        ; eax = [rsi], rsi += 4
+    lodsq        ; rax = [rsi], rsi += 8
+
+    ; Benutzung oft in Verarbeitungsschleifen:
+    .process_loop:
+        lodsb              ; al = nächstes Byte
+        test al, al
+        jz   .done
+        ; al verarbeiten...
+        jmp  .process_loop
+
+------------------------------------------------------------------------
+17.2  Eigene strlen-Implementierung (schnell)
+------------------------------------------------------------------------
+
+  ; Standard-Version (einfach):
+  strlen:
+      xor  rcx, rcx         ; Länge = 0
+  .loop:
+      cmp  byte [rdi + rcx], 0
+      je   .done
+      inc  rcx
+      jmp  .loop
+  .done:
+      mov  rax, rcx
+      ret
+
+  ; Schnellere Version mit SCAS:
+  strlen_scas:
+      push rdi              ; rdi sichern (wird verändert)
+      mov  rcx, -1          ; maximaler Zähler
+      xor  al,  al          ; Suche nach 0
+      cld
+      repne scasb
+      ; rdi = Adresse nach dem 0-Byte
+      ; ursprüngliches rdi = Startadresse
+      pop  rax              ; rax = ursprüngliche Adresse
+      sub  rdi, rax         ; rdi - ursprüngliches rdi = Länge+1
+      dec  rdi              ; -1 für das Null-Byte
+      mov  rax, rdi
+      ret
+
+  ; Noch schneller — 8 Bytes auf einmal prüfen (SWAR-Technik):
+  ; Das ist was optimierte libc-strlen machen.
+  strlen_swar:
+      ; Suche nach 0x00 in einem ganzen Qword auf einmal
+      ; Mathe-Trick: hat_null_byte = (wert - 0x0101...) & ~wert & 0x8080...
+      mov  rax, rdi         ; Startadresse
+      ; ... (komplex, aber extrem schnell — Teil 4 Thema)
+      ret
+
+------------------------------------------------------------------------
+17.3  memcpy — Speicher kopieren
+------------------------------------------------------------------------
+
+  ; memcpy(dest, src, count)
+  ; rdi = Ziel, rsi = Quelle, rdx = Anzahl Bytes
+  memcpy:
+      mov  rcx, rdx         ; Anzahl Bytes nach rcx
+      cld
+      rep movsb             ; Bytes kopieren
+      ret
+      ; (movsb verändert rdi und rsi, was OK ist da wir sie nicht mehr brauchen)
+
+  ; Schnellere Version — 8 Bytes auf einmal:
+  memcpy_fast:
+      ; Vorbedingung: rdx = Anzahl Bytes
+      mov  rcx, rdx
+      shr  rcx, 3          ; rcx = Anzahl Qwords (rdx / 8)
+      cld
+      rep movsq            ; Qwords kopieren (8× schneller als rep movsb!)
+      ; Rest-Bytes:
+      mov  rcx, rdx
+      and  rcx, 7          ; rcx = rdx mod 8 (0 bis 7 Rest-Bytes)
+      rep movsb
+      ret
+
+------------------------------------------------------------------------
+17.4  Praxis — String-Parsing
+------------------------------------------------------------------------
+
+  ; Leerzeichen trimmen (strip whitespace) von links:
+  ; rdi = String-Pointer → rax = neuer Pointer (ggf. vorgerückt)
+  ltrim:
+      .loop:
+          movzx  eax, byte [rdi]
+          cmp    al, ' '
+          je     .ist_leerzeichen
+          cmp    al, 9         ; Tab
+          je     .ist_leerzeichen
+          cmp    al, 10        ; Newline
+          je     .ist_leerzeichen
+          cmp    al, 13        ; Carriage Return
+          je     .ist_leerzeichen
+          mov    rax, rdi      ; Kein Leerzeichen → Rückgabe
+          ret
+      .ist_leerzeichen:
+          inc    rdi
+          jmp    .loop
+
+  ; String zu Uppercase konvertieren (in-place):
+  ; rdi = String-Pointer
+  to_upper:
+      .loop:
+          movzx  eax, byte [rdi]
+          test   al, al
+          jz     .done            ; Null-Byte → fertig
+          cmp    al, 'a'
+          jl     .kein_lowercase
+          cmp    al, 'z'
+          jg     .kein_lowercase
+          sub    al, 32           ; Lowercase → Uppercase (0x20 Unterschied)
+          mov    [rdi], al
+      .kein_lowercase:
+          inc    rdi
+          jmp    .loop
+      .done:
+          ret
+
+  ; String nach int konvertieren (vollständig, mit Vorzeichen):
+  atoi_signed:
+      ; rdi = String-Pointer → rax = Zahl (64-Bit signed)
+      xor  rax, rax             ; Ergebnis = 0
+      xor  rcx, rcx             ; Index
+      movzx rbx, byte [rdi]     ; erstes Zeichen
+      xor  r8, r8               ; Vorzeichen-Flag: 0 = positiv
+      cmp  bl, '-'
+      jne  .keine_minus
+      inc  r8                   ; negativ
+      inc  rcx
+  .keine_minus:
+      cmp  bl, '+'
+      jne  .ziffern_loop
+      inc  rcx                  ; '+' auch überspringen
+
+  .ziffern_loop:
+      movzx rbx, byte [rdi + rcx]
+      cmp  bl, '0'
+      jl   .fertig
+      cmp  bl, '9'
+      jg   .fertig
+      imul rax, 10
+      sub  bl, '0'
+      add  rax, rbx
+      inc  rcx
+      jmp  .ziffern_loop
+
+  .fertig:
+      test r8, r8
+      jz   .positiv
+      neg  rax                  ; Vorzeichen anwenden
+  .positiv:
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 17:
+Implementiere die folgenden Funktionen ohne C-Library:
+
+  1. strtok_asm(rdi=string, rsi=delimiter) → rax = nächstes Token (oder NULL)
+     (einfachste Version: delimiter ist ein einzelnes Zeichen in sil)
+     Hint: ersetzt delimiters durch Null-Bytes und gibt Pointer zurück.
+
+  2. itoa_signed(rdi=zahl, rsi=puffer) → schreibt Zahl als String nach puffer,
+     inkl. Vorzeichen für negative Zahlen. Gibt Länge in rax zurück.
+
+  3. Teste beide Funktionen in einem Programm das einen CSV-String
+     "10,-20,30,-40,50" parst und die Summe berechnet.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 18: Floating Point — SSE und x87
+================================================================================
+
+------------------------------------------------------------------------
+18.1  Floating-Point-Darstellung (IEEE 754)
+------------------------------------------------------------------------
+
+Zahlen wie 3.14 sind im Speicher KEIN Dezimalbruch — sie sind IEEE 754:
+
+  Single Precision (float, 32-Bit):
+    1 Bit Sign | 8 Bit Exponent | 23 Bit Mantissa
+
+  Double Precision (double, 64-Bit):
+    1 Bit Sign | 11 Bit Exponent | 52 Bit Mantissa
+
+  Besondere Werte:
+    +Inf:    0 11111111 00000000000000000000000
+    NaN:     0 11111111 irgendwas außer 000...
+    -0.0:    1 00000000 00000000000000000000000
+    3.14 ≈   0 10000000 10010001111010111000011  (single)
+
+  Wichtig: Floating-Point-Vergleiche mit == sind GEFÄHRLICH!
+    0.1 + 0.2 == 0.3  →  FALSCH! (0.30000000000000004...)
+    Stattdessen: |a - b| < epsilon
+
+------------------------------------------------------------------------
+18.2  SSE/SSE2 für Floating-Point
+------------------------------------------------------------------------
+
+Moderne x86-64-CPUs benutzen SSE2 für Float/Double.
+x87 (alte FPU mit Stack-basiertem Modell) ist veraltet.
+
+  XMM-Register: xmm0 bis xmm15, je 128 Bit.
+  SSE arbeitet mit 1 oder 4 Werten gleichzeitig:
+    Scalar:  ein einzelner float/double im unteren Teil von XMM
+    Packed:  4 floats oder 2 doubles auf einmal (SIMD — Teil 19)
+
+  Instruktionen (Suffix-Konvention):
+    SS = Scalar Single (ein float)
+    SD = Scalar Double (ein double)
+    PS = Packed Single (4 floats)
+    PD = Packed Double (2 doubles)
+
+  Daten laden/speichern:
+    movss  xmm0, [adresse]     ; float laden (32-Bit)
+    movsd  xmm0, [adresse]     ; double laden (64-Bit)
+    movss  [adresse], xmm0     ; float speichern
+    movsd  [adresse], xmm0     ; double speichern
+
+    movss  xmm0, xmm1          ; Register zu Register
+    movsd  xmm0, xmm1
+
+  Arithmetik (Scalar):
+    addss  xmm0, xmm1          ; xmm0 += xmm1  (float)
+    addsd  xmm0, xmm1          ; xmm0 += xmm1  (double)
+    subss  xmm0, xmm1          ; xmm0 -= xmm1
+    subsd  xmm0, xmm1
+    mulss  xmm0, xmm1          ; xmm0 *= xmm1
+    mulsd  xmm0, xmm1
+    divss  xmm0, xmm1          ; xmm0 /= xmm1
+    divsd  xmm0, xmm1
+    sqrtss xmm0, xmm1          ; xmm0 = sqrt(xmm1)
+    sqrtsd xmm0, xmm1
+    maxss  xmm0, xmm1          ; xmm0 = max(xmm0, xmm1)
+    minss  xmm0, xmm1          ; xmm0 = min(xmm0, xmm1)
+
+  Vergleiche:
+    ucomiss xmm0, xmm1         ; float-Vergleich, setzt EFLAGS
+    ucomisd xmm0, xmm1         ; double-Vergleich
+    ; danach: je, jne, ja, jb etc. wie bei integer cmp!
+    ; ABER: jo (overflow) → für NaN-Fälle!
+
+  Konvertierung:
+    cvtsi2ss xmm0, rax         ; int64 → float
+    cvtsi2sd xmm0, rax         ; int64 → double
+    cvtss2si rax, xmm0         ; float  → int64 (gerundet)
+    cvtsd2si rax, xmm0         ; double → int64 (gerundet)
+    cvttss2si rax, xmm0        ; float  → int64 (truncated, wie C-Cast)
+    cvttsd2si rax, xmm0        ; double → int64 (truncated)
+    cvtss2sd xmm0, xmm0        ; float  → double (Precision erhöhen)
+    cvtsd2ss xmm0, xmm0        ; double → float  (Precision verlieren)
+
+------------------------------------------------------------------------
+18.3  Konstanten für Floating-Point
+------------------------------------------------------------------------
+
+  Floating-Point-Konstanten müssen im Speicher definiert werden:
+
+  section .data
+      pi      dd  3.14159265358979   ; float (dd = 32-Bit)
+      e       dq  2.71828182845905   ; double (dq = 64-Bit)
+      minus1  dd  -1.0
+      null    dd  0.0
+      eins    dq  1.0
+
+  ; Laden:
+  movss xmm0, [pi]
+  movsd xmm1, [e]
+
+  ; Null in XMM-Register:
+  xorps xmm0, xmm0    ; xmm0 = 0.0 (schnellste Methode!)
+
+------------------------------------------------------------------------
+18.4  Vollständiges Beispiel — Kreis-Flächenberechnung
+------------------------------------------------------------------------
+
+  ; double kreis_flaeche(double radius)
+  ; Argument: xmm0 = radius (double)
+  ; Rückgabe: xmm0 = Fläche = pi * r * r
+
+  section .data
+      pi_d    dq  3.14159265358979323846
+
+  kreis_flaeche:
+      movsd xmm1, [pi_d]
+      mulsd xmm0, xmm0         ; xmm0 = r * r
+      mulsd xmm0, xmm1         ; xmm0 = r² * pi
+      ret
+
+  ; Aufruf von C:
+  ;   double flaeche = kreis_flaeche(5.0);  // 78.539...
+
+  ; Aufruf von Assembly (_start mit gcc-Verlinken und printf):
+  section .data
+      format  db  "Flaeche: %f\n", 0
+
+  _start:
+      movsd xmm0, [radius]
+      call  kreis_flaeche
+      ; xmm0 = Ergebnis für printf
+      lea   rdi, [rel format]
+      mov   eax, 1             ; 1 XMM-Argument
+      call  printf
+
+------------------------------------------------------------------------
+18.5  Absolute Grundlagen x87 (Legacy — vermeiden wenn möglich)
+------------------------------------------------------------------------
+
+  Die x87-FPU benutzt einen Stack (st0 bis st7), nicht Register.
+  Wird noch gebraucht für: trigonometrische Funktionen (sin, cos, tan),
+  und für 80-Bit Extended Precision.
+
+  fld    [adresse]      ; push float auf FPU-Stack
+  fldl   [adresse]      ; push double auf FPU-Stack
+  fld1                  ; push 1.0
+  fldpi                 ; push pi
+  fldz                  ; push 0.0
+
+  fst    [adresse]      ; st0 in Speicher (float), Stack bleibt
+  fstp   [adresse]      ; st0 in Speicher, dann pop
+
+  fadd   st0, st1       ; st0 += st1
+  fsub   st0, st1       ; st0 -= st1
+  fmul   st0, st1       ; st0 *= st1
+  fdiv   st0, st1       ; st0 /= st1
+  fsin                  ; st0 = sin(st0)
+  fcos                  ; st0 = cos(st0)
+  fpatan                ; st0 = atan(st1/st0), st1 pop
+  fsqrt                 ; st0 = sqrt(st0)
+
+  ; sin mit x87:
+  section .data
+      winkel  dq  1.5707963     ; pi/2 ≈ 90 Grad in Radiant
+  ;   ...
+      fldl  [winkel]            ; push Winkel
+      fsin                      ; st0 = sin(winkel) ≈ 1.0
+      fstpl [ergebnis]          ; speichern und pop
+
+  ; Für sin/cos in SSE gibt es KEINE direkten Befehle!
+  ; Entweder x87 benutzen, oder Bibliothek (glibc sin/cos), oder
+  ; Taylor-Reihe in SSE implementieren (kompliziert aber möglich).
+
+--------------------------------------------------------------------------------
+ÜBUNG 18:
+Schreibe eine Funktion "punkt_distanz":
+  ; double distanz(double x1, double y1, double x2, double y2)
+  ; Argumente: xmm0=x1, xmm1=y1, xmm2=x2, xmm3=y2
+  ; Rückgabe: xmm0 = sqrt((x2-x1)² + (y2-y1)²)
+
+  Und einen Test der die Distanz zwischen (0,0) und (3,4) berechnet
+  → Ergebnis muss 5.0 sein (Pythagoras!).
+  Gib das Ergebnis mit printf aus.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 19: SIMD — Vektoroperationen mit SSE/AVX
+================================================================================
+
+------------------------------------------------------------------------
+19.1  Was ist SIMD
+------------------------------------------------------------------------
+
+SIMD = Single Instruction, Multiple Data.
+Eine Instruktion operiert auf mehreren Werten gleichzeitig.
+
+  Ohne SIMD: 4 Additionen = 4 Instruktionen
+  Mit SSE:   4 float-Additionen = 1 Instruktion (addps)
+  Mit AVX:   8 float-Additionen = 1 Instruktion (vaddps)
+  Mit AVX-512: 16 float-Additionen = 1 Instruktion
+
+Das ist genau das was Spiele-Engines, Video-Codecs, und
+wissenschaftliche Simulationen so performant macht.
+
+  XMM (128-Bit) kann enthalten:
+    16 × uint8
+    8  × uint16
+    4  × uint32 oder float
+    2  × uint64 oder double
+
+  YMM (256-Bit, AVX) kann enthalten:
+    32 × uint8
+    16 × uint16
+    8  × uint32 oder float
+    4  × uint64 oder double
+
+------------------------------------------------------------------------
+19.2  SSE Packed Integer-Operationen
+------------------------------------------------------------------------
+
+  Laden/Speichern:
+    movdqa  xmm0, [adresse]    ; 128-Bit aligned laden (MUSS 16-Byte-aligned sein!)
+    movdqu  xmm0, [adresse]    ; 128-Bit unaligned laden (langsamer, aber sicher)
+    movdqa  [adresse], xmm0    ; 128-Bit aligned speichern
+    movdqu  [adresse], xmm0    ; 128-Bit unaligned speichern
+
+  Packed Integer-Arithmetik (Suffix = Element-Größe):
+    paddb   xmm0, xmm1        ; 16 × uint8 Addition
+    paddw   xmm0, xmm1        ; 8  × uint16 Addition
+    paddd   xmm0, xmm1        ; 4  × uint32 Addition
+    paddq   xmm0, xmm1        ; 2  × uint64 Addition
+    psubb, psubw, psubd, psubq ; Subtraktion
+
+    ; Mit Sättigungsarithmetik (kein Overflow, stoppt bei Min/Max):
+    paddusb xmm0, xmm1        ; 16 × uint8 Addition mit Sättigung (max = 255)
+    paddsb  xmm0, xmm1        ; 16 × int8  Addition mit Sättigung
+    paddusw xmm0, xmm1        ; 8 × uint16 mit Sättigung
+
+    pmulld  xmm0, xmm1        ; 4 × int32 Multiplikation (SSE4.1!)
+
+  Packed Logik:
+    pand    xmm0, xmm1        ; bitweises AND
+    pandn   xmm0, xmm1        ; bitweises ANDNOT (xmm0 = ~xmm0 & xmm1)
+    por     xmm0, xmm1        ; bitweises OR
+    pxor    xmm0, xmm1        ; bitweises XOR
+    pxor    xmm0, xmm0        ; xmm0 = alle Nullen (schnellste Null-Setzung)
+
+  Packed Shift:
+    psllw   xmm0, 3           ; 8 × uint16 links um 3 schieben
+    psrld   xmm0, 1           ; 4 × uint32 rechts um 1 schieben (unsigned)
+    psrad   xmm0, 1           ; 4 × int32  rechts um 1 schieben (signed, SAR)
+
+  Packed Vergleich:
+    pcmpeqb xmm0, xmm1        ; 16 × uint8: wenn gleich → 0xFF, sonst 0x00
+    pcmpgtb xmm0, xmm1        ; 16 × int8:  wenn xmm0 > xmm1 → 0xFF, sonst 0x00
+    pcmpeqd xmm0, xmm1        ; 4 × uint32 Vergleich
+
+  Das Ergebnis von Vergleichen ist eine MASKE (alles 1 oder alles 0).
+  Sie wird mit pand/pandn benutzt um Werte selektiv auszuwählen.
+
+------------------------------------------------------------------------
+19.3  SSE Packed Float-Operationen
+------------------------------------------------------------------------
+
+  Laden:
+    movaps  xmm0, [adresse]   ; 4 × float, ALIGNED (16-Byte-Boundary)
+    movups  xmm0, [adresse]   ; 4 × float, unaligned (flexibel, etwas langsamer)
+    movapd  xmm0, [adresse]   ; 2 × double, aligned
+    movupd  xmm0, [adresse]   ; 2 × double, unaligned
+
+  Arithmetik (PS = Packed Single, PD = Packed Double):
+    addps   xmm0, xmm1        ; 4 floats addieren
+    subps   xmm0, xmm1        ; 4 floats subtrahieren
+    mulps   xmm0, xmm1        ; 4 floats multiplizieren
+    divps   xmm0, xmm1        ; 4 floats dividieren
+    sqrtps  xmm0, xmm1        ; 4 Quadratwurzeln (xmm0 = sqrt(xmm1))
+    rcpps   xmm0, xmm1        ; 4 × 1/x (schnell aber ungenau!)
+    rsqrtps xmm0, xmm1        ; 4 × 1/sqrt(x) (sehr schnell, ungenau)
+    maxps   xmm0, xmm1        ; 4 × max(xmm0, xmm1)
+    minps   xmm0, xmm1        ; 4 × min(xmm0, xmm1)
+
+    andps   xmm0, xmm1        ; bitweises AND (auch für floats!)
+    andnps  xmm0, xmm1        ; bitweises ANDNOT
+    orps    xmm0, xmm1        ; bitweises OR
+    xorps   xmm0, xmm0        ; xmm0 = 0.0 für alle 4 floats (!)
+
+  Vergleiche (Ergebnis ist Bitmaske!):
+    cmpps   xmm0, xmm1, 0     ; xmm0[i] == xmm1[i] ? 0xFFFFFFFF : 0x00000000
+    cmpps   xmm0, xmm1, 1     ; < (less than)
+    cmpps   xmm0, xmm1, 2     ; <= (less than or equal)
+    cmpps   xmm0, xmm1, 4     ; != (not equal)
+
+  Shuffle (Elemente umordnen — sehr nützlich!):
+    shufps  xmm0, xmm1, imm8  ; nimmt je 2 Elemente aus xmm0 und xmm1
+    ; Das imm8 gibt an welche Elemente wohin gehen:
+    ; Bits 0-1: xmm0[?] → Ergebnis[0]
+    ; Bits 2-3: xmm0[?] → Ergebnis[1]
+    ; Bits 4-5: xmm1[?] → Ergebnis[2]
+    ; Bits 6-7: xmm1[?] → Ergebnis[3]
+
+    ; Beispiel: alle 4 Elemente auf xmm0[0] setzen:
+    shufps xmm0, xmm0, 0x00   ; 00 00 00 00 = alle von Index 0
+
+  Horizontal-Operationen:
+    haddps  xmm0, xmm1   ; xmm0[0+1], xmm0[2+3], xmm1[0+1], xmm1[2+3]
+    hsubps  xmm0, xmm1   ; ähnlich mit Subtraktion
+
+------------------------------------------------------------------------
+19.4  Praxis — 4 Vektoren parallel transformieren
+------------------------------------------------------------------------
+
+  ; 4 Punkte (x, y, z, w) gleichzeitig skalieren:
+  ; xmm0 = [x0, y0, z0, w0], xmm1 = Skalierungsfaktor [s, s, s, s]
+  ; Ergebnis in xmm0
+
+  section .data
+      align 16                      ; WICHTIG: MUSS 16-Byte-aligned sein!
+      punkte   dd  1.0, 2.0, 3.0, 4.0     ; [x, y, z, w]
+      skala    dd  2.5, 2.5, 2.5, 2.5     ; Skalierungsfaktor
+
+  skaliere_vektor:
+      movaps  xmm0, [punkte]        ; 4 floats laden
+      movaps  xmm1, [skala]         ; Skalierungsfaktor
+      mulps   xmm0, xmm1            ; EINE Instruktion: 4 Multiplikationen!
+      movaps  [punkte], xmm0        ; Ergebnis speichern
+      ret
+
+  ; Dot-Product (Skalarprodukt) von zwei 4D-Vektoren:
+  ; vec_a = [a0, a1, a2, a3], vec_b = [b0, b1, b2, b3]
+  ; Ergebnis: a0*b0 + a1*b1 + a2*b2 + a3*b3
+
+  dot_product_4:
+      ; xmm0 = vec_a, xmm1 = vec_b
+      mulps   xmm0, xmm1            ; [a0*b0, a1*b1, a2*b2, a3*b3]
+      haddps  xmm0, xmm0            ; [a0*b0+a1*b1, a2*b2+a3*b3, ..., ...]
+      haddps  xmm0, xmm0            ; [Summe aller 4, Summe aller 4, ...]
+      ; xmm0[0] enthält das Dot-Product
+      ret
+
+  ; Mit SSE4.1 (moderner, schneller):
+  ; dpps xmm0, xmm1, 0xFF  → direkt das Dot-Product in xmm0[0]
+
+------------------------------------------------------------------------
+19.5  AVX — 256-Bit Vektoren
+------------------------------------------------------------------------
+
+  AVX benutzt YMM-Register (256-Bit) und VEX-Prefix (Befehle beginnen mit "v").
+
+  ; Voraussetzung prüfen (CPUID):
+  ; AMD Bulldozer (2011) und Intel Sandy Bridge (2011) = erste AVX-CPUs
+
+  ; Laden (256-Bit):
+  vmovaps  ymm0, [adresse]     ; 8 × float, 32-Byte-aligned!
+  vmovups  ymm0, [adresse]     ; 8 × float, unaligned
+  vmovapd  ymm0, [adresse]     ; 4 × double, aligned
+  vzeroupper                   ; obere Hälfte aller YMM-Register löschen
+                               ; (IMMER nach AVX-Code vor SSE/CPU-Übergaben!)
+
+  ; Arithmetik (3-Operanden-Format — nicht-destruktiv!):
+  vaddps  ymm2, ymm0, ymm1     ; ymm2 = ymm0 + ymm1 (ymm0 UNVERÄNDERT!)
+  vsubps  ymm2, ymm0, ymm1
+  vmulps  ymm2, ymm0, ymm1
+  vdivps  ymm2, ymm0, ymm1
+
+  ; Broadcast (einen Wert an alle 8 Positionen):
+  vbroadcastss  ymm0, [skalar]  ; alle 8 float-Elemente = [skalar]
+  ; Oder:
+  movss    xmm0, [skalar]
+  vbroadcastss  ymm0, xmm0
+
+  ; FMA — Fused Multiply-Add (AVX2 + FMA-Support):
+  ; ymm0 = ymm1 * ymm2 + ymm3 (IN EINER INSTRUKTION, mit besserem Rounding!)
+  vfmadd213ps  ymm0, ymm1, ymm2   ; ymm0 = ymm0 * ymm1 + ymm2
+  vfmadd231ps  ymm0, ymm1, ymm2   ; ymm0 = ymm1 * ymm2 + ymm0
+  vfmsub213ps  ymm0, ymm1, ymm2   ; ymm0 = ymm0 * ymm1 - ymm2
+
+  ; FMA ist EXTREM wichtig für:
+  ; - Matrix-Multiplikation
+  ; - Dot-Products
+  ; - Polynomauswertung (sin, cos Näherungen)
+  ; - Maschinelles Lernen
+
+------------------------------------------------------------------------
+19.6  Praxis — Array summieren mit SIMD
+------------------------------------------------------------------------
+
+  ; Summiere 1000 floats so schnell wie möglich:
+
+  ; Naive Version: 1000 Iterationen, je 1 Instruktion
+  ; SIMD-Version: 250 Iterationen, je 4 Werte (SSE), 8× mal schneller (AVX)
+
+  section .data
+      align 32
+      arr    times 1000  dd  1.0   ; 1000 floats, alle 1.0
+
+  summe_simd:
+      ; rdi = Array-Adresse, rsi = Anzahl Elemente
+      ; Rückgabe: xmm0 = Summe
+
+      vzeroupper
+      vxorps     ymm0, ymm0, ymm0    ; Akkumulator = 0.0 × 8
+      vxorps     ymm1, ymm1, ymm1    ; zweiter Akkumulator (für bessere Pipeline!)
+
+      mov   rcx, rsi
+      shr   rcx, 4                   ; rcx = n / 16 (16 floats pro Iteration: 2 × 8)
+
+  .loop:
+      vmovups   ymm2, [rdi]          ; 8 floats laden
+      vmovups   ymm3, [rdi + 32]     ; nächste 8 floats laden
+      vaddps    ymm0, ymm0, ymm2     ; Akkumulator 0 += erste 8
+      vaddps    ymm1, ymm1, ymm3     ; Akkumulator 1 += nächste 8
+      add       rdi, 64              ; Zeiger um 64 Bytes (16 floats) vorrücken
+      dec       rcx
+      jnz       .loop
+
+      ; Akkumulatoren zusammenführen:
+      vaddps    ymm0, ymm0, ymm1     ; ymm0 = ymm0 + ymm1 (8 partielle Summen)
+
+      ; 8 floats in ymm0 horizontal summieren:
+      ; ymm0 = [a, b, c, d, e, f, g, h]
+      ; → Summe aller 8
+      vextractf128  xmm1, ymm0, 1   ; obere 128-Bit (e, f, g, h) in xmm1
+      vaddps        xmm0, xmm0, xmm1 ; xmm0 = [a+e, b+f, c+g, d+h]
+      vhaddps       xmm0, xmm0, xmm0 ; xmm0 = [a+e+b+f, c+g+d+h, ...]
+      vhaddps       xmm0, xmm0, xmm0 ; xmm0 = [Gesamtsumme, ...]
+      vzeroupper
+      ret
+
+      ; Rest-Elemente (n mod 16) könnte man noch mit skalaren SSE addieren.
+
+--------------------------------------------------------------------------------
+ÜBUNG 19:
+Implementiere Matrix-Multiplikation zweier 4×4 float-Matrizen mit SSE:
+  void mat4_mul(float *C, float *A, float *B);
+  C[4×4] = A[4×4] × B[4×4]
+
+  Strategie: Für jede Zeile von A und jede Spalte von B:
+    - Zeile von A laden: [a0, a1, a2, a3] → broadcast jedes Element
+    - Spalte von B laden: [b0, b1, b2, b3]
+    - Akkumulieren: C[i][j] += A[i][k] * B[k][j]
+  Mit SSE kannst du EINE GANZE ZEILE von C auf einmal berechnen!
+
+  Tipp: Stelle B transposed vor oder benutze shufps/broadcast.
+  Teste mit Einheitsmatrix × Testmatrix = Testmatrix.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 20: Strukturen und Datenstrukturen in Assembly
+================================================================================
+
+------------------------------------------------------------------------
+20.1  Strukturen definieren
+------------------------------------------------------------------------
+
+  In C:
+    struct Spieler {
+        long  id;          // 8 Bytes
+        float x;           // 4 Bytes
+        float y;           // 4 Bytes
+        int   health;      // 4 Bytes
+        char  name[16];    // 16 Bytes
+    };                     // Total: 36 Bytes (+ evtl. Padding)
+
+  In Assembly (NASM struc-Makro):
+    struc Spieler
+        .id     resq 1      ; 8 Bytes (Offset 0)
+        .x      resd 1      ; 4 Bytes (Offset 8)
+        .y      resd 1      ; 4 Bytes (Offset 12)
+        .health resd 1      ; 4 Bytes (Offset 16)
+        .name   resb 16     ; 16 Bytes (Offset 20)
+        .groesse equ $-Spieler  ; Größe der gesamten Struktur
+    endstruc
+    ; Spieler.id = 0, Spieler.x = 8, Spieler.y = 12, etc.
+
+  ; Oder manuell mit EQU-Konstanten:
+  SPIELER_ID     equ  0
+  SPIELER_X      equ  8
+  SPIELER_Y      equ  12
+  SPIELER_HEALTH equ  16
+  SPIELER_NAME   equ  20
+  SPIELER_GROESSE equ 36
+
+  ; Struktur im .bss-Bereich:
+  section .bss
+      spieler1  resb  SPIELER_GROESSE     ; Platz für einen Spieler
+
+  ; Oder statische Struktur im .data-Bereich:
+  section .data
+      spieler2:
+          dq  42              ; id = 42
+          dd  10.0            ; x = 10.0
+          dd  20.0            ; y = 20.0
+          dd  100             ; health = 100
+          db  "Hero", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  ; name (16 Bytes)
+
+------------------------------------------------------------------------
+20.2  Felder einer Struktur zugreifen
+------------------------------------------------------------------------
+
+  ; rdi = Pointer auf Spieler-Struktur
+
+  ; Lesen:
+  mov  rax, [rdi + SPIELER_ID]       ; id lesen
+  movss xmm0, [rdi + SPIELER_X]     ; x als float lesen
+  mov  ecx, [rdi + SPIELER_HEALTH]   ; health als int lesen
+
+  ; Schreiben:
+  mov  qword [rdi + SPIELER_ID], 99  ; id setzen
+  mov  dword [rdi + SPIELER_HEALTH], 50  ; health setzen
+
+  ; Mit struc-Makro (etwas eleganter):
+  mov  rax, [rdi + Spieler.id]
+  movss xmm0, [rdi + Spieler.x]
+
+  ; Array von Strukturen:
+  section .bss
+      spieler_array  resb  SPIELER_GROESSE * 100   ; 100 Spieler
+
+  ; Zugriff auf spieler_array[i].health:
+  ; rdi = Basisadresse, rcx = Index i
+  imul  rax, rcx, SPIELER_GROESSE    ; rax = i * Strukturgröße
+  mov   edx, [rdi + rax + SPIELER_HEALTH]
+
+------------------------------------------------------------------------
+20.3  Linked List in Assembly
+------------------------------------------------------------------------
+
+  ; Node-Struktur:
+  ; struct Node {
+  ;     long  wert;       // 8 Bytes (Offset 0)
+  ;     Node* next;       // 8 Bytes (Offset 8) — Pointer!
+  ; };
+
+  NODE_WERT   equ 0
+  NODE_NEXT   equ 8
+  NODE_GROESSE equ 16
+
+  ; Speicher für Nodes (z.B. über mmap):
+  ; Einfacherer Ansatz: statischer Pool im .bss
+  section .bss
+      node_pool   resb  NODE_GROESSE * 1000   ; Platz für 1000 Nodes
+      pool_idx    resq  1                      ; Nächster freier Index
+
+  ; Node allozieren:
+  alloc_node:
+      ; Rückgabe: rax = Pointer auf neue Node (oder NULL wenn voll)
+      mov  rax, [pool_idx]
+      cmp  rax, 1000
+      jae  .pool_voll
+      ; Berechne Adresse: node_pool + rax * NODE_GROESSE
+      imul rcx, rax, NODE_GROESSE
+      lea  rcx, [node_pool + rcx]
+      inc  qword [pool_idx]
+      mov  rax, rcx       ; Pointer zurückgeben
+      ret
+  .pool_voll:
+      xor  rax, rax       ; NULL zurückgeben
+      ret
+
+  ; Node am Anfang einfügen (prepend):
+  ; rdi = Wert, rsi = aktueller Head (Pointer oder NULL)
+  ; Rückgabe: rax = neuer Head
+  list_prepend:
+      push rdi
+      push rsi
+      call alloc_node    ; rax = neue Node
+      pop  rsi
+      pop  rdi
+      test rax, rax
+      jz   .fehler       ; Allokierung fehlgeschlagen
+      mov  [rax + NODE_WERT], rdi    ; wert setzen
+      mov  [rax + NODE_NEXT], rsi    ; next = alter Head
+      ret
+  .fehler:
+      xor  rax, rax
+      ret
+
+  ; Liste durchlaufen und alle Werte ausgeben:
+  ; rdi = Head-Pointer
+  list_print:
+      push r12
+      mov  r12, rdi      ; aktueller Node
+  .loop:
+      test r12, r12
+      jz   .done         ; NULL → Ende
+      mov  rdi, [r12 + NODE_WERT]
+      ; Wert ausgeben (mit int_zu_string aus Teil 1)
+      call print_int     ; eigene Funktion
+      mov  r12, [r12 + NODE_NEXT]  ; nächster Node
+      jmp  .loop
+  .done:
+      pop  r12
+      ret
+
+------------------------------------------------------------------------
+20.4  Hash Table in Assembly
+------------------------------------------------------------------------
+
+  ; Sehr einfache Implementierung: offenes Hashing mit linearem Probing
+
+  TABEL_GROESSE   equ 256          ; Muss Potenz von 2 sein!
+  TABEL_MASKE     equ 255          ; TABEL_GROESSE - 1
+
+  ; Eintrag: [key: 8 Bytes] [value: 8 Bytes] [belegt: 1 Byte]
+  ENTRY_KEY       equ 0
+  ENTRY_VALUE     equ 8
+  ENTRY_BELEGT    equ 16
+  ENTRY_GROESSE   equ 24
+
+  section .bss
+      hashtabel  resb  TABEL_GROESSE * ENTRY_GROESSE
+
+  ; Einfache Hash-Funktion für 64-Bit-Schlüssel:
+  hash_key:
+      ; rdi = Schlüssel → rax = Hash-Index
+      mov  rax, rdi
+      ; Multiplikative Hash-Funktion:
+      imul rax, 0x9e3779b97f4a7c15  ; Goldener Schnitt × 2^64
+      shr  rax, 56                   ; Obere 8 Bits = Index 0-255
+      ; Oder einfacher für kleine Tabellen:
+      ; and rax, TABEL_MASKE
+      ret
+
+  ; Wert einfügen:
+  ; rdi = Schlüssel, rsi = Wert
+  hash_insert:
+      push r12
+      push r13
+      mov  r12, rdi
+      mov  r13, rsi
+      ; Hash berechnen:
+      call hash_key
+      and  rax, TABEL_MASKE    ; Index 0-255
+
+  .probe:
+      ; Adresse des Eintrags berechnen:
+      imul rcx, rax, ENTRY_GROESSE
+      lea  rcx, [hashtabel + rcx]
+
+      cmp  byte [rcx + ENTRY_BELEGT], 0
+      je   .freier_platz       ; leer → hier einfügen
+
+      cmp  [rcx + ENTRY_KEY], r12
+      je   .update             ; gleicher Schlüssel → Update
+
+      ; Belegt mit anderem Schlüssel → linear probing:
+      inc  rax
+      and  rax, TABEL_MASKE
+      jmp  .probe
+
+  .freier_platz:
+      mov  [rcx + ENTRY_KEY], r12
+      mov  byte [rcx + ENTRY_BELEGT], 1
+  .update:
+      mov  [rcx + ENTRY_VALUE], r13
+      pop  r13
+      pop  r12
+      ret
+
+------------------------------------------------------------------------
+20.5  Stack-Implementierung in Assembly
+------------------------------------------------------------------------
+
+  ; Dynamischer Stack mit fester Maximalgröße
+
+  STACK_MAX   equ 1024
+
+  section .bss
+      stack_data  resq STACK_MAX    ; 1024 × 8 Bytes
+      stack_top   resq 1            ; aktueller Stack-Pointer (Index)
+
+  ; push_val: rdi = Wert
+  stack_push:
+      mov  rax, [stack_top]
+      cmp  rax, STACK_MAX
+      jae  .overflow
+      mov  [stack_data + rax*8], rdi
+      inc  qword [stack_top]
+      xor  rax, rax               ; Erfolg = 0
+      ret
+  .overflow:
+      mov  rax, -1                ; Fehler
+      ret
+
+  ; pop_val: Rückgabe rax = Wert (oder -1 wenn leer)
+  stack_pop:
+      mov  rax, [stack_top]
+      test rax, rax
+      jz   .underflow
+      dec  rax
+      mov  [stack_top], rax
+      mov  rax, [stack_data + rax*8]
+      ret
+  .underflow:
+      mov  rax, -1
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 20 (Abschlussprojekt Teil 3 — Datenstrukturen):
+Implementiere einen einfachen Taschenrechner mit Stack-basierter Auswertung
+(Reverse Polish Notation / RPN):
+
+  Eingabe:  "3 4 + 2 * 5 -"
+  Schritte:
+    push 3        Stack: [3]
+    push 4        Stack: [3, 4]
+    +: pop 4, pop 3, push 3+4=7   Stack: [7]
+    push 2        Stack: [7, 2]
+    *: pop 2, pop 7, push 7*2=14  Stack: [14]
+    push 5        Stack: [14, 5]
+    -: pop 5, pop 14, push 14-5=9 Stack: [9]
+  Ausgabe: 9
+
+  Benutze: string-Parsing (Modul 17), atoi, eigene Stack-Implementierung,
+  Arithmetik, und Syscalls für Eingabe/Ausgabe.
+  Unterstütze: +, -, *, / und ganze Zahlen.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 21: Speicherverwaltung — eigener Heap in Assembly
+================================================================================
+
+------------------------------------------------------------------------
+21.1  Der brk-Syscall — Heap wachsen lassen
+------------------------------------------------------------------------
+
+  ; brk(addr) setzt die "Program Break" — die Grenze des Data-Segments.
+  ; Alles zwischen dem ursprünglichen Heap-Ende und der neuen brk-Adresse
+  ; kann als Speicher verwendet werden.
+
+  ; Aktuelles brk ermitteln (brk(0) gibt aktuelle Adresse zurück):
+  mov  rax, 12            ; Syscall: brk
+  xor  rdi, rdi           ; addr = 0 → nur abfragen
+  syscall
+  ; rax = aktuelle brk-Adresse (Heap-Ende)
+
+  ; brk erhöhen (n Bytes anfordern):
+  ; Vorher: heap_end = rax von oben
+  mov  rbx, rax           ; heap_end sichern
+  add  rbx, n_bytes       ; neue brk-Adresse
+  mov  rax, 12
+  mov  rdi, rbx
+  syscall
+  ; rax = neue brk (oder -1 bei Fehler)
+
+  ; In der Praxis: mmap ist flexibler und wird von malloc bevorzugt.
+
+------------------------------------------------------------------------
+21.2  Einfacher Heap-Allokator (malloc)
+------------------------------------------------------------------------
+
+  ; Sehr einfache Implementierung: Bump Allocator
+  ; (kein free, kein Reuse — aber funktioniert für einfache Programme)
+
+  section .bss
+      heap_start  resq 1    ; Anfang des Heaps
+      heap_ptr    resq 1    ; aktueller Zeiger (nächster freier Bereich)
+
+  ; Heap initialisieren (einmalig beim Programmstart):
+  heap_init:
+      mov  rax, 12          ; brk(0)
+      xor  rdi, rdi
+      syscall
+      mov  [heap_start], rax
+      mov  [heap_ptr], rax
+      ret
+
+  ; malloc(size) → rax = Pointer (oder NULL bei Fehler):
+  ; rdi = Anzahl Bytes
+  my_malloc:
+      ; Alignment auf 8 Bytes:
+      add  rdi, 7
+      and  rdi, ~7          ; rdi = (rdi + 7) & ~7 → nächstes Vielfaches von 8
+
+      mov  rax, [heap_ptr]  ; aktueller Zeiger = Rückgabe
+      mov  rcx, rax
+      add  rcx, rdi         ; neue Heap-Spitze
+
+      ; brk anfordern:
+      push rax              ; Rückgabe-Pointer sichern
+      push rcx
+      mov  rax, 12
+      mov  rdi, rcx
+      syscall
+      pop  rcx
+      pop  rbx              ; Rückgabe-Pointer
+      cmp  rax, rcx         ; Hat brk den gewünschten Wert zurückgegeben?
+      jne  .fehler
+      mov  [heap_ptr], rcx
+      mov  rax, rbx         ; Rückgabe: alter heap_ptr
+      ret
+  .fehler:
+      xor  rax, rax         ; NULL zurückgeben
+      ret
+
+------------------------------------------------------------------------
+21.3  Vollständiger malloc mit free (First-Fit)
+------------------------------------------------------------------------
+
+  ; Echter Allocator mit Header und Freelist:
+  ; Header vor jedem Block: [Größe: 8 Bytes] [belegt: 8 Bytes]
+  ; Dann folgen die Nutz-Bytes des Blocks.
+
+  HEADER_SIZE  equ 16
+  HEADER_GROESSE_OFF equ 0
+  HEADER_BELEGT_OFF  equ 8
+
+  ; malloc_real(rdi=size) → rax = Pointer auf Nutz-Bytes (hinter Header)
+  malloc_real:
+      ; (1) Freelist durchsuchen (first-fit):
+      mov  rbx, [freelist_head]    ; Freelist-Start
+  .such_loop:
+      test rbx, rbx
+      jz   .kein_freier_block
+      mov  rcx, [rbx + HEADER_GROESSE_OFF]
+      cmp  rcx, rdi
+      jge  .passend
+      mov  rbx, [rbx + 8 + rcx]   ; nächste freie Block (am Ende des Blocks: next-Pointer)
+      jmp  .such_loop
+
+  .passend:
+      ; Block gefunden: als belegt markieren und zurückgeben
+      mov  qword [rbx + HEADER_BELEGT_OFF], 1
+      ; aus Freelist entfernen (vereinfacht)
+      lea  rax, [rbx + HEADER_SIZE]  ; Pointer auf Nutzbereich
+      ret
+
+  .kein_freier_block:
+      ; Neuen Block mit brk anfordern
+      ; ... (wie my_malloc oben, aber mit Header)
+      ret
+
+  ; (Vollständige Implementierung mit Koaleszierung und Splitting
+  ;  ist Thema für eigene Implementierungsprojekte!)
+
+------------------------------------------------------------------------
+21.4  mmap für große Allokierungen
+------------------------------------------------------------------------
+
+  ; Für Allokierungen > 128KB bevorzugt glibc mmap (nicht brk):
+
+  ; mmap-basiertes malloc:
+  mmap_alloc:
+      ; rdi = Größe
+      ; Alignment auf PAGE_SIZE (4096):
+      add  rdi, 4095
+      and  rdi, ~4095          ; Aufrunden auf nächste Seitengröße
+
+      mov  rax, 9              ; Syscall: mmap
+      mov  r10d, 0x22          ; MAP_PRIVATE | MAP_ANONYMOUS
+      mov  rdx, 3              ; PROT_READ | PROT_WRITE
+      xor  rsi, rsi            ; Kernel wählt Adresse → (rdi schon gesetzt)
+      push rdi
+      mov  rdi, 0
+      pop  rsi
+      mov  r8, -1              ; fd = -1
+      xor  r9, r9              ; offset = 0
+      syscall
+      ; rax = Adresse oder 0xFFFF...FFFF bei Fehler
+      ret
+
+  ; munmap (free für mmap-Blöcke):
+  mmap_free:
+      ; rdi = Pointer, rsi = Größe
+      mov  rax, 11             ; Syscall: munmap
+      syscall
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 21:
+Implementiere einen funktionierenden "String-Pool" Allocator:
+  - String-Pool ist ein großer Speicherbereich für kurze Strings
+  - pool_init(size): Alloziert einen Pool der gegebenen Größe mit mmap
+  - pool_alloc_str(src, len): Kopiert String in den Pool, gibt Pointer zurück
+  - pool_reset(): Setzt den Pool auf Anfang zurück (alle Strings weg)
+  - pool_free(): Gibt den gesamten Pool mit munmap frei
+
+  Das ist nützlich für Parser, Compiler, und Interpreter — genau das
+  was man für eine Game-Engine-Scripting-Sprache bräuchte.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 22: Multithreading-Grundlagen in Assembly
+================================================================================
+
+------------------------------------------------------------------------
+22.1  Threads ohne C-Library — clone() Syscall
+------------------------------------------------------------------------
+
+  ; Linux-Threads sind eigentlich Prozesse die Speicher teilen.
+  ; Der clone() Syscall erstellt einen neuen Thread:
+
+  ; clone(fn, stack, flags, arg)
+  ; Aber die Syscall-Signatur in Linux ist anders!
+
+  CLONE_VM    equ 0x00000100  ; Adressraum teilen
+  CLONE_FS    equ 0x00000200  ; Dateisystem-Kontext teilen
+  CLONE_FILES equ 0x00000400  ; Dateideskriptoren teilen
+  CLONE_SIGHAND equ 0x00000800  ; Signal-Handler teilen
+  CLONE_THREAD  equ 0x00010000  ; Gleiche Thread-Gruppe
+
+  THREAD_FLAGS equ CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD
+
+  section .bss
+      thread_stack  resb  65536    ; 64KB Stack für den Thread
+
+  ; Thread erstellen:
+  ; Der neue Thread startet bei der Funktion thread_func
+  erstelle_thread:
+      ; rdi = Thread-Funktion, rsi = Argument
+      ; Stack für Thread vorbereiten (Stack wächst nach unten!):
+      lea  rdx, [thread_stack + 65536]  ; Zeige auf ENDE des Stacks
+      and  rdx, -16                      ; 16-Byte-Alignment
+
+      ; Argument auf Thread-Stack legen (damit Thread-Func es findet):
+      sub  rdx, 8
+      mov  [rdx], rsi               ; Argument
+
+      ; clone-Syscall:
+      ; Syscall 56 = clone
+      ; rdi = flags, rsi = Stack-Pointer, rdx = parent_tidptr, r10 = child_tidptr, r8 = tls
+      push rdi                       ; Thread-Funktion sichern
+      mov  rdi, THREAD_FLAGS
+      mov  rsi, rdx                  ; Thread-Stack-Pointer
+      xor  rdx, rdx                  ; parent_tidptr = NULL
+      xor  r10, r10                  ; child_tidptr = NULL
+      xor  r8, r8                    ; tls = NULL
+      mov  rax, 56                   ; Syscall: clone
+      syscall
+      pop  rdi
+
+      test rax, rax
+      jz   .im_child              ; rax = 0 → wir sind im neuen Thread
+      ; Im Parent: rax = Thread-TID
+      ret
+
+  .im_child:
+      ; Wir sind im neuen Thread
+      ; Argument vom Stack holen:
+      pop  rdi                    ; das Argument das wir gepusht haben
+      call rdi                    ; eigentlich: call thread_func mit rdi=argument
+      ; Thread beenden:
+      mov  rax, 60               ; exit
+      xor  rdi, rdi
+      syscall
+
+------------------------------------------------------------------------
+22.2  Atomare Operationen — Lock-Free Programming
+------------------------------------------------------------------------
+
+  Wenn mehrere Threads gleichzeitig auf dieselbe Variable zugreifen,
+  entstehen Race Conditions. Lösung: Atomare Operationen.
+
+  LOCK-Prefix: macht die nächste Instruktion atomar (Memory Bus Lock):
+    lock add [counter], 1        ; atomares Increment
+    lock sub [counter], 1        ; atomares Decrement
+    lock xadd rax, [counter]     ; rax = [counter], dann [counter] += rax (atomic)
+    lock cmpxchg [ptr], rcx      ; Compare-and-Swap (CAS)
+
+  XADD — Exchange and Add:
+    ; rax = [mem], [mem] += rax (alles atomar mit lock-Prefix)
+    lock xadd [counter], rax     ; rax = alter Wert, counter += rax
+
+  CMPXCHG — Compare and Exchange (das fundamentale Lock-freie Primitiv):
+    ; Vergleicht [mem] mit rax.
+    ; Wenn gleich: [mem] = rcx und ZF = 1.
+    ; Wenn ungleich: rax = [mem] und ZF = 0.
+    lock cmpxchg [ptr], rcx      ; atomar!
+
+    ; Typisches Muster: Wert atomar erhöhen (wie atomic_fetch_add):
+  .retry:
+      mov  rax, [counter]         ; aktuellen Wert lesen
+      lea  rcx, [rax + 1]         ; neuer Wert = alter + 1
+      lock cmpxchg [counter], rcx ; versuche atomar zu tauschen
+      jnz  .retry                 ; wenn jemand anderes inzwischen geändert hat: retry
+
+  MFENCE / SFENCE / LFENCE — Speicher-Barrieren:
+    mfence       ; full memory barrier (alle Loads und Stores vor/nach MFENCE bleiben in Ordnung)
+    sfence       ; store fence (alle Stores vor diesem sind sichtbar)
+    lfence       ; load fence (alle Loads nach diesem sehen vorherige Writes)
+
+    ; WICHTIG: Ohne Fences kann die CPU Operationen umordnen!
+    ; mfence braucht man vor einem atomiaren Lesen wenn man garantieren will
+    ; was andere Threads sehen.
+
+------------------------------------------------------------------------
+22.3  Mutex in Assembly (Spin Lock)
+------------------------------------------------------------------------
+
+  ; Einfachster Mutex: Spin Lock mit CMPXCHG
+
+  section .bss
+      mutex_belegt  resq 1     ; 0 = frei, 1 = belegt
+
+  ; mutex_lock() — blockiert bis Mutex frei ist:
+  mutex_lock:
+      mov  rcx, 1              ; Wert "belegt"
+  .spin:
+      xor  rax, rax            ; erwarteter Wert: 0 (frei)
+      lock cmpxchg [mutex_belegt], rcx
+      jnz  .spin               ; wenn nicht tauschbar: nochmal versuchen
+      mfence                   ; Speicher-Barriere
+      ret
+
+  ; mutex_unlock():
+  mutex_unlock:
+      mfence
+      mov  qword [mutex_belegt], 0  ; Mutex freigeben
+      ret
+
+  ; WARNUNG: Spin Locks sind nur gut wenn Wartezeit sehr kurz!
+  ; Für längere Wartezeiten: futex-Syscall benutzen (komplexer, aber kein CPU-Burning).
+
+  ; Futex (Fast Userspace Mutex) — kurzer Überblick:
+  ; Syscall 202 = futex(uaddr, op, val, timeout, uaddr2, val3)
+  ; FUTEX_WAIT (0): blockiere wenn [uaddr] == val
+  ; FUTEX_WAKE (1): wecke N Threads die auf uaddr warten
+
+------------------------------------------------------------------------
+22.4  Thread-Local Storage
+------------------------------------------------------------------------
+
+  ; fs-Register zeigt auf Thread-Local Storage (TLS)
+  ; (Jeder Thread hat seinen eigenen Bereich)
+
+  ; Thread-ID lesen:
+  mov  rax, 186          ; Syscall: gettid
+  syscall
+  ; rax = Thread-ID
+
+  ; TLS-Zugriff via fs-Register:
+  ; In Linux zeigt fs:0 auf den TLS-Block des aktuellen Threads
+  ; (wird von der C-Runtime gesetzt, für reine Assembly-Threads komplex)
+
+  ; Einfacher Ansatz: Thread-Index als Argument übergeben und
+  ; in einem Array indexieren:
+  section .bss
+      thread_data  resq 128    ; max 128 Threads × 8 Bytes lokale Daten
+
+  ; In Thread-Funktion: rdi = Thread-Index
+  thread_func:
+      ; Eigene "lokale" Daten schreiben:
+      mov  [thread_data + rdi*8], r12  ; Wert speichern
+      ; Lesen:
+      mov  r12, [thread_data + rdi*8]
+      ret
+
+--------------------------------------------------------------------------------
+ÜBUNG 22:
+Implementiere einen Producer-Consumer mit zwei Threads:
+  - Producer: schreibt 10 Zahlen (1-10) in einen Ring-Buffer
+  - Consumer: liest und summiert sie, gibt Summe aus (sollte 55 sein)
+  - Ring-Buffer: 16 Einträge (Potenz von 2!), nutze Modulo mit AND
+  - Synchronisation: Spin Lock für den Buffer-Zugriff
+  - Beide Threads mit clone() starten
+  - Hauptprogramm wartet bis Consumer fertig (futex oder poll auf Variable)
+
+Tipp: Ring-Buffer braucht write_idx und read_idx.
+      Mit LOCK CMPXCHG können beide Thread-sicher erhöht werden.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 23: CPUID — CPU-Features erkennen
+================================================================================
+
+------------------------------------------------------------------------
+23.1  Was ist CPUID
+------------------------------------------------------------------------
+
+  CPUID ist eine Instruktion die CPU-Informationen abfragt:
+    - CPU-Hersteller (Intel/AMD/...)
+    - Unterstützte Befehlssätze (SSE, AVX, AVX2, AVX-512, FMA, ...)
+    - Cache-Größen
+    - CPU-Topologie
+
+  Benutzung: Setze eax (und manchmal ecx) vor cpuid.
+  Nach cpuid: eax, ebx, ecx, edx enthalten die Informationen.
+
+------------------------------------------------------------------------
+23.2  Hersteller-String lesen
+------------------------------------------------------------------------
+
+  cpu_hersteller:
+      xor  eax, eax            ; CPUID Leaf 0 = max_leaf + Hersteller-String
+      cpuid
+      ; eax = maximale unterstützte CPUID-Leaf-Nummer
+      ; ebx:edx:ecx = Hersteller-String (ASCII, 12 Zeichen):
+
+      section .bss
+          hersteller_str  resb  13
+
+      ; Speichere in der richtigen Reihenfolge: ebx, edx, ecx!
+      mov  [hersteller_str],     ebx
+      mov  [hersteller_str + 4], edx
+      mov  [hersteller_str + 8], ecx
+      mov  byte [hersteller_str + 12], 0
+
+      ; AMD:   "AuthenticAMD"
+      ; Intel: "GenuineIntel"
+      ; VMs:   "VMwareVMware", "KVMKVMKVM", "Microsoft Hv"
+
+------------------------------------------------------------------------
+23.3  Feature Flags prüfen
+------------------------------------------------------------------------
+
+  ; CPUID Leaf 1 → Feature Flags:
+  mov  eax, 1
+  cpuid
+  ; ecx = Feature Flags (neuere):
+  ;   Bit 0:  SSE3
+  ;   Bit 9:  SSSE3
+  ;   Bit 19: SSE4.1
+  ;   Bit 20: SSE4.2
+  ;   Bit 28: AVX
+  ;   Bit 30: RDRAND (Zufallszahlen-Instruktion)
+  ; edx = Feature Flags (ältere):
+  ;   Bit 23: MMX
+  ;   Bit 25: SSE
+  ;   Bit 26: SSE2
+
+  ; Beispiel — AVX prüfen:
+  check_avx:
+      mov  eax, 1
+      cpuid
+      test ecx, (1 << 28)     ; Bit 28 von ecx = AVX-Bit
+      jnz  .avx_vorhanden
+      ; kein AVX → Fallback
+      ret
+  .avx_vorhanden:
+      ; AVX kann benutzt werden!
+      ret
+
+  ; CPUID Leaf 7 (Extended Features, Sub-Leaf 0):
+  mov  eax, 7
+  xor  ecx, ecx               ; Sub-Leaf 0
+  cpuid
+  ; ebx Bit 5: AVX2
+  ; ebx Bit 16: AVX-512F
+  ; ebx Bit 3: BMI1 (Bit Manipulation Instructions)
+  ; ebx Bit 8: BMI2
+
+  check_avx2:
+      mov  eax, 7
+      xor  ecx, ecx
+      cpuid
+      test ebx, (1 << 5)
+      jnz  .avx2_vorhanden
+      ret
+  .avx2_vorhanden:
+      ret
+
+------------------------------------------------------------------------
+23.4  Optimierung basierend auf CPU-Features
+------------------------------------------------------------------------
+
+  ; Dispatch-Funktion: wähle beste Implementierung zur Laufzeit:
+
+  section .data
+      ptr_strlen  dq  strlen_fallback    ; Standard
+
+  strlen_init:
+      ; Prüfe welche Features verfügbar sind
+      mov  eax, 1
+      cpuid
+      test ecx, (1 << 20)               ; SSE4.2?
+      jz   .kein_sse42
+      ; SSE4.2 hat PCMPESTRI/PCMPISTRM — extrem schneller String-Scan!
+      mov  qword [ptr_strlen], strlen_sse42
+      ret
+  .kein_sse42:
+      test edx, (1 << 26)               ; SSE2?
+      jz   .kein_sse2
+      mov  qword [ptr_strlen], strlen_sse2
+      ret
+  .kein_sse2:
+      ; Fallback bleibt gesetzt
+      ret
+
+  ; Aufruf (indirect durch Pointer):
+  strlen_dispatch:
+      jmp  [ptr_strlen]           ; ruft die beste verfügbare Version auf
+
+------------------------------------------------------------------------
+23.5  RDTSC — Präzisionsmessung
+------------------------------------------------------------------------
+
+  ; RDTSC = Read Time Stamp Counter (seit CPU-Reset)
+
+  ; Zeit messen:
+  mfence              ; Speicher-Barriere (verhindert Out-of-Order-Messfehler)
+  rdtsc               ; edx:eax = TSC (64-Bit Takt-Zähler)
+  shl  rdx, 32
+  or   rax, rdx       ; rax = kompletter 64-Bit TSC-Wert
+  mov  r12, rax       ; Startzeit sichern
+
+  ; ... Code der gemessen werden soll ...
+
+  mfence
+  rdtsc
+  shl  rdx, 32
+  or   rax, rdx
+  sub  rax, r12       ; Dauer in CPU-Takten
+
+  ; RDTSCP — serialisiert den TSC-Read (genauer):
+  rdtscp              ; edx:eax = TSC, ecx = CPU-ID
+  ; Verhindert dass der CPU den rdtsc über Instruktionsgrenzen hinaus verschiebt
+
+--------------------------------------------------------------------------------
+ÜBUNG 23:
+Schreibe eine "cpu_info"-Funktion die auf stdout ausgibt:
+  1. Den Hersteller-String
+  2. "AVX2: ja/nein"
+  3. "FMA:  ja/nein"
+  4. "AVX-512: ja/nein"
+
+Und: Schreibe eine Benchmark-Funktion die drei strlen-Implementierungen
+vergleicht (naive, SSE2-basiert, SCAS-basiert) und die Taktzahlen ausgibt.
+Benutze rdtsc für die Messung.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+ENDE TEIL 3
+================================================================================
+
+Weiter in Teil 4:
+  Modul 24: Optimierungstechniken — IPC, Pipeline-Stalls, Cache
+  Modul 25: Interrupts, Signale, und Ausnahmebehandlung
+  Modul 26: Bootloader schreiben — "Bare Metal" Assembly
+  Modul 27: Grafik in Assembly — Framebuffer, Pixel-Rendering
+  Modul 28: RollerCoaster Tycoon-Architektur in Assembly
+  Modul 29: Komplettes Projekt — 2D-Spiel-Engine in Assembly
+
+================================================================================

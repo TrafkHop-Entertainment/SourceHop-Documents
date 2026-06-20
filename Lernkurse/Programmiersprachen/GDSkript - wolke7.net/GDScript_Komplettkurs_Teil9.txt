@@ -1,0 +1,1564 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 9 von 9)
+================================================================================
+
+Der letzte Teil. Wir bauen Werkzeuge fuer Entwickler und Spieler gleichzeitig:
+einen vollstaendigen In-Game Level-Editor mit Objekt-Platzierung, Terrain-
+Sculpting, Prop-Rotation, Undo/Redo, Property-Inspektor und Speichern/Laden.
+Dazu geile Menues mit echtem Charakter, das Plugin-System fuer Editor-Erweiterungen,
+professioneller Export-Workflow, und schliesslich die drei Abschlussprojekte die
+alles zusammenfassen.
+
+"Level-Editor" heisst hier nicht Bloecke auf ein Grid klicken. Wir bauen
+das was du dir vorstellst: Objekte frei platzieren, rotieren, skalieren,
+Terrain live formen, Trigger und Volumes setzen, Skripte an Objekte haengen,
+alles speichern und wieder laden -- komplett in GDScript, lauffaehig
+im finalen Export. Dein Spieler kann das auch benutzen.
+
+
+################################################################################
+TEIL 9 -- WERKZEUGE, WORKFLOWS UND ABSCHLUSSPROJEKTE
+################################################################################
+
+
+================================================================================
+MODUL 38: In-Game Level-Editor -- vollstaendig
+================================================================================
+
+------------------------------------------------------------------------
+38.1  Editor-Architektur -- was ein echter Editor braucht
+------------------------------------------------------------------------
+
+Ein vollstaendiger Level-Editor hat diese Systeme:
+
+  KERN-SYSTEME:
+    SelectionManager   -- welches Objekt ist gerade ausgewaehlt
+    TransformGizmo     -- Pfeil/Ring um Objekte zu verschieben/drehen/skalieren
+    UndoRedoSystem     -- Strg+Z / Strg+Y mit beliebig tiefer History
+    ObjectPlacer       -- Objekte aus Bibliothek spawnen
+    PropertyInspector  -- Eigenschaften des selektierten Objekts bearbeiten
+
+  TERRAIN-SYSTEME:
+    TerrainSculptor    -- Terrain anheben/absenken/glaetten per Brush
+    TerrainPainter     -- Texturen auf Terrain malen
+    TerrainFoliage     -- Baeume/Gras automatisch platzieren
+
+  ERWEITERTE SYSTEME:
+    TriggerEditor      -- Areas als Trigger definieren + Aktionen zuweisen
+    PathEditor         -- Pfade zeichnen fuer NPCs, Cutscenes, Fahrzeuge
+    LightEditor        -- Lichtquellen setzen und konfigurieren
+    AudioZoneEditor    -- Audiobereiche definieren
+
+  VERWALTUNG:
+    LevelSerializer    -- Level als JSON/Resource speichern und laden
+    ObjectLibrary      -- Datenbank aller platzierbaren Objekte
+    LayerSystem        -- Sichtbarkeit/Sperren von Ebenen
+
+------------------------------------------------------------------------
+38.2  SelectionManager und Objekt-Picking
+------------------------------------------------------------------------
+
+  class_name SelectionManager
+  extends Node
+
+  signal auswahl_geaendert(objekt: EditorObjekt)
+  signal auswahl_aufgehoben
+
+  var ausgewaehlt: EditorObjekt = null
+  var hover_objekt: EditorObjekt = null
+
+  func _unhandled_input(event: InputEvent) -> void:
+      if not editor_aktiv:
+          return
+
+      # Maus-Klick: Objekt auswaehlen
+      if event is InputEventMouseButton:
+          var mev := event as InputEventMouseButton
+          if mev.button_index == MOUSE_BUTTON_LEFT and mev.pressed:
+              var getroffen := raycast_auf_maus(mev.position)
+              if getroffen:
+                  auswahl_setzen(getroffen)
+              elif not gizmo_aktiv:
+                  auswahl_aufheben()
+
+      # Maus bewegen: Hover hervorheben
+      if event is InputEventMouseMotion:
+          var mev := event as InputEventMouseMotion
+          var getroffen := raycast_auf_maus(mev.position)
+          if getroffen != hover_objekt:
+              if hover_objekt:
+                  hover_objekt.hover_aus()
+              hover_objekt = getroffen
+              if hover_objekt:
+                  hover_objekt.hover_an()
+
+  func raycast_auf_maus(maus_pos: Vector2) -> EditorObjekt:
+      var kamera: Camera3D = get_viewport().get_camera_3d()
+      var ray_origin := kamera.project_ray_origin(maus_pos)
+      var ray_dir    := kamera.project_ray_normal(maus_pos)
+      var ray_end    := ray_origin + ray_dir * 1000.0
+
+      var space := get_viewport().get_world_3d().direct_space_state
+      var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+      query.collision_mask = 0xFFFFFFFF   # Alles treffen
+      var treffer := space.intersect_ray(query)
+
+      if treffer.is_empty():
+          return null
+      var collider: Node = treffer["collider"]
+      # Zum EditorObjekt hochwandern (Collider ist vielleicht ein Kind):
+      var node: Node = collider
+      while node:
+          if node is EditorObjekt:
+              return node as EditorObjekt
+          node = node.get_parent()
+      return null
+
+  func auswahl_setzen(objekt: EditorObjekt) -> void:
+      if ausgewaehlt:
+          ausgewaehlt.deselektieren()
+      ausgewaehlt = objekt
+      ausgewaehlt.selektieren()
+      auswahl_geaendert.emit(objekt)
+
+  func auswahl_aufheben() -> void:
+      if ausgewaehlt:
+          ausgewaehlt.deselektieren()
+          ausgewaehlt = null
+          auswahl_aufgehoben.emit()
+
+------------------------------------------------------------------------
+38.3  TransformGizmo -- Objekte verschieben/drehen/skalieren
+------------------------------------------------------------------------
+
+  class_name TransformGizmo
+  extends Node3D
+
+  enum Modus { KEINE, VERSCHIEBEN, DREHEN, SKALIEREN }
+  enum Achse  { KEINE, X, Y, Z, XY, XZ, YZ }
+
+  var aktueller_modus: Modus = Modus.VERSCHIEBEN
+  var aktive_achse: Achse    = Achse.KEINE
+  var ziel: Node3D           = null
+
+  var drag_start_pos: Vector3    = Vector3.ZERO
+  var drag_start_transform: Transform3D
+  var ist_am_ziehen: bool = false
+
+  @onready var pfeil_x: MeshInstance3D = $PfeilX   # Roter Pfeil
+  @onready var pfeil_y: MeshInstance3D = $PfeilY   # Gruener Pfeil
+  @onready var pfeil_z: MeshInstance3D = $PfeilZ   # Blauer Pfeil
+  @onready var ring_x:  MeshInstance3D = $RingX
+  @onready var ring_y:  MeshInstance3D = $RingY
+  @onready var ring_z:  MeshInstance3D = $RingZ
+
+  func ziel_setzen(neues_ziel: Node3D) -> void:
+      ziel = neues_ziel
+      visible = true
+      global_position = ziel.global_position
+
+  func _process(delta: float) -> void:
+      if not ziel:
+          return
+      # Gizmo bleibt immer gleich gross (Screen-Space-Groesse):
+      var kamera: Camera3D = get_viewport().get_camera_3d()
+      var dist: float = global_position.distance_to(kamera.global_position)
+      scale = Vector3.ONE * dist * 0.1
+
+      if not ist_am_ziehen:
+          global_position = ziel.global_position
+
+  func _input(event: InputEvent) -> void:
+      if not ziel:
+          return
+
+      if event is InputEventMouseButton:
+          var mev := event as InputEventMouseButton
+          if mev.button_index == MOUSE_BUTTON_LEFT:
+              if mev.pressed and aktive_achse != Achse.KEINE:
+                  drag_starten(mev.position)
+              elif not mev.pressed:
+                  drag_beenden()
+
+      if event is InputEventMouseMotion and ist_am_ziehen:
+          drag_ausfuehren(event as InputEventMouseMotion)
+
+      # Tastenkuerzel:
+      if event is InputEventKey and event.pressed:
+          match event.keycode:
+              KEY_G: aktueller_modus = Modus.VERSCHIEBEN; modus_ui_aktualisieren()
+              KEY_R: aktueller_modus = Modus.DREHEN;      modus_ui_aktualisieren()
+              KEY_S: aktueller_modus = Modus.SKALIEREN;   modus_ui_aktualisieren()
+              KEY_X: aktive_achse = Achse.X
+              KEY_Y: aktive_achse = Achse.Y
+              KEY_Z: aktive_achse = Achse.Z
+
+  func drag_starten(maus_pos: Vector2) -> void:
+      ist_am_ziehen = true
+      drag_start_transform = ziel.global_transform
+      drag_start_pos = maus_pos_auf_welt(maus_pos)
+
+  func drag_ausfuehren(event: InputEventMouseMotion) -> void:
+      var delta_welt: Vector3 = maus_pos_auf_welt(event.position) - drag_start_pos
+
+      match aktueller_modus:
+          Modus.VERSCHIEBEN:
+              var bewegung: Vector3 = achse_einschraenken(delta_welt)
+              ziel.global_position = drag_start_transform.origin + bewegung
+
+          Modus.DREHEN:
+              var winkel: float = delta_welt.length() * sign(event.relative.x)
+              var achse_vec: Vector3 = achse_als_vektor()
+              ziel.global_transform = drag_start_transform.rotated_local(achse_vec, winkel)
+
+          Modus.SKALIEREN:
+              var faktor: float = 1.0 + delta_welt.length() * sign(event.relative.x)
+              var skalierung: Vector3 = achse_skalierung(faktor)
+              ziel.global_transform = drag_start_transform.scaled_local(skalierung)
+
+  func drag_beenden() -> void:
+      if not ist_am_ziehen:
+          return
+      ist_am_ziehen = false
+      # Undo-Eintrag erstellen:
+      UndoRedo.aktion_ausfuehren(
+          "Objekt transformieren",
+          func(): ziel.global_transform = drag_start_transform,
+          func(): ziel.global_transform   # Aktueller State = neuer State
+      )
+
+  func achse_einschraenken(delta: Vector3) -> Vector3:
+      match aktive_achse:
+          Achse.X:  return Vector3(delta.x, 0, 0)
+          Achse.Y:  return Vector3(0, delta.y, 0)
+          Achse.Z:  return Vector3(0, 0, delta.z)
+          Achse.XY: return Vector3(delta.x, delta.y, 0)
+          Achse.XZ: return Vector3(delta.x, 0, delta.z)
+          Achse.YZ: return Vector3(0, delta.y, delta.z)
+          _:        return delta
+
+  func maus_pos_auf_welt(maus_pos: Vector2) -> Vector3:
+      var kamera: Camera3D = get_viewport().get_camera_3d()
+      var ray_origin := kamera.project_ray_origin(maus_pos)
+      var ray_dir    := kamera.project_ray_normal(maus_pos)
+      # Schnitt mit der Ebene durch ziel.global_position:
+      var ebene := Plane(Vector3.UP, ziel.global_position.y)
+      var schnitt := ebene.intersects_ray(ray_origin, ray_dir)
+      return schnitt if schnitt else ray_origin + ray_dir * 10.0
+
+------------------------------------------------------------------------
+38.4  UndoRedo-System
+------------------------------------------------------------------------
+
+  class_name UndoRedoSystem
+  extends Node
+
+  class Aktion:
+      var name: String
+      var undo_func: Callable
+      var redo_func: Callable
+
+  var history: Array[Aktion] = []
+  var position: int = -1          # Aktuelle Position in der History
+  const MAX_HISTORY: int = 100
+
+  signal history_geaendert
+
+  func aktion_ausfuehren(name: String, undo: Callable, redo: Callable) -> void:
+      # Alles nach der aktuellen Position loeschen (neuer Zweig):
+      if position < history.size() - 1:
+          history = history.slice(0, position + 1)
+
+      var aktion := Aktion.new()
+      aktion.name     = name
+      aktion.undo_func = undo
+      aktion.redo_func = redo
+
+      history.append(aktion)
+      if history.size() > MAX_HISTORY:
+          history.pop_front()
+
+      position = history.size() - 1
+      history_geaendert.emit()
+
+  func undo() -> void:
+      if position < 0:
+          return
+      history[position].undo_func.call()
+      position -= 1
+      history_geaendert.emit()
+
+  func redo() -> void:
+      if position >= history.size() - 1:
+          return
+      position += 1
+      history[position].redo_func.call()
+      history_geaendert.emit()
+
+  func _input(event: InputEvent) -> void:
+      if event is InputEventKey and event.pressed:
+          if event.ctrl_pressed and event.keycode == KEY_Z:
+              undo()
+          if event.ctrl_pressed and (event.keycode == KEY_Y or
+             (event.shift_pressed and event.keycode == KEY_Z)):
+              redo()
+
+Nutzung fuer Objekt-Erstellung:
+  func objekt_spawnen(szene: PackedScene, position: Vector3) -> EditorObjekt:
+      var obj: EditorObjekt = szene.instantiate()
+      level_container.add_child(obj)
+      obj.global_position = position
+
+      var obj_ref := obj   # Closure-Variable
+      UndoRedo.aktion_ausfuehren(
+          "Objekt platzieren: " + obj.objekt_name,
+          func(): obj_ref.queue_free(),   # Undo: loeschen
+          func():                          # Redo: neu spawnen
+              var neu: EditorObjekt = szene.instantiate()
+              level_container.add_child(neu)
+              neu.global_transform = obj_ref.global_transform
+      )
+      return obj
+
+------------------------------------------------------------------------
+38.5  Property Inspector -- Eigenschaften bearbeiten
+------------------------------------------------------------------------
+
+  extends VBoxContainer   # PropertyInspector
+
+  signal eigenschaft_geaendert(objekt: EditorObjekt, eigenschaft: String, wert: Variant)
+
+  var aktuelles_objekt: EditorObjekt = null
+
+  func objekt_inspizieren(objekt: EditorObjekt) -> void:
+      aktuelles_objekt = objekt
+      # Alle alten Felder loeschen:
+      for kind in get_children():
+          kind.queue_free()
+
+      if not objekt:
+          return
+
+      # Titel:
+      var titel := Label.new()
+      titel.text = objekt.objekt_name
+      titel.add_theme_font_size_override("font_size", 18)
+      add_child(titel)
+
+      # Fuer jede inspizierbare Eigenschaft ein Feld erstellen:
+      for eigenschaft in objekt.editor_eigenschaften:
+          var wert: Variant = objekt.get(eigenschaft)
+          var zeile := eigenschaft_feld_erstellen(eigenschaft, wert)
+          add_child(zeile)
+
+  func eigenschaft_feld_erstellen(name: String, wert: Variant) -> Control:
+      var zeile := HBoxContainer.new()
+      var label := Label.new()
+      label.text = name.capitalize()
+      label.custom_minimum_size.x = 120
+      zeile.add_child(label)
+
+      var feld: Control
+      match typeof(wert):
+          TYPE_FLOAT:
+              var spin := SpinBox.new()
+              spin.value = wert
+              spin.step  = 0.1
+              spin.value_changed.connect(func(v): _eigenschaft_setzen(name, v))
+              feld = spin
+          TYPE_INT:
+              var spin := SpinBox.new()
+              spin.value = wert
+              spin.step  = 1
+              spin.value_changed.connect(func(v): _eigenschaft_setzen(name, int(v)))
+              feld = spin
+          TYPE_STRING:
+              var edit := LineEdit.new()
+              edit.text = wert
+              edit.text_submitted.connect(func(v): _eigenschaft_setzen(name, v))
+              feld = edit
+          TYPE_BOOL:
+              var check := CheckButton.new()
+              check.button_pressed = wert
+              check.toggled.connect(func(v): _eigenschaft_setzen(name, v))
+              feld = check
+          TYPE_COLOR:
+              var picker := ColorPickerButton.new()
+              picker.color = wert
+              picker.color_changed.connect(func(v): _eigenschaft_setzen(name, v))
+              feld = picker
+          TYPE_VECTOR3:
+              var container := HBoxContainer.new()
+              for achse in ["x", "y", "z"]:
+                  var s := SpinBox.new()
+                  s.value = wert.get(achse)
+                  s.step  = 0.1
+                  s.custom_minimum_size.x = 60
+                  s.value_changed.connect(func(v, a=achse):
+                      var neuer_vec: Vector3 = aktuelles_objekt.get(name)
+                      neuer_vec.set(a, v)
+                      _eigenschaft_setzen(name, neuer_vec)
+                  )
+                  container.add_child(s)
+              feld = container
+          _:
+              feld = Label.new()
+              (feld as Label).text = str(wert)
+
+      if feld:
+          feld.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+          zeile.add_child(feld)
+      return zeile
+
+  func _eigenschaft_setzen(name: String, neuer_wert: Variant) -> void:
+      if not aktuelles_objekt:
+          return
+      var alter_wert: Variant = aktuelles_objekt.get(name)
+      aktuelles_objekt.set(name, neuer_wert)
+
+      var obj_ref  := aktuelles_objekt
+      UndoRedo.aktion_ausfuehren(
+          "Eigenschaft aendern: " + name,
+          func(): obj_ref.set(name, alter_wert),
+          func(): obj_ref.set(name, neuer_wert)
+      )
+      eigenschaft_geaendert.emit(aktuelles_objekt, name, neuer_wert)
+
+------------------------------------------------------------------------
+38.6  EditorObjekt -- die Basisklasse fuer alles Platzierbare
+------------------------------------------------------------------------
+
+  class_name EditorObjekt
+  extends Node3D
+
+  # Diese Eigenschaften erscheinen automatisch im Inspector:
+  @export var objekt_name: String = "Objekt"
+  @export var editor_eigenschaften: Array[String] = ["position", "rotation_degrees", "scale"]
+
+  # Visuelle Hervorhebung bei Auswahl:
+  var ist_ausgewaehlt: bool = false
+  var outline_material: ShaderMaterial
+
+  func selektieren() -> void:
+      ist_ausgewaehlt = true
+      _outline_anzeigen(true)
+
+  func deselektieren() -> void:
+      ist_ausgewaehlt = false
+      _outline_anzeigen(false)
+
+  func hover_an() -> void:
+      if not ist_ausgewaehlt:
+          _outline_anzeigen(true, Color(1, 1, 0, 0.5))
+
+  func hover_aus() -> void:
+      if not ist_ausgewaehlt:
+          _outline_anzeigen(false)
+
+  func _outline_anzeigen(an: bool, farbe: Color = Color.CYAN) -> void:
+      for mesh in find_children("*", "MeshInstance3D", true):
+          var mi := mesh as MeshInstance3D
+          if an:
+              var mat := ShaderMaterial.new()
+              # Outline-Shader (invertierte Normals-Technik):
+              mat.shader = preload("res://addons/mein_core/shaders/outline.gdshader")
+              mat.set_shader_parameter("farbe", farbe)
+              mat.set_shader_parameter("staerke", 0.03)
+              mi.set_layer_mask_value(2, true)
+          else:
+              mi.set_layer_mask_value(2, false)
+
+  # Fuer Speichern/Laden -- jedes Objekt weiss wie es sich serialisiert:
+  func zu_dict() -> Dictionary:
+      return {
+          "klasse": get_script().resource_path,
+          "name": objekt_name,
+          "position": {"x": position.x, "y": position.y, "z": position.z},
+          "rotation": {"x": rotation.x, "y": rotation.y, "z": rotation.z},
+          "scale":    {"x": scale.x,    "y": scale.y,    "z": scale.z},
+          "eigenschaften": _eigene_eigenschaften_speichern()
+      }
+
+  func von_dict(d: Dictionary) -> void:
+      objekt_name = d.get("name", objekt_name)
+      var p: Dictionary = d["position"]
+      position = Vector3(p["x"], p["y"], p["z"])
+      var r: Dictionary = d["rotation"]
+      rotation = Vector3(r["x"], r["y"], r["z"])
+      var s: Dictionary = d["scale"]
+      scale    = Vector3(s["x"], s["y"], s["z"])
+      _eigene_eigenschaften_laden(d.get("eigenschaften", {}))
+
+  # Unterklassen ueberschreiben diese:
+  func _eigene_eigenschaften_speichern() -> Dictionary:
+      return {}
+  func _eigene_eigenschaften_laden(_d: Dictionary) -> void:
+      pass
+
+------------------------------------------------------------------------
+38.7  Terrain-Sculpting im Level-Editor
+------------------------------------------------------------------------
+
+  extends Node3D   # TerrainSculptor
+
+  @export var terrain_mesh: MeshInstance3D
+  @export var brush_radius: float    = 5.0
+  @export var brush_staerke: float   = 0.5
+  @export var brush_glaetten: bool   = false
+
+  var terrain_daten: PackedFloat32Array   # Hoehenmap
+  var terrain_breite:  int = 128
+  var terrain_tiefe:   int = 128
+
+  enum Brush { ANHEBENABSENKEN, GLAETTEN, ABFLACHEN, RAUSCHEN }
+  var aktiver_brush: Brush = Brush.ANHEBENABSENKEN
+
+  func _ready() -> void:
+      terrain_daten = PackedFloat32Array()
+      terrain_daten.resize(terrain_breite * terrain_tiefe)
+      terrain_daten.fill(0.0)
+      terrain_mesh_aktualisieren()
+
+  func sculpt_an_position(welt_pos: Vector3, anheban: bool) -> void:
+      var center_x: int = int(welt_pos.x)
+      var center_z: int = int(welt_pos.z)
+      var radius_int: int = int(brush_radius)
+
+      var betroffene: Dictionary = {}   # idx -> alter Wert (fuer Undo)
+
+      for dx in range(-radius_int, radius_int + 1):
+          for dz in range(-radius_int, radius_int + 1):
+              var px: int = center_x + dx
+              var pz: int = center_z + dz
+              if px < 0 or px >= terrain_breite or pz < 0 or pz >= terrain_tiefe:
+                  continue
+
+              var distanz: float = sqrt(dx*dx + dz*dz)
+              if distanz > brush_radius:
+                  continue
+
+              # Brush-Falloff (Gaussian):
+              var falloff: float = exp(-2.0 * (distanz / brush_radius) ** 2)
+              var idx: int = px + pz * terrain_breite
+
+              betroffene[idx] = terrain_daten[idx]
+
+              match aktiver_brush:
+                  Brush.ANHEBENABSENKEN:
+                      var delta: float = brush_staerke * falloff * (1.0 if anheban else -1.0)
+                      terrain_daten[idx] += delta
+                  Brush.GLAETTEN:
+                      var nachbarn_schnitt: float = nachbarn_durchschnitt(px, pz)
+                      terrain_daten[idx] = lerp(terrain_daten[idx], nachbarn_schnitt, brush_staerke * falloff)
+                  Brush.ABFLACHEN:
+                      terrain_daten[idx] = lerp(terrain_daten[idx], ziel_hoehe, brush_staerke * falloff)
+                  Brush.RAUSCHEN:
+                      terrain_daten[idx] += randf_range(-1, 1) * brush_staerke * falloff
+
+      terrain_mesh_aktualisieren()
+
+      # Undo-Eintrag:
+      var alte_werte := betroffene.duplicate()
+      UndoRedo.aktion_ausfuehren(
+          "Terrain sculpting",
+          func():
+              for idx in alte_werte:
+                  terrain_daten[idx] = alte_werte[idx]
+              terrain_mesh_aktualisieren(),
+          func(): pass   # Redo: Werte wurden schon geaendert
+      )
+
+  func nachbarn_durchschnitt(x: int, z: int) -> float:
+      var summe: float = 0.0
+      var anzahl: int = 0
+      for dx in [-1, 0, 1]:
+          for dz in [-1, 0, 1]:
+              var nx: int = x + dx
+              var nz: int = z + dz
+              if nx >= 0 and nx < terrain_breite and nz >= 0 and nz < terrain_tiefe:
+                  summe += terrain_daten[nx + nz * terrain_breite]
+                  anzahl += 1
+      return summe / anzahl if anzahl > 0 else 0.0
+
+  func terrain_mesh_aktualisieren() -> void:
+      var surface := SurfaceTool.new()
+      surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+      for z in range(terrain_tiefe - 1):
+          for x in range(terrain_breite - 1):
+              var h00: float = terrain_daten[x +       z       * terrain_breite]
+              var h10: float = terrain_daten[(x+1) +   z       * terrain_breite]
+              var h01: float = terrain_daten[x +       (z+1)   * terrain_breite]
+              var h11: float = terrain_daten[(x+1) +   (z+1)   * terrain_breite]
+
+              var v00 := Vector3(x,   h00, z)
+              var v10 := Vector3(x+1, h10, z)
+              var v01 := Vector3(x,   h01, z+1)
+              var v11 := Vector3(x+1, h11, z+1)
+
+              # Dreieck 1:
+              surface.add_vertex(v00)
+              surface.add_vertex(v10)
+              surface.add_vertex(v11)
+              # Dreieck 2:
+              surface.add_vertex(v00)
+              surface.add_vertex(v11)
+              surface.add_vertex(v01)
+
+      surface.generate_normals()
+      surface.generate_tangents()
+      terrain_mesh.mesh = surface.commit()
+
+      # Kollision aktualisieren:
+      var static_body := terrain_mesh.get_node_or_null("StaticBody3D")
+      if static_body:
+          static_body.queue_free()
+      terrain_mesh.create_trimesh_collision()
+
+------------------------------------------------------------------------
+38.8  Level speichern und laden
+------------------------------------------------------------------------
+
+  class_name LevelSerializer
+  extends Node
+
+  const LEVEL_VERSION: int = 1
+
+  func level_speichern(pfad: String, objekte: Array[EditorObjekt], terrain: TerrainSculptor) -> void:
+      var daten: Dictionary = {
+          "version": LEVEL_VERSION,
+          "erstellt": Time.get_datetime_string_from_system(),
+          "objekte": [],
+          "terrain": {
+              "breite": terrain.terrain_breite,
+              "tiefe":  terrain.terrain_tiefe,
+              "daten":  Array(terrain.terrain_daten)   # PackedArray -> Array
+          }
+      }
+      for obj in objekte:
+          daten["objekte"].append(obj.zu_dict())
+
+      var json := JSON.stringify(daten, "\t")
+      var datei := FileAccess.open(pfad, FileAccess.WRITE)
+      if datei:
+          datei.store_string(json)
+          datei.close()
+          print("Level gespeichert: ", pfad)
+
+  func level_laden(pfad: String, container: Node3D, terrain: TerrainSculptor) -> bool:
+      if not FileAccess.file_exists(pfad):
+          return false
+
+      var datei := FileAccess.open(pfad, FileAccess.READ)
+      var daten: Dictionary = JSON.parse_string(datei.get_as_text())
+      datei.close()
+
+      if daten.get("version", 0) != LEVEL_VERSION:
+          push_error("Veraltetes Level-Format!")
+          return false
+
+      # Alte Objekte loeschen:
+      for kind in container.get_children():
+          kind.queue_free()
+
+      # Terrain laden:
+      if daten.has("terrain"):
+          var t: Dictionary = daten["terrain"]
+          terrain.terrain_daten = PackedFloat32Array(t["daten"])
+          terrain.terrain_mesh_aktualisieren()
+
+      # Objekte laden:
+      for obj_daten in daten["objekte"]:
+          var script_pfad: String = obj_daten["klasse"]
+          var szene_pfad: String  = obj_daten.get("szene", "")
+
+          var obj: EditorObjekt
+          if szene_pfad and ResourceLoader.exists(szene_pfad):
+              obj = load(szene_pfad).instantiate()
+          else:
+              obj = EditorObjekt.new()
+          container.add_child(obj)
+          obj.von_dict(obj_daten)
+
+      return true
+
+  # Thumbnail fuer Speicher-Slot:
+  func thumbnail_erstellen() -> Image:
+      await RenderingServer.frame_post_draw
+      return get_viewport().get_texture().get_image()
+
+------------------------------------------------------------------------
+38.9  Objekt-Bibliothek und Kategorien
+------------------------------------------------------------------------
+
+  class_name ObjektBibliothek
+  extends Resource
+
+  class ObjektEintrag:
+      var name:        String
+      var beschreibung: String
+      var vorschau:    Texture2D
+      var szene:       PackedScene
+      var kategorie:   String
+      var tags:        Array[String]
+
+  @export var eintraege: Array[ObjektEintrag] = []
+
+  func eintraege_nach_kategorie(kat: String) -> Array[ObjektEintrag]:
+      return eintraege.filter(func(e): return e.kategorie == kat)
+
+  func suche(suchbegriff: String) -> Array[ObjektEintrag]:
+      var sb := suchbegriff.to_lower()
+      return eintraege.filter(func(e):
+          return sb in e.name.to_lower() or
+                 e.tags.any(func(t): return sb in t)
+      )
+
+  func alle_kategorien() -> Array[String]:
+      var kats: Array[String] = []
+      for e in eintraege:
+          if not e.kategorie in kats:
+              kats.append(e.kategorie)
+      return kats
+
+--------------------------------------------------------------------------------
+UEBUNG 38:
+1. Baue den SelectionManager: Raycast auf Maus-Klick, Outline auf Auswahl.
+2. Implementiere UndoRedo mit 100-Schritten-History. Teste mit Strg+Z/Y.
+3. Baue den PropertyInspector: Zeigt alle @export-Variablen des ausgewaehlten
+   Objekts mit passenden Feldern (SpinBox, LineEdit, CheckButton, ColorPicker).
+4. Implementiere Terrain-Sculpting mit 4 Brush-Modi und korrektem Undo.
+5. Speichere ein Level als JSON (Objekte + Terrain) und lade es wieder.
+6. Bonus: Vollstaendiger Gizmo mit Verschiebe-Pfeilen (Maus zieht an Achse).
+   Zeige Pfeile immer gleich gross (Screen-Space-Scaling).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 39: Geile Menues -- UI mit Charakter
+================================================================================
+
+------------------------------------------------------------------------
+39.1  Was ein geiles Menu ausmacht
+------------------------------------------------------------------------
+
+Schlechte Menues: weissr Hintergrund, normale Buttons, kein Feedback,
+kein Stil, langweilig.
+
+Gute Menues haben:
+  Visuelle Identitaet   -- Farben, Typografie, Stil der zum Spiel passt
+  Uebergangs-Animationen -- Menues gleiten rein/raus statt zu poppen
+  Hover-Feedback        -- Buttons reagieren subtil auf Mausnaeherung
+  Sound-Feedback        -- Hover-Sound, Klick-Sound, Menu-Musik
+  Hintergrund-Aktivitaet -- kein statisches Bild hinter dem Menu
+  Gamepad-Navigation    -- Fokus-System fuer Controller
+
+------------------------------------------------------------------------
+39.2  Animiertes Hauptmenu
+------------------------------------------------------------------------
+
+  extends Control   # HauptMenu
+
+  @onready var titel:      Label           = $Titel
+  @onready var knopf_list: VBoxContainer   = $Knoepfe
+  @onready var bg_partikel: GPUParticles2D = $Hintergrund/Partikel
+  @onready var menu_musik:  AudioStreamPlayer = $MenuMusik
+
+  func _ready() -> void:
+      menu_musik.play()
+      # Alles versteckt starten:
+      titel.modulate.a = 0.0
+      for knopf in knopf_list.get_children():
+          knopf.modulate.a = 0.0
+          knopf.position.x += 100
+
+      # Sequenziell einblenden:
+      await einblenden_sequenz()
+
+  func einblenden_sequenz() -> void:
+      await get_tree().create_timer(0.3).timeout
+
+      # Titel einblenden:
+      var tween := create_tween()
+      tween.tween_property(titel, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_SINE)
+      tween.parallel().tween_property(titel, "position:y", titel.position.y - 20, 0.6)\
+          .set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+      await tween.finished
+
+      # Knoepfe nacheinander einblenden:
+      for i in range(knopf_list.get_child_count()):
+          var knopf: Control = knopf_list.get_child(i)
+          var t := create_tween()
+          t.tween_property(knopf, "modulate:a", 1.0, 0.3)
+          t.parallel().tween_property(knopf, "position:x", knopf.position.x - 100, 0.4)\
+              .set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+          await get_tree().create_timer(0.08).timeout
+
+------------------------------------------------------------------------
+39.3  Stylisher Menu-Button
+------------------------------------------------------------------------
+
+  extends Button   # MenuButton
+
+  var hover_tween:  Tween = null
+  var hover_sound:  AudioStream = preload("res://audio/ui/hover.wav")
+  var klick_sound:  AudioStream = preload("res://audio/ui/click.wav")
+
+  var basis_farbe:  Color = Color(0.1, 0.1, 0.15, 0.8)
+  var hover_farbe:  Color = Color(0.2, 0.3, 0.6, 0.9)
+  var klick_farbe:  Color = Color(0.3, 0.5, 1.0, 1.0)
+
+  @onready var bg:          ColorRect = $BG
+  @onready var glow:        ColorRect = $Glow
+  @onready var text_label:  Label     = $Text
+  @onready var pfeil:       Label     = $Pfeil
+
+  func _ready() -> void:
+      mouse_entered.connect(_on_hover_ein)
+      mouse_exited.connect(_on_hover_aus)
+      button_down.connect(_on_klick_start)
+      button_up.connect(_on_klick_ende)
+      glow.modulate.a = 0.0
+      pfeil.modulate.a = 0.0
+
+  func _on_hover_ein() -> void:
+      Audio.sound_abspielen(hover_sound, 0.4)
+      if hover_tween:
+          hover_tween.kill()
+      hover_tween = create_tween().set_parallel(true)
+      hover_tween.tween_property(bg,    "color",          hover_farbe, 0.15)
+      hover_tween.tween_property(glow,  "modulate:a",     0.6,         0.2)
+      hover_tween.tween_property(pfeil, "modulate:a",     1.0,         0.15)
+      hover_tween.tween_property(pfeil, "position:x",     pfeil.position.x + 8, 0.15)\
+          .set_trans(Tween.TRANS_QUART)
+      hover_tween.tween_property(text_label, "position:x",
+          text_label.position.x + 5, 0.15).set_trans(Tween.TRANS_QUART)
+
+  func _on_hover_aus() -> void:
+      if hover_tween:
+          hover_tween.kill()
+      hover_tween = create_tween().set_parallel(true)
+      hover_tween.tween_property(bg,    "color",          basis_farbe, 0.2)
+      hover_tween.tween_property(glow,  "modulate:a",     0.0,         0.2)
+      hover_tween.tween_property(pfeil, "modulate:a",     0.0,         0.2)
+      hover_tween.tween_property(pfeil, "position:x",     pfeil.position.x - 8, 0.15)
+      hover_tween.tween_property(text_label, "position:x",
+          text_label.position.x - 5, 0.15)
+
+  func _on_klick_start() -> void:
+      Audio.sound_abspielen(klick_sound, 0.7)
+      var t := create_tween()
+      t.tween_property(self, "scale", Vector2(0.96, 0.96), 0.05)
+      t.tween_property(bg, "color", klick_farbe, 0.05)
+
+  func _on_klick_ende() -> void:
+      var t := create_tween()
+      t.tween_property(self, "scale", Vector2(1.0, 1.0), 0.1)\
+          .set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+------------------------------------------------------------------------
+39.4  Menu-Uebergaenge zwischen Submenus
+------------------------------------------------------------------------
+
+  extends Control   # MenuManager
+
+  var aktives_menu: Control = null
+  var menu_history: Array[Control] = []
+
+  func menu_wechseln(neues_menu: Control, mit_history: bool = true) -> void:
+      if aktives_menu:
+          if mit_history:
+              menu_history.append(aktives_menu)
+          await menu_ausblenden(aktives_menu)
+
+      aktives_menu = neues_menu
+      await menu_einblenden(aktives_menu)
+
+  func zurueck() -> void:
+      if menu_history.is_empty():
+          return
+      await menu_ausblenden(aktives_menu)
+      aktives_menu = menu_history.pop_back()
+      await menu_einblenden(aktives_menu)
+
+  func menu_einblenden(menu: Control) -> void:
+      menu.visible = true
+      menu.modulate.a = 0.0
+      menu.position.x += 60
+      var tween := create_tween().set_parallel(true)
+      tween.tween_property(menu, "modulate:a", 1.0, 0.25)
+      tween.tween_property(menu, "position:x", menu.position.x - 60, 0.3)\
+          .set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+      await tween.finished
+
+  func menu_ausblenden(menu: Control) -> void:
+      var tween := create_tween().set_parallel(true)
+      tween.tween_property(menu, "modulate:a", 0.0, 0.2)
+      tween.tween_property(menu, "position:x", menu.position.x - 40, 0.2)\
+          .set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+      await tween.finished
+      menu.visible = false
+
+------------------------------------------------------------------------
+39.5  Einstellungs-Menu mit echten Einstellungen
+------------------------------------------------------------------------
+
+  extends Control
+
+  @onready var aufloesung_dropdown: OptionButton = $Aufloesung
+  @onready var vollbild_check:      CheckButton  = $Vollbild
+  @onready var musik_slider:        HSlider      = $MusikLautstaerke
+  @onready var sound_slider:        HSlider      = $SoundLautstaerke
+  @onready var grafik_dropdown:     OptionButton = $Grafik
+
+  const AUFLOESUNGEN: Array[Vector2i] = [
+      Vector2i(1280, 720), Vector2i(1920, 1080),
+      Vector2i(2560, 1440), Vector2i(3840, 2160)
+  ]
+  const GRAFIK_PRESETS: Array[String] = ["Niedrig", "Mittel", "Hoch", "Ultra"]
+
+  func _ready() -> void:
+      for res in AUFLOESUNGEN:
+          aufloesung_dropdown.add_item("%dx%d" % [res.x, res.y])
+      for preset in GRAFIK_PRESETS:
+          grafik_dropdown.add_item(preset)
+      einstellungen_laden()
+
+  func einstellungen_laden() -> void:
+      var config := ConfigFile.new()
+      config.load("user://settings.cfg")
+      musik_slider.value  = config.get_value("audio", "musik",  0.8)
+      sound_slider.value  = config.get_value("audio", "sound",  1.0)
+      vollbild_check.button_pressed = config.get_value("grafik", "vollbild", false)
+      var res_idx: int = config.get_value("grafik", "aufloesung_idx", 1)
+      aufloesung_dropdown.selected = res_idx
+      aufloesung_anwenden(res_idx)
+
+  func einstellungen_speichern() -> void:
+      var config := ConfigFile.new()
+      config.set_value("audio", "musik",  musik_slider.value)
+      config.set_value("audio", "sound",  sound_slider.value)
+      config.set_value("grafik", "vollbild", vollbild_check.button_pressed)
+      config.set_value("grafik", "aufloesung_idx", aufloesung_dropdown.selected)
+      config.save("user://settings.cfg")
+
+  func aufloesung_anwenden(idx: int) -> void:
+      var res: Vector2i = AUFLOESUNGEN[idx]
+      DisplayServer.window_set_size(res)
+      DisplayServer.window_set_position(
+          (DisplayServer.screen_get_size() - res) / 2
+      )
+
+  func vollbild_anwenden(an: bool) -> void:
+      DisplayServer.window_set_mode(
+          DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN if an
+          else DisplayServer.WINDOW_MODE_WINDOWED
+      )
+
+  func grafik_preset_anwenden(idx: int) -> void:
+      match idx:
+          0:  # Niedrig
+              RenderingServer.render_loop_enabled = true
+              get_viewport().use_hdr_2d = false
+              get_viewport().msaa_3d    = Viewport.MSAA_DISABLED
+          1:  # Mittel
+              get_viewport().msaa_3d    = Viewport.MSAA_2X
+          2:  # Hoch
+              get_viewport().msaa_3d    = Viewport.MSAA_4X
+              get_viewport().screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+          3:  # Ultra
+              get_viewport().msaa_3d    = Viewport.MSAA_8X
+              get_viewport().use_taa    = true
+
+------------------------------------------------------------------------
+39.6  Gamepad-Navigation in Menus
+------------------------------------------------------------------------
+
+  extends Control   # Menu das Gamepad unterstuetzt
+
+  var fokus_knopf: Button = null
+  var alle_knoepfe: Array[Button] = []
+
+  func _ready() -> void:
+      for kind in get_all_children_recursive():
+          if kind is Button:
+              alle_knoepfe.append(kind)
+              kind.focus_entered.connect(func(): fokus_knopf = kind)
+
+      if not alle_knoepfe.is_empty():
+          alle_knoepfe[0].grab_focus()
+
+  func _input(event: InputEvent) -> void:
+      if event is InputEventJoypadButton:
+          var joy := event as InputEventJoypadButton
+          if joy.pressed:
+              match joy.button_index:
+                  JOY_BUTTON_A:
+                      if fokus_knopf:
+                          fokus_knopf.emit_signal("pressed")
+                  JOY_BUTTON_B:
+                      MenuManager.zurueck()
+
+      # D-Pad Navigation:
+      if event.is_action_pressed("ui_down"):
+          _naechster_knopf(1)
+      if event.is_action_pressed("ui_up"):
+          _naechster_knopf(-1)
+
+  func _naechster_knopf(richtung: int) -> void:
+      var idx: int = alle_knoepfe.find(fokus_knopf)
+      var neuer_idx: int = (idx + richtung) % alle_knoepfe.size()
+      alle_knoepfe[neuer_idx].grab_focus()
+
+--------------------------------------------------------------------------------
+UEBUNG 39:
+1. Baue ein Hauptmenu mit sequenziellem Einblenden (Titel zuerst, dann Buttons).
+2. Implementiere den stylischen MenuButton (Hover, Klick, Glow, Sound).
+3. Baue den MenuManager mit animierten Uebergaengen zwischen Submenus
+   und funktionierender "Zurueck"-Navigation.
+4. Einstellungs-Menu: Lautstaerke, Vollbild, Aufloesung -- alles wird in
+   einer ConfigFile gespeichert und beim Neustart wiederhergestellt.
+5. Bonus: Gamepad-Navigation -- D-Pad und A-Button funktionieren im Menu.
+   Fokussierter Button leuchtet anders auf.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 40: Plugin-Skripte und Editor-Erweiterungen
+================================================================================
+
+------------------------------------------------------------------------
+40.1  @tool -- Skripte die im Editor laufen
+------------------------------------------------------------------------
+
+Mit @tool laeuft ein Skript sowohl im Spiel ALS AUCH im Editor.
+Damit kannst du:
+  - Vorschau-Geometrie im Editor zeichnen
+  - Properties die sich gegenseitig beeinflussen automatisch aktualisieren
+  - Editor-Buttons in Inspector-Panels einbauen
+
+  @tool
+  extends Node3D   # Beispiel: Zaun-Generator
+
+  @export var pfosten_anzahl: int = 5:
+      set(wert):
+          pfosten_anzahl = wert
+          if Engine.is_editor_hint():
+              zaun_aufbauen()   # Im Editor sofort neu generieren!
+
+  @export var abstand: float = 2.0:
+      set(wert):
+          abstand = wert
+          if Engine.is_editor_hint():
+              zaun_aufbauen()
+
+  @export var pfosten_szene: PackedScene
+
+  func zaun_aufbauen() -> void:
+      # Alte Kinder entfernen:
+      for kind in get_children():
+          kind.queue_free()
+      await get_tree().process_frame   # Warten bis queue_free wirkt
+
+      if not pfosten_szene:
+          return
+
+      for i in range(pfosten_anzahl):
+          var pfosten: Node3D = pfosten_szene.instantiate()
+          add_child(pfosten)
+          pfosten.owner = get_tree().edited_scene_root   # WICHTIG fuer Speichern!
+          pfosten.position = Vector3(i * abstand, 0, 0)
+
+  func _ready() -> void:
+      if not Engine.is_editor_hint():
+          zaun_aufbauen()   # Auch im Spiel einmal aufbauen
+
+------------------------------------------------------------------------
+40.2  EditorPlugin -- eigene Editor-Tabs und Panels
+------------------------------------------------------------------------
+
+  # addons/mein_tool/plugin.gd
+  @tool
+  extends EditorPlugin
+
+  var dock: Control = null
+
+  func _enter_tree() -> void:
+      dock = preload("res://addons/mein_tool/MeinDock.tscn").instantiate()
+      add_control_to_dock(DOCK_SLOT_LEFT_BR, dock)
+      # Alternativ: eigener Tab oben:
+      # add_control_to_bottom_panel(dock, "Mein Tool")
+
+  func _exit_tree() -> void:
+      if dock:
+          remove_control_from_docks(dock)
+          dock.queue_free()
+
+  # Editor-Toolbar-Button:
+  func _has_main_screen() -> bool:
+      return true
+
+  func _get_main_screen_name() -> String:
+      return "MeinScreen"
+
+  func _make_visible(visible: bool) -> void:
+      if dock:
+          dock.visible = visible
+
+------------------------------------------------------------------------
+40.3  Eigene Inspector-Plugins
+------------------------------------------------------------------------
+
+  @tool
+  extends EditorInspectorPlugin
+
+  func _can_handle(object: Object) -> bool:
+      return object is MeinKlassenTyp   # Nur fuer bestimmte Klassen
+
+  func _parse_property(object: Object, type: Variant.Type,
+      name: String, hint_type: PropertyHint,
+      hint_string: String, usage_flags: int, wide: bool) -> bool:
+
+      if name == "meine_spezial_eigenschaft":
+          # Standard-Property durch eigenes Control ersetzen:
+          var btn := EditorProperty.new()
+          var knopf := Button.new()
+          knopf.text = "Klick mich im Inspector!"
+          knopf.pressed.connect(func():
+              print("Custom Inspector Button!")
+          )
+          btn.add_child(knopf)
+          add_property_editor(name, btn)
+          return true   # true = Standard-Property unterdruecken
+      return false
+
+------------------------------------------------------------------------
+40.4  Gizmo-Plugins -- 3D-Visualisierung im Editor
+------------------------------------------------------------------------
+
+  @tool
+  extends EditorNode3DGizmoPlugin
+
+  func _init() -> void:
+      create_material("linie", Color.CYAN)
+      create_handle_material("griff")
+
+  func _has_gizmo(node: Node3D) -> bool:
+      return node is MeinKlassenTyp
+
+  func _redraw(gizmo: EditorNode3DGizmo) -> void:
+      gizmo.clear()
+      var node := gizmo.get_node_3d() as MeinKlassenTyp
+
+      # Linie zeichnen:
+      var linien := PackedVector3Array([Vector3.ZERO, Vector3(0, node.hoehe, 0)])
+      gizmo.add_lines(linien, get_material("linie", gizmo))
+
+      # Griff (verschiebbar):
+      var griffe := PackedVector3Array([Vector3(0, node.hoehe, 0)])
+      gizmo.add_handles(griffe, get_material("griff", gizmo), [])
+
+  func _get_handle_value(gizmo: EditorNode3DGizmo, handle_id: int,
+      secondary: bool) -> Variant:
+      var node := gizmo.get_node_3d() as MeinKlassenTyp
+      return node.hoehe
+
+  func _set_handle(gizmo: EditorNode3DGizmo, handle_id: int,
+      secondary: bool, camera: Camera3D, screen_pos: Vector2) -> void:
+      var node := gizmo.get_node_3d() as MeinKlassenTyp
+      var ray_origin := camera.project_ray_origin(screen_pos)
+      var ray_dir    := camera.project_ray_normal(screen_pos)
+      var ebene      := Plane(Vector3.RIGHT, 0)
+      var punkt      := ebene.intersects_ray(ray_origin, ray_dir)
+      if punkt:
+          node.hoehe = max(0.0, punkt.y)
+
+
+================================================================================
+MODUL 41: Export und Plattformen
+================================================================================
+
+------------------------------------------------------------------------
+41.1  Export-Vorbereitungen
+------------------------------------------------------------------------
+
+Checkliste vor dem Export:
+  [ ] Projektname und Version in Projekteinstellungen gesetzt
+  [ ] Icon (256x256 PNG) hinterlegt
+  [ ] Boot-Splash hinterlegt oder deaktiviert
+  [ ] Alle .import-Dateien commitet (oder .gdignore fuer Testdateien)
+  [ ] Debug-Print-Statements entfernt oder durch print_debug() ersetzt
+  [ ] Alle Szenen-Pfade korrekt (case-sensitive auf Linux!)
+  [ ] Audio-Bus-Layout gespeichert
+  [ ] Physik-Layer-Namen vergeben (optional, aber sauber)
+
+Haeufige Fehler:
+  # FALSCH auf Windows entwickelt, bricht auf Linux:
+  load("res://Textures/Player.png")   # Gross P
+  # RICHTIG (immer lowercase fuer Plattformunabhaengigkeit):
+  load("res://textures/player.png")
+
+------------------------------------------------------------------------
+41.2  Windows, Linux, Mac exportieren
+------------------------------------------------------------------------
+
+  Projekteinstellungen -> Export -> Exportieren -> Vorlage hinzufuegen
+
+  Fuer jede Plattform:
+    1. Export-Template herunterladen (einmalig)
+    2. Neue Export-Konfiguration erstellen
+    3. Optionen setzen
+
+  Wichtige Export-Optionen:
+    Embed PCK       -> EXE enthaelt alle Assets (empfohlen fuer Distribution)
+    Debug Build     -> Behalte debug info (nur fuer Tests)
+    Encryption Key  -> Assets verschluesseln (optional)
+
+  Per Kommandozeile (fuer CI/CD):
+    godot --export-release "Windows Desktop" "ausgabe/mein_spiel.exe"
+    godot --export-release "Linux/X11" "ausgabe/mein_spiel.x86_64"
+    godot --export-release "macOS"     "ausgabe/mein_spiel.zip"
+
+------------------------------------------------------------------------
+41.3  Android exportieren
+------------------------------------------------------------------------
+
+  Voraussetzungen:
+    Android SDK + JDK installieren
+    In Godot: Editor -> Editor-Einstellungen -> Export -> Android -> SDK-Pfad
+
+  Fuer Google Play:
+    Keystore erstellen (einmalig, SICHER AUFBEWAHREN!):
+      keytool -genkey -v -keystore mein_spiel.keystore
+              -alias mein_alias -keyalg RSA -keysize 2048
+
+  In der Export-Konfiguration:
+    Paketname:  com.dein_name.mein_spiel
+    Minversion: 6.0 (API 23) empfohlen
+    Orientierung: Landscape fuer die meisten Spiele
+
+  GDScript-Eigenheiten auf Android:
+    Input.vibrate_handheld(100)   # Vibration
+    OS.get_unique_id()             # Geraete-ID
+    # Datei-Pfade: user:// funktioniert, res:// readonly
+
+------------------------------------------------------------------------
+41.4  Web (HTML5) exportieren
+------------------------------------------------------------------------
+
+  Godot kann zu WebAssembly exportieren -- laeuft im Browser.
+
+  Einschraenkungen:
+    Kein Multithreading ohne spezielle HTTP-Header (COOP/COEP)
+    Dateisystem: virtuell, nicht persistent ohne IndexedDB
+    Audio erst nach erstem User-Gesture
+
+  In GDScript fuer Web anpassen:
+    if OS.get_name() == "Web":
+        # JavaScript aufrufen:
+        JavaScriptBridge.eval("console.log('Hallo aus Godot!')")
+        # Browser-URL lesen:
+        var url := JavaScriptBridge.eval("window.location.href")
+
+  Auf eigenem Server hosten:
+    Den _export_html-Ordner auf einen Webserver hochladen.
+    Wichtig: MIME-Type fuer .wasm auf application/wasm setzen!
+    Und COOP/COEP Header fuer SharedArrayBuffer (Threads):
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Embedder-Policy: require-corp
+
+------------------------------------------------------------------------
+41.5  Steam-Release-Vorbereitung
+------------------------------------------------------------------------
+
+  1. Steamworks-Account ($100 einmalig)
+  2. App-ID anfordern
+  3. steam_appid.txt mit App-ID in Spiel-Ordner
+  4. Depot konfigurieren (welche Dateien werden hochgeladen)
+  5. Mit SteamCMD hochladen:
+       steamcmd +login user pass +run_app_build app_build.vdf +quit
+
+  Saison-Pass / DLC in Godot:
+    if Steam.isDLCInstalled(DLC_ID):
+        bonus_inhalt_freischalten()
+
+
+================================================================================
+MODUL 42: Das Ein-Asset-Workflow-System -- abgeschlossen
+================================================================================
+
+Wir haben in Modul 18 begonnen. Jetzt die vollstaendige Umsetzung.
+
+------------------------------------------------------------------------
+42.1  Das Master-Asset-Projekt
+------------------------------------------------------------------------
+
+  Ordnerstruktur:
+    MasterAssets/
+    |- addons/
+    |   |- mein_core/       <- dein Kern-Addon (Modul 18)
+    |- assets/
+    |   |- audio/
+    |   |   |- music/
+    |   |   |- sfx/
+    |   |- fonts/
+    |   |- shaders/
+    |   |   |- outline.gdshader
+    |   |   |- water.gdshader
+    |   |   |- dissolve.gdshader
+    |   |- ui/
+    |   |   |- MenuButton.tscn
+    |   |   |- DialogBox.tscn
+    |   |   |- InventarUI.tscn
+    |   |   |- FadeOverlay.tscn
+    |   |   |- PauseMenu.tscn
+    |   |- textures/
+    |   |   |- noise/
+    |   |   |- util/
+    |- templates/
+    |   |- CharacterBody3D_FPS.tscn   <- Fertiger FPS-Spieler
+    |   |- CharacterBody3D_TPS.tscn   <- Fertiger TPS-Spieler
+    |   |- CharacterBody2D.tscn        <- Fertiger 2D-Spieler
+    |   |- VehicleBody3D.tscn          <- Fertiges Fahrzeug
+    |   |- Helicopter.tscn             <- Fertiger Helikopter
+    |   |- RagdollCharacter.tscn       <- Fertiger Ragdoll
+    |   |- WeltManager.tscn            <- Voxel-Welt-System
+    |- systems/
+        |- WeatherSystem.tscn
+        |- DayNightCycle.tscn
+        |- WindZone.tscn
+        |- ObjectPool.tscn
+
+  Dieses Projekt wird NIE exportiert. Es ist nur deine Asset-Bibliothek.
+
+------------------------------------------------------------------------
+42.2  In ein neues Spiel-Projekt einbinden
+------------------------------------------------------------------------
+
+  Option A: Addon kopieren (einfach):
+    1. addons/mein_core/ in neues Projekt kopieren
+    2. Projekteinstellungen -> Plugins -> aktivieren
+    3. Gewuenschte Templates kopieren (templates/CharacterBody3D_FPS.tscn etc.)
+
+  Option B: Symlinks (schnell, lokal):
+    # macOS/Linux:
+    ln -s /pfad/MasterAssets/addons/mein_core  /pfad/NeuesProjekt/addons/mein_core
+    ln -s /pfad/MasterAssets/assets             /pfad/NeuesProjekt/assets
+    ln -s /pfad/MasterAssets/templates          /pfad/NeuesProjekt/templates
+
+    # Aenderungen an MasterAssets sind sofort in ALLEN Projekten sichtbar.
+
+  Option C: Git Submodule (professionell):
+    cd NeuesProjekt
+    git submodule add https://github.com/du/MasterAssets addons/master
+    # Dann symlinks oder direkte Nutzung via res://addons/master/
+
+------------------------------------------------------------------------
+42.3  Was im neuen Projekt bleibt (spielspezifisch)
+------------------------------------------------------------------------
+
+  NeuesProjekt/
+  |- addons/mein_core/  (aus MasterAssets, Symlink oder Kopie)
+  |- assets/            (aus MasterAssets, Symlink oder Kopie)
+  |- game/              <- NUR DIESES IST SPIELSPEZIFISCH
+  |   |- scenes/
+  |   |   |- levels/
+  |   |   |- ui/
+  |   |   |- characters/
+  |   |- scripts/
+  |   |   |- player/
+  |   |   |- enemies/
+  |   |   |- systems/
+  |   |- data/
+  |   |   |- items/     <- ItemData.tres Dateien
+  |   |   |- quests/
+  |   |   |- dialogs/
+  |   |- audio/
+  |       |- music/     <- Spielspezifische Musik
+  |       |- sfx/       <- Spielspezifische SFX
+
+------------------------------------------------------------------------
+42.4  Versions-Management deines Core
+------------------------------------------------------------------------
+
+  # In addons/mein_core/VERSION.gd:
+  const CORE_VERSION: String   = "2.3.1"
+  const CORE_MIN_GODOT: String = "4.2.0"
+
+  # Jedes Projekt prueft beim Start:
+  func _ready() -> void:
+      if Engine.get_version_info()["string"] < CoreVersion.CORE_MIN_GODOT:
+          push_error("Godot-Version zu alt! Core benoetigt " + CoreVersion.CORE_MIN_GODOT)
+
+  # Changelog pflegen:
+  # CHANGELOG.md im Core-Ordner:
+  # ## 2.3.1 (2026-06-01)
+  # - WeatherManager: Blitz-Timing-Bug behoben
+  # - DialogSystem: Unendliche Schleifen verhindert
+  # ## 2.3.0 ...
+
+
+================================================================================
+MODUL 43: Abschlussprojekte
+================================================================================
+
+Diese drei Projekte setzen den gesamten Kurs um. Jedes nutzt deinen Core.
+
+------------------------------------------------------------------------
+43.1  ABSCHLUSSPROJEKT 1: Open-World-RPG
+------------------------------------------------------------------------
+
+Ziel: Spielbarer RPG-Prototyp mit offener Welt, Dialog, Quests, Inventar.
+
+  TECHNOLOGIEN AUS DEM KURS:
+    Teil 1-4:  CharacterBody3D TPS, AnimationTree, Signals, Resources
+    Teil 4:    NavigationAgent3D-NPCs, Cutscene beim Boss
+    Teil 4:    Core-Addon fuer alle Systeme
+    Teil 5:    Online-Kooperativ-Modus (2 Spieler)
+    Teil 7:    Prozedurale Welt mit Biomen (FastNoiseLite)
+    Teil 8:    Wetter + Tag/Nacht-Zyklus
+    Teil 9:    Einfacher Level-Editor (Inhalte platzieren)
+
+  PFLICHT-SYSTEME:
+    [ ] Third-Person-Spieler mit Kampfsystem (Angriff, Ausweichen, Blocken)
+    [ ] 3 Waffen-Typen als ItemData-Resources
+    [ ] Inventar-UI mit Drag & Drop
+    [ ] Dialog-System mit Antwort-Choices
+    [ ] Quest-System (3 Quests, Fortschritt, Belohnung)
+    [ ] Speichern/Laden (3 Slots)
+    [ ] 5 verschiedene Gegner-Typen mit eigener KI
+    [ ] Tag/Nacht-Zyklus + Wetter
+    [ ] Prozedurale Welt (Noise-basiert, 3 Biome)
+    [ ] Cutscene zum Spielstart (AnimationPlayer, aus Blender)
+    [ ] Boss-Kampf mit mehreren Phasen (State Machine)
+
+  BONUS-SYSTEME:
+    [ ] Online-Koop (2 Spieler, Modul 22-24)
+    [ ] Crafting-System
+    [ ] Dynamischer Soundtrack (Musik wechselt mit Tageszeit/Gefahr)
+
+------------------------------------------------------------------------
+43.2  ABSCHLUSSPROJEKT 2: Minecraft-Klon
+------------------------------------------------------------------------
+
+Ziel: Funktionierende Voxel-Sandbox mit Multiplayer.
+
+  TECHNOLOGIEN AUS DEM KURS:
+    Teil 7:  ChunkData, ChunkGenerator, ChunkMeshBuilder, WeltManager
+    Teil 7:  WorkerThreadPool fuer Generierung
+    Teil 7:  MultiMeshInstance3D fuer Baeume/Gras
+    Teil 5:  Listen-Server Multiplayer (4 Spieler)
+    Teil 8:  Wetter (Regen, Schnee je nach Biom/Hoehe)
+    Teil 9:  Einfaches Crafting-UI
+
+  PFLICHT-SYSTEME:
+    [ ] Voxel-Welt 16x16x256 Chunks, Sichtweite 8
+    [ ] Thread-basierte Generierung (kein Freeze beim Laden)
+    [ ] Mindestens 16 Block-Typen
+    [ ] Block platzieren/entfernen per Raycast
+    [ ] Inventar/Hotbar (9 Slots)
+    [ ] Crafting (5 Rezepte)
+    [ ] Beleuchtung (Fackeln als OmniLight3D, Tag/Nacht)
+    [ ] 4-Spieler-Multiplayer (Listen-Server)
+    [ ] Welt speichern/laden (modifizierte Chunks)
+    [ ] Biome (Wald, Wueste, Schnee, Ozean)
+    [ ] Tiere (Kuh, Schaf) mit einfacher Wander-KI
+
+  BONUS-SYSTEME:
+    [ ] Redstone-aehnliches Signal-System
+    [ ] Dungeons (prozedurale Raeume unter Erde)
+    [ ] Wasserphysik (Ausbreitung per BFS)
+
+------------------------------------------------------------------------
+43.3  ABSCHLUSSPROJEKT 3: Physics-Platformer (Human: Fall Flat Style)
+------------------------------------------------------------------------
+
+Ziel: Kooperativer Physik-Puzzle-Platformer, 1-4 Spieler.
+
+  TECHNOLOGIEN AUS DEM KURS:
+    Teil 8:  Ragdoll-System mit PD-Controller-Armen
+    Teil 8:  Greif-System (Joints)
+    Teil 7:  Object-Pool fuer Physik-Debris
+    Teil 5/6: Online-Multiplayer (4 Spieler, Lag Compensation)
+    Teil 9:  Splitscreen (lokal 1-2 Spieler)
+    Teil 9:  Level-Editor (Puzzle-Level bauen)
+
+  PFLICHT-SYSTEME:
+    [ ] Ragdoll-Charakter mit wackeligen Armen (PD-Controller)
+    [ ] Greifen (Generic6DOFJoint), Klettern, Haengen
+    [ ] Schieben, Ziehen von RigidBody-Objekten
+    [ ] 5 Puzzle-Level mit physik-basierten Raetseln
+    [ ] Lokal-Splitscreen (1-2 Spieler)
+    [ ] Online-Multiplayer (bis 4 Spieler, ENet)
+    [ ] Ragdoll-auf-ragdoll Kollision (Spieler schubsen)
+    [ ] Checkpoint-System + Tod (Respawn am letzten Checkpoint)
+    [ ] Physics-Objekte: Kisten, Seile, Wippen, Hebel, bewegliche Plattformen
+
+  BONUS-SYSTEME:
+    [ ] Level-Editor: Spieler koennen eigene Level bauen und teilen
+    [ ] Kostueme (Charakter-Aussehen aendern)
+    [ ] Replay-System (Physik-State aufzeichnen und abspielen)
+
+--------------------------------------------------------------------------------
+ABSCHLUSS-UEBUNG (gilt fuer alle drei Projekte):
+Waehle eines der drei Abschlussprojekte und baue einen spielbaren Prototyp.
+Mindestanforderung: alle Pflicht-Systeme laufen, Spiel ist von Anfang bis
+Ende spielbar (auch wenn kurz), es gibt ein Hauptmenu und einen Game-Over/
+Win-Zustand. Nutze deinen Core-Addon fuer alle Shared-Systeme.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 9 (GESAMTKURS-ZUSAMMENFASSUNG)
+################################################################################
+
+LEVEL-EDITOR KERN:
+  SelectionManager: Raycast + Outline + Hover
+  TransformGizmo:   Drag an Achsen, Screen-Space-Scale
+  UndoRedo:         history[pos], undo/redo per Callable
+  PropertyInspector: typeof() -> passendes Control
+  EditorObjekt:     zu_dict()/von_dict() fuer Serialisierung
+  TerrainSculptor:  PackedFloat32Array + SurfaceTool + Gaussian Falloff
+
+GEILE MENUES:
+  Sequenzielles Einblenden: for-Schleife + await timer
+  MenuButton: hover/klick Tweens + Sounds + Scale-Animation
+  MenuManager: menu_wechseln() mit await Uebergaengen + History
+  Einstellungen: ConfigFile fuer Persistenz
+  Gamepad: grab_focus() + _input() fuer D-Pad
+
+PLUGINS:
+  @tool + Engine.is_editor_hint() -> laeuft im Editor
+  EditorPlugin: add_control_to_dock(), add_autoload_singleton()
+  EditorInspectorPlugin: _can_handle() + _parse_property()
+  EditorNode3DGizmoPlugin: _redraw() + add_lines() + add_handles()
+
+EIN-ASSET-WORKFLOW:
+  MasterAssets/ als eigenes Projekt
+  addons/mein_core/ per Symlink oder Git Submodule einbinden
+  templates/ fuer fertige Spieler/Fahrzeuge/Systeme
+  game/ ist das einzige Spielspezifische
+  CHANGELOG.md + VERSION.gd im Core pflegen
+
+EXPORT:
+  Lowercase Dateinamen (Linux case-sensitive!)
+  print_debug() statt print() fuer Debug-Ausgaben
+  godot --export-release "Plattform" "ausgabe/datei"
+  Android: Keystore SICHER aufbewahren!
+  Web: COOP/COEP Header fuer SharedArrayBuffer (Threads)
+
+================================================================================
+ENDE TEIL 9 -- GDSCRIPT KOMPLETTKURS ABGESCHLOSSEN
+
+Du hast jetzt alles was du brauchst um zu bauen:
+  - Open-World-RPGs
+  - Minecraft-Klone mit Multithreading und Multiplayer
+  - Physics-Platformer wie Human: Fall Flat
+  - Flugsimulationen, Rennspiele, Wetter-Simulationen
+  - Vollstaendige Tools (Level-Editor, der wirklich professionell ist)
+  - Wiederverwendbare Systeme die alle deine Projekte teilen
+
+Als naechstes: Der separate Godot-Shader-Kurs -- GLSL-aehnliche Syntax,
+Vertex/Fragment/Compute-Shader, PBR-Materialien, Post-Processing,
+prozedurale Texturen, Wasser-Shader, Dissolve-Effekte und mehr.
+================================================================================

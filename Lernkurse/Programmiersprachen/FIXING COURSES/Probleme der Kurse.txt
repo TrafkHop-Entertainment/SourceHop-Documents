@@ -1,0 +1,51 @@
+Ich habe hier einen Komplettkurs, der jedoch nicht vollkommen ist:
+
+Allgemeine Probleme der Kurse:
+------------------------------
+* Der Kurs soll anstatt einer TXT in einem HTML/CSS Format (eine html und eine css datei) genau im Stile der 2 angehängeten Reference Datein (und standard.css, welche sie nicht anrühren dürfen) erstellt werden. Die extra css datei ist nur dazu da, die ganzen sections richtig zu positionieren, das styling ansich wird von der standard.css übernommen.
+
+* TrafkHop Entertainment ist ein Primäres Spielestudio, welche allerlei Art von Spielen wie Arcade Racer, Plattformer, Smash bros like figher, Open World RPG, Minecraft Like, Simulation, motion controlls, shooter, etc. jedoch entwickelt es auch eine Linux Distro und verschiedene Arbeitsprogramme.
+
+* du, dein, das geht nicht. Es soll eher "schreibe das dahin", "... ist eine Programmiersprache die sich auf ... fokkusiert", "in diesem Kurs lernen sie ...", "sie brauchen für das ...". Der Kurs ist nicht für eine einzelperson gedacht, es ist ein KOMPLETTKURS für TrafkHop Entertainment Mitglieder. Respekt und würde sind angebracht!
+
+* Man wird für verschiedene Aufgaben oder Kapitel verschiedene assets brauchen. Z.B. in Godot wird man wohl ein 3D modell mit spezifischen eigenschaften brauchen, oder in JavaSkript eine Spezifische hzml oder css.
+Diese Abhängigkeiten müssen alle immer mitangegeben werden.
+
+* Die Kurse erwähnen öfters verschiedene Datein, diese haben aber meißt nichts mit der Programmiersprache zu tun. Statt diesen Datein sollen verschiedene Datein oder Kapitel von anderen Kursen erwähnt, welche mit dem Hauptkurs miteschickt werden, und mitintegriert werden. z.B.: JavaSkript: Hier werden sie lernen dieses Element aus index.html aus dem HTML Kurs ins Leben zu bringen. oder: GDSkript: Hier bauen wir Lava, welche sie mit einem Shader aus dem Godot Shader Kurs versehen können. Solche Sachen. Die Kurse sollen und müssen fast miteinander kommunizieren. WICHTIG!!! ES GIBT KEINE KURSE DIE IHNEN NICHT MITGESCHICKT WERDEN, DIES SIND NUR BEISPIELE UND WENN SIE KEINE ANDERE KURS DATEI BEKOMMEN GIBT ES DIESEN AUCH NICHT! NUR ETWAS REFERENZIEREN, WENN IN "SPEZIFISCHE PROBLEME DIESES KURSES" andere Kurse explizit erwähnt werden, ansonsten keine kurse referenzieren!
+
+* Die Kurse sin aktuell keine Komplettkurse. Sie decken zwar das wichtigste ab, jedoch nicht jede Situation. Der Bash Kurs deckt noch am meißten ab, genauso wie html und css. JavaSkript und Python sind ok, das ginge aber noch etwas mehr. GDSkript jedoch hat noch nichtmal ansatzweise genug, genauso wie manch andere.
+Im allgemeinen muss man es so denken: Was kann man mit dieser Sprache alles programmieren, was sind die schwersten sachen? dann nimmt man das und schreibt den Kurs so, dass er alles inklusive der schweren sachen und ALLEM was davor kommt miteinbaut! WICHTIG: DIE KURSE SIND NICHT KOMPLETT, DER KURS MUSS ALLES ABDECKEN WAS IN DER SPRACHE MÖGLICH IST!
+
+* Das Modulsystem ist zu lang. Die neuen Kurse sollen das Kapitel und Unterkapitel system nutzen, welches alles in viel kleinere Stücke zerteilt, was auch viel mehr Übungen bedeutet und es auch besser ermöglicht ins Detail zu gehen.
+
+* Die Kurse gehen viel zu wenig ins Detail. Es muss immer klarifiziert werden: Was ist diese Sprache, warum, wieso weshalb. Ein neues Element: Warum gibts das was machts es wo benutzt man es. Die Kurse müssen so Detailiert sein wie mäglich, diese Kurse dürfen keine Externen Reccourcen für Lernende Verlinken, alles muss man vom Kurs selbst lernen können. ABER BITTE NICHCHT WIRKLICH was: wo: oder os schreiben. ES IST EIN KOMPLETTKURS, DAS KOMMT DOCH ALLES NATÜRLICH.
+* Außerdem konzentrieren sich die Kurse meißt auf ein Hauptthema zum Schluss hin. Ansich ja gut weil das die Prioritäten sind, jedoch lassen sie dann den Rest weg, was furchtbar ist. Also Hauptthemen sind schön und gut, aber vollständigkeit ist besser!
+
+* Die Kurse lassen außerdem viele themen aus, die man ansonsten gebrauchen könnte. Besonders in Spielespezifischen Sprachen wie GDskript, wo viele Genres komplett Übersprungen werden, da nur eine Handvoll Genres beigebracht werden.
+Es muss ALLES beigebracht werden, es sind KOMPLETTKURSE.
+
+* Die Komplettkurse beinhalten am Schluss einer Moduls immer Lernrecourcen. Dies darf nicht nötig sein, es sind Komplettkurse, das bedeutet es wird bereits alles erklärt und diese Lernrecourcen werden überflüssig. Die Kurse müssen so vollständig sein, dass man in seinem LEBEN niemals etwas anderes Benutzen muss!
+
+* Man muss aber auch anmerken, dass diese Kurse bereits ein gutes Fundament in sache Formatierung und allgemeinen Sachen legen. Jedoch muss man sagen, dass sie auch noch sehr Unreif und nicht bereit sind, eine ganze Sprache beibringenzukönnen.
+
+* Info: Kurse die mit neben dem besagen Kurs hochgeladen werden, sollen referenziert im Hauptkurs werden. Z.B.: der html Kurs im CSS Kurs (nicht andersrum! Basis immer ohne konkrete Referenzen, nur grobe referenzen was man da machen wird, nichts genauses. Im Oberstufigen Kurs kann und soll man explizit auf andere Kurse und Kapitel hinweisen. Z.B.: HTML: Diese classes sind dafür da, dass man später mit css diese seperat stylen kann. CSS: Im html kurs in Übung 3 werden wird jetzt .... so unstylen, dass ... .) oder GodotShaders im GDSkript Kurs(Z.B.: GDSkript: Hier plazieren wir die Lava Fläche (Modell und Textur aus Blender als .blend file) (Lava kann man mit Shader noch besser aussehen lassen). GDShader: Im GDSkript kurs bei der Lava, da werden wir nen Lava Shader basteln (oder so).).
+
+* Die Sprache des Kurses ist Deutsch, jedoch versuchen sie nicht englische Begriffe ins Deutsche zu übersetzen, da Englisch im Programmieren vorrausgesetzt ist.
+
+* Nutze keine Emojis, nur Emoticons sind erlaubt!
+
+* Da ich kein Pro habe, werde ich öfters "weiter" schreiben, da es sich höchst warscheinlich nicht ausgehen wird, alles auf einmal zu schreiben. Du schreibe den Kurs aber in einer einzigen Datei, eine HTML, nicht mehrere.
+
+* schreibstil muss natürlich wirken, nichts aufzählen wie; Was: das ist ...; wo: im...; warum: darum; das ist nix, normal schreiben.
+
+* Der Schreibstil und die Formatierung des vorhandenen Kurses ist bereits relativ gut, nur die oben besprochenen Sachen sind schlecht, der Rest ist ganz ok.
+
+* Ich will kein Inhaltsverzeichnis sehen, die html datei soll genau so aufgebaut sein die die Referenz datei. Copyright am ende ist unnötig, ist schon in der footer datei. Syntax der Referenz Datein ist zu übernehmen.
+
+* Und verschwende meine Zeit nicht, alles was geändert werden muss steht hier.
+
+SPEZIFISCHE PROBLEME DIESES KURSES:
+-----------------------------------
+
+Der Kurs ist ansich ganz ok, die obrigen Punkte sind die Mangel dieses Kurses.
+Schreiben sie diesen Kurs mit besagten Verbesserungen komplett neu.

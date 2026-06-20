@@ -1,0 +1,1043 @@
+================================================================================
+GODOT SHADER KOMPLETTKURS — GODOT 4 EDITION (Teil 2 von 4)
+================================================================================
+
+
+################################################################################
+TEIL 2 — 2D-SHADER MEISTERN
+################################################################################
+
+
+================================================================================
+MODUL 6: Farbmanipulation — HSV, Paletten, Color Grading
+================================================================================
+
+Farben manipulieren ist eine der häufigsten Shader-Aufgaben. Du lernst hier
+die Mathematik dahinter — und wie du professionelle Effekte baust.
+
+------------------------------------------------------------------------
+6.1  RGB vs. HSV — warum wir konvertieren
+------------------------------------------------------------------------
+
+RGB (Rot, Grün, Blau) ist wie die GPU Farben speichert. Für die meisten
+Manipulationen (Helligkeit, Sättigung, Farbton) ist HSV aber natürlicher:
+
+  H = Hue (Farbton): 0° bis 360° (Regenbogen)
+  S = Saturation (Sättigung): 0.0 (grau) bis 1.0 (voll gesättigt)
+  V = Value (Helligkeit): 0.0 (schwarz) bis 1.0 (maximal hell)
+
+Konvertierungsfunktionen (als Shader-Hilfsfunktionen):
+
+  vec3 rgb_zu_hsv(vec3 c) {
+      vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+      vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+      float d = q.x - min(q.w, q.y);
+      float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+  }
+
+  vec3 hsv_zu_rgb(vec3 c) {
+      vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+      vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+      return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+  }
+
+Diese Funktionen sind die Standardimplementierung — einmal oben im Shader
+definiert, überall nutzbar.
+
+------------------------------------------------------------------------
+6.2  Farbton-Rotation, Sättigung, Helligkeit
+------------------------------------------------------------------------
+
+  shader_type canvas_item;
+
+  uniform float hue_shift : hint_range(-1.0, 1.0) = 0.0;
+  uniform float saturation : hint_range(0.0, 2.0) = 1.0;
+  uniform float brightness : hint_range(0.0, 2.0) = 1.0;
+
+  vec3 rgb_zu_hsv(vec3 c) { /* ... (von oben) */ }
+  vec3 hsv_zu_rgb(vec3 c) { /* ... (von oben) */ }
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      vec3 hsv = rgb_zu_hsv(tex.rgb);
+
+      hsv.x = fract(hsv.x + hue_shift);   // Farbton-Rotation (wrap-around)
+      hsv.y = clamp(hsv.y * saturation, 0.0, 1.0);  // Sättigung
+      hsv.z = clamp(hsv.z * brightness, 0.0, 1.0);  // Helligkeit
+
+      COLOR = vec4(hsv_zu_rgb(hsv), tex.a);
+  }
+
+Mit diesem Shader kannst du einen roten Ritter in einen blauen verwandeln,
+ohne eine neue Textur zu erstellen — nur hue_shift anpassen.
+
+------------------------------------------------------------------------
+6.3  Palette-Mapping — Retro-Palette anwenden
+------------------------------------------------------------------------
+
+Klassischer Retro-Effekt: Alle Farben werden auf eine feste Palette reduziert.
+Das geht in Shadern elegant über eine 1D-Lookup-Textur:
+
+  // Die "Palette" ist eine 256×1 Pixel Textur mit 256 Farben.
+  // Die Textur des Sprites enthält statt Farben nur Helligkeit (0-1).
+  // Die Helligkeit ist der Index in die Palette.
+
+  uniform sampler2D palette : hint_default_white;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      float index = tex.r;  // Rot-Kanal als Palette-Index
+      vec4 farbe = texture(palette, vec2(index, 0.5));
+      COLOR = vec4(farbe.rgb, tex.a);
+  }
+
+Für eine automatische Quantisierung auf eine vorhandene Farb-Textur:
+
+  uniform sampler2D palette;
+  uniform int palette_groesse = 8;
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+
+      // Nächste Farbe in der Palette finden:
+      float beste_distanz = 999.0;
+      vec3 beste_farbe = tex.rgb;
+
+      for (int i = 0; i < 32; i++) {  // Maximale Palette-Größe = Konstante
+          if (i >= palette_groesse) break;
+          float u = (float(i) + 0.5) / float(palette_groesse);
+          vec3 paletten_farbe = texture(palette, vec2(u, 0.5)).rgb;
+          float distanz = distance(tex.rgb, paletten_farbe);
+          if (distanz < beste_distanz) {
+              beste_distanz = distanz;
+              beste_farbe = paletten_farbe;
+          }
+      }
+
+      COLOR = vec4(beste_farbe, tex.a);
+  }
+
+------------------------------------------------------------------------
+6.4  Color Grading — filmische Farbkorrektur
+------------------------------------------------------------------------
+
+Color Grading macht dein Spiel "filmisch". Die mächtigste Technik:
+3D-LUT (Lookup Table) — eine spezielle Textur die eine ganze
+Farbkorrektur kodiert.
+
+Einfachere Color-Grading-Techniken direkt im Shader:
+
+HELLIGKEIT / KONTRAST:
+  vec3 brightness_contrast(vec3 farbe, float helligkeit, float kontrast) {
+      return (farbe - 0.5) * kontrast + 0.5 + helligkeit;
+  }
+
+GAMMA-KORREKTUR:
+  vec3 gamma(vec3 farbe, float gamma_wert) {
+      return pow(farbe, vec3(1.0 / gamma_wert));
+  }
+
+FARBBALANCE (Schatten/Mitten/Lichter):
+  vec3 farbbalance(vec3 farbe, vec3 schatten, vec3 mitten, vec3 lichter) {
+      float lum = dot(farbe, vec3(0.299, 0.587, 0.114));
+      // Gewichte für Schatten/Mitten/Lichter:
+      float s = smoothstep(0.0, 0.5, 1.0 - lum);
+      float h = smoothstep(0.5, 1.0, lum);
+      float m = 1.0 - s - h;
+      return farbe + s * schatten + m * mitten + h * lichter;
+  }
+
+SPLIT-TONING (Schatten = kalt, Lichter = warm):
+  shader_type canvas_item;
+  uniform vec3 schatten_tint = vec3(0.3, 0.3, 0.5);  // Blau-Töne
+  uniform vec3 licht_tint = vec3(0.5, 0.4, 0.3);     // Warm-Töne
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+      vec3 tint = mix(schatten_tint, licht_tint, lum);
+      COLOR = vec4(mix(tex.rgb, tint, 0.3), tex.a);
+  }
+
+------------------------------------------------------------------------
+6.5  Blending Modes — wie Ebenen überlagern
+------------------------------------------------------------------------
+
+Photoshop-artige Blending-Modes per Shader:
+
+  vec3 multiply(vec3 a, vec3 b) { return a * b; }
+  vec3 screen(vec3 a, vec3 b) { return 1.0 - (1.0 - a) * (1.0 - b); }
+  vec3 overlay(vec3 a, vec3 b) {
+      return mix(2.0 * a * b, 1.0 - 2.0 * (1.0 - a) * (1.0 - b),
+                 step(0.5, a));
+  }
+  vec3 dodge(vec3 a, vec3 b) { return a / (1.0 - b + 0.001); }
+  vec3 burn(vec3 a, vec3 b) { return 1.0 - (1.0 - a) / (b + 0.001); }
+  vec3 soft_light(vec3 a, vec3 b) {
+      return (1.0 - 2.0*b) * a*a + 2.0*b*a;
+  }
+  vec3 hard_light(vec3 a, vec3 b) { return overlay(b, a); }
+  vec3 difference(vec3 a, vec3 b) { return abs(a - b); }
+
+--------------------------------------------------------------------------------
+ÜBUNG 6:
+1. Baue einen "Temperaturen"-Shader: Ein Schieberegler (uniform float temperatur,
+   -1.0 bis 1.0) macht das Bild wärmer (mehr Rot/Gelb) oder kälter (mehr Blau).
+2. Implementiere einen "Nachtsicht"-Effekt: Grün-tönung, erhöhte Helligkeit
+   in dunklen Bereichen, leichtes Rauschen (sin-basiert oder via Noise-Textur).
+3. Baue einen "Sepia-Ton"-Shader mit einem blend-Wert.
+   Sepia-Konvertierung: (R*0.393+G*0.769+B*0.189, R*0.349+G*0.686+B*0.168, R*0.272+G*0.534+B*0.131)
+4. Farbton-Isolierung: Ein bestimmter Farbton (uniform float ziel_farbton, uniform
+   float toleranz) bleibt farbig, alles andere wird grau. Nutze HSV und den
+   Abstand im Farbton-Kreis (fract()-basiert).
+5. Bonus: Implementiere Overlay-Blending mit einer zweiten Textur und baue
+   damit einen Vignette-Effekt (dunkle Ränder, helle Mitte).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 7: Formen und SDFs — Signed Distance Functions
+================================================================================
+
+SDFs (Signed Distance Functions) sind eine der mächtigsten Techniken in
+der Shader-Programmierung. Eine SDF gibt für jeden Punkt an, wie weit er
+von einer Form entfernt ist — negativ wenn innen, positiv wenn außen.
+
+------------------------------------------------------------------------
+7.1  Was ist eine SDF?
+------------------------------------------------------------------------
+
+Für einen Kreis mit Mittelpunkt und Radius:
+  float sdf_kreis(vec2 punkt, vec2 mitte, float radius) {
+      return length(punkt - mitte) - radius;
+  }
+
+  // Ergebnis:
+  // < 0 → Punkt ist INNERHALB des Kreises
+  // = 0 → Punkt ist GENAU AUF dem Rand
+  // > 0 → Punkt ist AUßERHALB
+
+Dieses einfache Konzept erlaubt beliebig komplexe Formen durch Kombination.
+
+In Shadern arbeiten wir im UV-Raum (0.0 bis 1.0):
+  float abstand = sdf_kreis(UV, vec2(0.5), 0.3);
+  float ist_innen = step(0.0, -abstand);  // 1.0 wenn innen, 0.0 wenn außen
+  COLOR = vec4(vec3(ist_innen), 1.0);
+
+Weiche Kante mit smoothstep:
+  float kante_breite = 0.01;
+  float innen = smoothstep(kante_breite, 0.0, abstand);
+  COLOR = vec4(vec3(innen), 1.0);
+
+------------------------------------------------------------------------
+7.2  Grundformen als SDFs
+------------------------------------------------------------------------
+
+  // Kreis:
+  float sdf_kreis(vec2 p, float radius) {
+      return length(p) - radius;
+  }
+
+  // Rechteck:
+  float sdf_rechteck(vec2 p, vec2 groesse) {
+      vec2 d = abs(p) - groesse;
+      return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+  }
+  // → Inneres Rechteck bei sdf_rechteck(p - mitte, vec2(breite, hoehe) * 0.5)
+
+  // Abgerundetes Rechteck (mit Radius):
+  float sdf_abgerundetes_rechteck(vec2 p, vec2 groesse, float radius) {
+      vec2 d = abs(p) - groesse + radius;
+      return length(max(d, 0.0)) - radius + min(max(d.x, d.y), 0.0);
+  }
+
+  // Linie (von a nach b, mit Dicke):
+  float sdf_linie(vec2 p, vec2 a, vec2 b) {
+      vec2 pa = p - a, ba = b - a;
+      float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+      return length(pa - ba * h);
+  }
+
+  // Gleichseitiges Dreieck:
+  float sdf_dreieck(vec2 p, float radius) {
+      const float k = sqrt(3.0);
+      p.x = abs(p.x) - radius;
+      p.y = p.y + radius / k;
+      if (p.x + k * p.y > 0.0) p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+      p.x -= clamp(p.x, -2.0 * radius, 0.0);
+      return -length(p) * sign(p.y);
+  }
+
+  // Ring (Kreis mit Loch):
+  float sdf_ring(vec2 p, float innen_r, float aussen_r) {
+      return abs(length(p) - (innen_r + aussen_r) * 0.5) - (aussen_r - innen_r) * 0.5;
+  }
+
+  // Sektor (Kuchenstück):
+  float sdf_sektor(vec2 p, float winkel_rad) {
+      vec2 n = vec2(sin(winkel_rad), cos(winkel_rad));
+      p.x = abs(p.x);
+      float w = length(p) - 1.0;
+      float v = length(p - n * clamp(dot(p, n), 0.0, 1.0));
+      return max(w, v * sign(n.y * p.x - n.x * p.y));
+  }
+
+------------------------------------------------------------------------
+7.3  SDFs kombinieren — Boolean-Operationen
+------------------------------------------------------------------------
+
+Das Mächtige an SDFs: Formen lassen sich durch einfache Mathematik kombinieren:
+
+  // UNION (A oder B → beide Formen):
+  float sdf_union(float a, float b) { return min(a, b); }
+
+  // SUBTRAKTION (A minus B → Loch ausschneiden):
+  float sdf_sub(float a, float b) { return max(a, -b); }
+
+  // SCHNITT (A und B → nur Überlappung):
+  float sdf_und(float a, float b) { return max(a, b); }
+
+  // WEICHE UNION (sanfter Übergang zwischen den Formen):
+  float sdf_weiche_union(float a, float b, float staerke) {
+      float h = max(staerke - abs(a - b), 0.0) / staerke;
+      return min(a, b) - h * h * staerke * 0.25;
+  }
+
+Beispiel — Kapseln-Form (zwei Kreise verbunden):
+  shader_type canvas_item;
+
+  void fragment() {
+      vec2 p = UV - 0.5;  // Mitte = (0,0)
+      p.x *= 2.0;         // Aspect-korrektur (Textur ist quadratisch)
+
+      float kreis1 = sdf_kreis(p - vec2(-0.3, 0.0), 0.2);
+      float kreis2 = sdf_kreis(p - vec2(0.3, 0.0), 0.2);
+      float verbindung = sdf_weiche_union(kreis1, kreis2, 0.3);
+
+      float form = smoothstep(0.01, 0.0, verbindung);
+      COLOR = vec4(vec3(form), 1.0);
+  }
+
+------------------------------------------------------------------------
+7.4  SDFs für Spieleffekte
+------------------------------------------------------------------------
+
+LADE-BALKEN (Kreis-Form):
+  shader_type canvas_item;
+  uniform float fortschritt : hint_range(0.0, 1.0) = 0.75;
+  uniform vec4 farbe_voll : source_color = vec4(0.2, 0.8, 0.2, 1.0);
+  uniform vec4 farbe_leer : source_color = vec4(0.3, 0.3, 0.3, 0.5);
+
+  void fragment() {
+      vec2 p = UV - 0.5;
+
+      // Kreisring:
+      float ring = sdf_ring(p, 0.35, 0.45);
+
+      // Winkel des aktuellen Pixels (0 bis 1, clockwise von oben):
+      float winkel = atan(p.x, -p.y) / (2.0 * 3.14159) + 0.5;
+
+      // Innen im Ring? Und vor dem Fortschritt-Winkel?
+      float ist_ring = smoothstep(0.01, 0.0, abs(ring));
+      float ist_aktiv = step(winkel, fortschritt);
+
+      vec4 ring_farbe = mix(farbe_leer, farbe_voll, ist_aktiv);
+      COLOR = vec4(ring_farbe.rgb, ring_farbe.a * ist_ring);
+  }
+
+RADAR-EFFECT:
+  shader_type canvas_item;
+
+  void fragment() {
+      vec2 p = UV - 0.5;
+
+      // Radar-Kreis:
+      float kreis = smoothstep(0.005, 0.0, abs(length(p) - 0.45));
+
+      // Drehender Strahl:
+      float strahl_winkel = TIME * 1.5;  // Geschwindigkeit
+      float pixel_winkel = atan(p.y, p.x);
+      float winkel_diff = mod(pixel_winkel - strahl_winkel, 6.28318);
+      float strahl = smoothstep(1.2, 0.0, winkel_diff) * 0.5;
+
+      // Blips auf dem Radar (statisch für Demo):
+      float blip1 = smoothstep(0.02, 0.0, length(p - vec2(0.2, 0.1)));
+      float blip2 = smoothstep(0.02, 0.0, length(p - vec2(-0.15, 0.3)));
+
+      vec3 radar_gruen = vec3(0.0, 0.8, 0.3);
+      float gesamt = kreis + strahl + blip1 + blip2;
+      COLOR = vec4(radar_gruen * gesamt, gesamt);
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 7:
+1. Baue einen "HP-Balken"-Shader als SDF:
+     - Rechteckige Form, von links nach rechts gefüllt
+     - Grün → Gelb → Rot je nach Füllstand (uniform float hp_prozent)
+     - Weicher Rand (smoothstep) und ein innerer Schatten
+2. Implementiere einen "Schild"-Shader: Kreisring der pulsiert (SIZE mit TIME)
+   und eine Farbe hat die von uniform vec4 schild_farbe gesetzt wird.
+   Bei schaden_animation=1.0 kurz aufleuchten.
+3. SDF-Kombination: Zeichne eine Sternform (8 Kreise um einen Mittelpunkt,
+   minus ein größerer Kreis in der Mitte). Benutze Rotations-Loop.
+4. Fortschrittsring (wie in Übung 4, aber mit Startposition unten und
+   Uhrzeigersinn-Richtung). Innen soll ein Text-Node sichtbar sein
+   (nutze draw order und alpha).
+5. Bonus: Baue einen "Zielerfassungs"-Shader: Ein rotierendes Viereck-SDF
+   das langsam kleiner wird und sich dem Mittelpunkt nähert, um ein Ziel
+   "einzuschließen". Steuere mit TIME.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 8: Prozedurale Muster — Noise, Wellen, Gitter
+================================================================================
+
+Prozedurale Texturen werden komplett im Shader berechnet — keine Textur-Datei
+nötig. Das spart Speicher und erlaubt unendliche Variation.
+
+------------------------------------------------------------------------
+8.1  Gittermuster — tiles und Zellen
+------------------------------------------------------------------------
+
+Das einfachste prozedurale Muster ist ein Gitter:
+
+  void fragment() {
+      // UV skalieren = Gitter erstellen
+      vec2 gitter_uv = UV * 8.0;  // 8x8 Gitter
+      vec2 zelle = floor(gitter_uv);   // Welche Zelle?
+      vec2 lokal = fract(gitter_uv);   // Position innerhalb der Zelle (0-1)
+
+      // Gitterlinie wenn nahe an ganzzahligem UV:
+      float linie_breite = 0.05;
+      float linie_x = step(1.0 - linie_breite, lokal.x);
+      float linie_y = step(1.0 - linie_breite, lokal.y);
+      float gitter = max(linie_x, linie_y);
+
+      COLOR = vec4(vec3(gitter), 1.0);
+  }
+
+SCHACHBRETT:
+  void fragment() {
+      vec2 gitter = floor(UV * 8.0);
+      float schach = mod(gitter.x + gitter.y, 2.0);  // 0 oder 1
+      COLOR = vec4(vec3(schach), 1.0);
+  }
+
+HEXAGONALES GITTER:
+  vec2 hex_gitter(vec2 uv) {
+      vec2 r = vec2(1.0, sqrt(3.0));
+      vec2 h = r * 0.5;
+      vec2 a = mod(uv, r) - h;
+      vec2 b = mod(uv - h, r) - h;
+      return dot(a, a) < dot(b, b) ? a : b;
+  }
+
+  void fragment() {
+      vec2 gitter = UV * 10.0;
+      vec2 hex = hex_gitter(gitter);
+      float dist = length(hex);
+      float zelle = smoothstep(0.4, 0.38, dist);
+      COLOR = vec4(vec3(zelle), 1.0);
+  }
+
+------------------------------------------------------------------------
+8.2  Noise — zufällige Muster die "natürlich" aussehen
+------------------------------------------------------------------------
+
+Echter Zufall (random noise) sieht zu chaotisch aus. "Value Noise" und
+"Perlin Noise" erzeugen fließende, organische Muster.
+
+WERT-NOISE (einfachste Variante):
+
+  // Pseudo-Zufall für einen vec2-Seed:
+  float rand(vec2 co) {
+      return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  // Value Noise (interpoliertes Rauschen):
+  float value_noise(vec2 p) {
+      vec2 i = floor(p);    // Gitter-Zelle
+      vec2 f = fract(p);    // Lokale Position in Zelle
+
+      // Smooth interpolation (Hermite kurve statt linear):
+      vec2 u = f * f * (3.0 - 2.0 * f);
+
+      // 4 Eckpunkt-Werte:
+      float a = rand(i);
+      float b = rand(i + vec2(1.0, 0.0));
+      float c = rand(i + vec2(0.0, 1.0));
+      float d = rand(i + vec2(1.0, 1.0));
+
+      // Bilinear interpolieren:
+      return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  }
+
+  void fragment() {
+      float n = value_noise(UV * 8.0);
+      COLOR = vec4(vec3(n), 1.0);
+  }
+
+FRAKTALES NOISE (FBM — Fractional Brownian Motion):
+FBM überlagert mehrere Frequenzen von Noise — erzeugt natürlichere Muster
+(Wolken, Terrain, Marmor).
+
+  float fbm(vec2 p, int oktaven) {
+      float wert = 0.0;
+      float amplitudo = 0.5;
+      float frequenz = 1.0;
+
+      for (int i = 0; i < oktaven; i++) {
+          wert += amplitudo * value_noise(p * frequenz);
+          frequenz *= 2.0;        // Jede Oktave doppelt so fein
+          amplitudo *= 0.5;       // Jede Oktave halb so stark
+      }
+      return wert;
+  }
+
+  void fragment() {
+      float wolke = fbm(UV * 3.0 + vec2(TIME * 0.05, 0.0), 6);
+      COLOR = vec4(vec3(wolke), 1.0);
+  }
+
+GRADIENT NOISE (Perlin-ähnlich, smoother):
+
+  vec2 grad(vec2 p) {
+      float h = rand(p) * 6.28318;  // Zufälliger Winkel
+      return vec2(cos(h), sin(h));  // Einheitsvektor in diese Richtung
+  }
+
+  float gradient_noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);  // Quintic smoothstep
+
+      return mix(
+          mix(dot(grad(i), f), dot(grad(i + vec2(1,0)), f - vec2(1,0)), u.x),
+          mix(dot(grad(i + vec2(0,1)), f - vec2(0,1)), dot(grad(i + vec2(1,1)), f - vec2(1,1)), u.x),
+          u.y
+      ) * 0.5 + 0.5;  // Auf 0-1 normieren
+  }
+
+------------------------------------------------------------------------
+8.3  Worley Noise (Cellulare / Voronoi Noise)
+------------------------------------------------------------------------
+
+Worley Noise erzeugt Zell-Muster wie Haut, Stein, oder Schuppenoptik:
+
+  float worley_noise(vec2 p) {
+      vec2 cell = floor(p);
+      float min_dist = 99999.0;
+
+      // Umgebende 9 Zellen prüfen:
+      for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+              vec2 nahe_cell = cell + vec2(float(x), float(y));
+              vec2 zufalls_punkt = nahe_cell + rand(nahe_cell) * vec2(
+                  rand(nahe_cell + 0.1),
+                  rand(nahe_cell + 0.2)
+              );
+              float dist = distance(p, zufalls_punkt);
+              min_dist = min(min_dist, dist);
+          }
+      }
+      return min_dist;
+  }
+
+  void fragment() {
+      float zelle = worley_noise(UV * 6.0);
+      COLOR = vec4(vec3(zelle), 1.0);
+  }
+
+------------------------------------------------------------------------
+8.4  Wellenmuster
+------------------------------------------------------------------------
+
+SINUSWELLEN:
+  void fragment() {
+      float welle = sin(UV.x * 20.0 + TIME * 3.0);
+      welle = welle * 0.5 + 0.5;  // 0 bis 1 normieren
+
+      // Vertikale Position = Wellenlinie:
+      float linie = smoothstep(0.02, 0.0, abs(UV.y - 0.5 - welle * 0.1));
+      COLOR = vec4(vec3(linie), 1.0);
+  }
+
+KONZENTRISCHE WELLEN:
+  void fragment() {
+      vec2 p = UV - 0.5;
+      float radius = length(p);
+      float welle = sin(radius * 30.0 - TIME * 5.0);
+      welle = welle * 0.5 + 0.5;
+      COLOR = vec4(vec3(welle), 1.0);
+  }
+
+INTERFERENZ (zwei Wellenzentren):
+  void fragment() {
+      vec2 p = UV;
+      float dist1 = length(p - vec2(0.3, 0.5));
+      float dist2 = length(p - vec2(0.7, 0.5));
+
+      float welle1 = sin(dist1 * 40.0 - TIME * 4.0);
+      float welle2 = sin(dist2 * 40.0 - TIME * 4.0);
+      float interferenz = (welle1 + welle2) * 0.5 + 0.5;
+
+      COLOR = vec4(vec3(interferenz), 1.0);
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 8:
+1. Baue einen "Ozean"-Shader: FBM-Noise als Basis, blaue Farbe mit
+   helleren Spitzen (crests) für Schaumoptik. Leichte Animation mit TIME.
+2. Implementiere einen "Stein"-Shader: Worley Noise als Grundmuster,
+   Farbe zwischen zwei Grau-Tönen, leichte Kanten-Hervorhebung.
+3. Baue einen "Feuer"-Shader: Noise der nach oben fließt (UV.y - TIME * 0.5),
+   Farbgradient von Schwarz → Rot → Orange → Gelb (mit mix/palette).
+4. Schachbrett mit zufälligem Farbton pro Zelle: Nutze rand(zelle) als
+   Eingabe für die Farbton-Funktion aus Modul 6.
+5. Bonus: "Wasser-Oberfläche": Mehrere überlagerte Sinuswellen verschiedener
+   Frequenz und Richtung, mit Reflexions-Glänzern (weiße Punkte wo Wellen
+   konstruktiv interferieren und über einem Schwellwert liegen).
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 9: Animierte 2D-Shader — Zeit und Bewegung
+================================================================================
+
+TIME und Animationsprinzipien: Wie du überzeugend fließende Effekte baust.
+
+------------------------------------------------------------------------
+9.1  Zeitbasierte Animationsgrundlagen
+------------------------------------------------------------------------
+
+TIME ist kontinuierlich steigend — für Animationen nutzt du es mit:
+
+  sin(TIME)          → Schwingt zwischen -1 und 1
+  fract(TIME)        → Sahnewelle von 0 auf 1, dann reset
+  mod(TIME, PERIODE) → Zählt von 0 auf PERIODE, dann reset
+  TIME * GESCHWINDIGKEIT → Tempo steuern
+
+EASING-FUNKTIONEN für smoother Animation:
+  // Ease-In (langsam starten):
+  float ease_in(float t) { return t * t; }
+  // Ease-Out (langsam stoppen):
+  float ease_out(float t) { return 1.0 - (1.0 - t) * (1.0 - t); }
+  // Ease-In-Out:
+  float ease_in_out(float t) {
+      return t < 0.5 ? 2.0 * t * t : 1.0 - pow(-2.0 * t + 2.0, 2.0) / 2.0;
+  }
+
+SÄGEZAHN → Dreieckswelle:
+  float saegewelle = fract(TIME);          // /\/\/\ nur aufsteigend
+  float dreieckswelle = abs(fract(TIME * 0.5) * 2.0 - 1.0);  // /\/\/\
+
+------------------------------------------------------------------------
+9.2  UV-Animationen
+------------------------------------------------------------------------
+
+SCROLLING TEXTUR (Endloser Hintergrund):
+  shader_type canvas_item;
+  uniform float scroll_speed = 0.1;
+
+  void fragment() {
+      vec2 scroll_uv = UV;
+      scroll_uv.x = fract(UV.x + TIME * scroll_speed);
+      COLOR = texture(TEXTURE, scroll_uv);
+  }
+
+PARALLAX-SCROLLING (mehrere Ebenen, verschiedene Geschwindigkeiten):
+  shader_type canvas_item;
+  uniform sampler2D ebene_fern : hint_default_white;
+  uniform sampler2D ebene_nah : hint_default_white;
+
+  void fragment() {
+      vec2 uv_fern = fract(UV + vec2(TIME * 0.03, 0.0));
+      vec2 uv_nah  = fract(UV + vec2(TIME * 0.1, 0.0));
+
+      vec4 fern = texture(ebene_fern, uv_fern);
+      vec4 nah  = texture(ebene_nah, uv_nah);
+
+      // Überlagern (nahe Schicht ist "vor" der fernen):
+      COLOR = mix(fern, nah, nah.a);
+  }
+
+UV-ROTATION um Mittelpunkt:
+  void fragment() {
+      vec2 p = UV - 0.5;
+      float w = TIME * 0.5;
+      vec2 rotiert = vec2(cos(w)*p.x - sin(w)*p.y, sin(w)*p.x + cos(w)*p.y) + 0.5;
+      COLOR = texture(TEXTURE, rotiert);
+  }
+
+PULSIERENDES SKALIEREN:
+  void fragment() {
+      float puls = 0.9 + sin(TIME * 3.0) * 0.1;  // 0.9 bis 1.1
+      vec2 skaliert_uv = (UV - 0.5) / puls + 0.5;
+      COLOR = texture(TEXTURE, skaliert_uv);
+  }
+
+------------------------------------------------------------------------
+9.3  Sprite-Sheet Animation im Shader
+------------------------------------------------------------------------
+
+Für sehr viele identische Sprites (Partikel, Crowd) kann die Sprite-Sheet-
+Animation im Shader effizienter sein als AnimatedSprite2D:
+
+  shader_type canvas_item;
+
+  uniform int spalten = 4;
+  uniform int zeilen = 4;
+  uniform float fps = 12.0;
+
+  void fragment() {
+      int gesamt_frames = spalten * zeilen;
+      int frame = int(mod(TIME * fps, float(gesamt_frames)));
+
+      int zeile = frame / spalten;
+      int spalte = frame % spalten;
+
+      vec2 frame_groesse = vec2(1.0 / float(spalten), 1.0 / float(zeilen));
+      vec2 frame_offset = vec2(float(spalte), float(zeile)) * frame_groesse;
+
+      vec2 frame_uv = UV * frame_groesse + frame_offset;
+      COLOR = texture(TEXTURE, frame_uv);
+  }
+
+WICHTIG: Für normale Sprites ist AnimatedSprite2D besser — dieser Ansatz
+ist nützlich für GPU-Instancing (Tausende animierter Sprites, Modul 17+).
+
+------------------------------------------------------------------------
+9.4  Partikel-ähnliche Effekte im Shader
+------------------------------------------------------------------------
+
+Kleine animierte Elemente ohne das Partikel-System:
+
+  // Funken / Glitzereffekt:
+  shader_type canvas_item;
+
+  float rand(vec2 co) {
+      return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  void fragment() {
+      // Viele Punkte im Raum:
+      vec2 gitter = UV * 20.0;
+      vec2 cell = floor(gitter);
+      vec2 lokal = fract(gitter);
+
+      // Zufällige Position des Punktes in der Zelle:
+      vec2 punkt_pos = vec2(rand(cell), rand(cell + 0.1));
+      float distanz = distance(lokal, punkt_pos);
+
+      // Zufällige Blinkfrequenz pro Zelle:
+      float frequenz = 1.0 + rand(cell + 0.5) * 5.0;
+      float phase = rand(cell + 0.3) * 6.28318;
+      float blinken = (sin(TIME * frequenz + phase) * 0.5 + 0.5);
+      blinken = pow(blinken, 3.0);  // Schnelles Blinken
+
+      // Punkt zeichnen:
+      float punkt = smoothstep(0.05, 0.0, distanz) * blinken;
+      COLOR = vec4(1.0, 0.9, 0.5, punkt);  // Goldene Funken
+  }
+
+------------------------------------------------------------------------
+9.5  Shader-Übergänge (Transitions)
+------------------------------------------------------------------------
+
+WIPE (horizontaler Übergang):
+  shader_type canvas_item;
+  uniform float progress : hint_range(0.0, 1.0) = 0.0;
+  uniform sampler2D naechste_szene : hint_default_black;
+
+  void fragment() {
+      float kante = UV.x - progress;
+      float misch = smoothstep(-0.05, 0.05, kante);
+      vec4 aktuell = texture(TEXTURE, UV);
+      vec4 naechst = texture(naechste_szene, UV);
+      COLOR = mix(naechst, aktuell, misch);
+  }
+
+RADIAL WIPE:
+  shader_type canvas_item;
+  uniform float progress : hint_range(0.0, 1.0) = 0.0;
+
+  void fragment() {
+      vec2 p = UV - 0.5;
+      float winkel = atan(p.y, p.x) / (2.0 * 3.14159) + 0.5;
+      float maske = step(winkel, progress);
+      vec4 tex = texture(TEXTURE, UV);
+      COLOR = vec4(tex.rgb, tex.a * (1.0 - maske));
+  }
+
+DISSOLVE MIT NOISE:
+  shader_type canvas_item;
+  uniform float progress : hint_range(0.0, 1.0) = 0.0;
+  uniform sampler2D noise_tex;
+
+  float fbm(vec2 p) { /* ... */ }  // Value Noise FBM
+
+  void fragment() {
+      vec4 tex = texture(TEXTURE, UV);
+      float noise = fbm(UV * 3.0);
+
+      if (noise < progress) discard;
+
+      float rand_breite = 0.05;
+      float rand = smoothstep(progress, progress + rand_breite, noise);
+      vec3 glow_farbe = vec3(1.0, 0.5, 0.0);
+      COLOR = mix(vec4(glow_farbe, 1.0), tex, rand);
+  }
+
+--------------------------------------------------------------------------------
+ÜBUNG 9:
+1. Baue einen "Lavalampe"-Shader: FBM-Noise der sich langsam nach oben bewegt,
+   mit weichen Blob-Formen in einer Farbe, Hintergrund in einer anderen.
+2. Implementiere einen "Matrix-Regen"-Effekt: Vertikale Zeichen-Streifen die
+   nach unten fallen (UV-Scroll), zufällige Längen, grüner Farbverlauf.
+3. Baue einen "Portal"-Shader: Spiralförmige UV-Rotation (atan-basiert),
+   Farbregenbogen der rotiert, Rand-Verblassung mit smoothstep.
+4. Implementiere den "Heartbeat"-Effekt: Ein Sprite pulsiert mit einem
+   Herz-EKG-ähnlichen Rhythmus (nicht sinusförmig!). Programmiere die
+   EKG-Kurve per Sahnewellen-Komposition.
+5. Bonus: "Glitch-Effekt": Zufällige horizontale UV-Versätze, gelegentliche
+   Farbkanal-Trennung (RGB separate Versätze), flackernde Zeilenverzerrungen.
+   Nutze TIME-basierte pseudo-random seeds.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 10: Post-Processing — Vollbild-Effekte in 2D
+================================================================================
+
+Post-Processing-Effekte werden über das gesamte Bild gelegt. In Godot 4
+geht das über einen ColorRect oder eine CanvasLayer mit SCREEN_TEXTURE.
+
+------------------------------------------------------------------------
+10.1  Setup für Post-Processing
+------------------------------------------------------------------------
+
+Der einfachste Weg: ColorRect über die gesamte Szene.
+
+  Szene:
+  Node2D (Hauptszene)
+  ├── ... (dein Spiel-Inhalt)
+  └── CanvasLayer (layer = 127, also ganz vorne)
+      └── ColorRect (anchors: Full Rect)
+          └── ShaderMaterial
+
+Shader auf dem ColorRect:
+  shader_type canvas_item;
+
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+
+  void fragment() {
+      // Bildschirm lesen:
+      vec4 bildschirm = texture(SCREEN_TEXTURE, SCREEN_UV);
+
+      // Modifizieren:
+      COLOR = vec4(vec3(dot(bildschirm.rgb, vec3(0.299, 0.587, 0.114))), 1.0);
+      // Ergebnis: Graustufen-Vollbild-Effekt
+  }
+
+WICHTIG: SCREEN_TEXTURE liefert das Bild VOR dem ColorRect. Der ColorRect
+selbst wird darüber gerendert — daher muss sein Shader transparent sein
+wo kein Effekt gewünscht ist, oder er überschreibt alles.
+
+------------------------------------------------------------------------
+10.2  Vignette — dunkle Ränder
+------------------------------------------------------------------------
+
+  shader_type canvas_item;
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  uniform float intensitaet : hint_range(0.0, 1.0) = 0.5;
+  uniform float groesse : hint_range(0.0, 1.0) = 0.75;
+
+  void fragment() {
+      vec4 bildschirm = texture(SCREEN_TEXTURE, SCREEN_UV);
+
+      // Abstand zur Mitte:
+      vec2 p = SCREEN_UV - 0.5;
+      float vignette = 1.0 - smoothstep(groesse, 1.0, length(p) * 2.0);
+
+      COLOR = vec4(bildschirm.rgb * mix(1.0, vignette, intensitaet), 1.0);
+  }
+
+------------------------------------------------------------------------
+10.3  Chromatic Aberration (Farbkanal-Trennung)
+------------------------------------------------------------------------
+
+Dieser Effekt trennt die RGB-Kanäle leicht — erzeugt einen "Linsenfehler"-Look.
+
+  shader_type canvas_item;
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  uniform float staerke = 0.005;
+
+  void fragment() {
+      vec2 uv = SCREEN_UV;
+      vec2 mitte = vec2(0.5);
+      vec2 richtung = normalize(uv - mitte);
+
+      float rot   = texture(SCREEN_TEXTURE, uv - richtung * staerke).r;
+      float gruen = texture(SCREEN_TEXTURE, uv).g;
+      float blau  = texture(SCREEN_TEXTURE, uv + richtung * staerke).b;
+
+      COLOR = vec4(rot, gruen, blau, 1.0);
+  }
+
+------------------------------------------------------------------------
+10.4  Bloom (Glühen heller Bereiche)
+------------------------------------------------------------------------
+
+Echter Bloom braucht mehrere Render-Passes. Eine schnelle Approximation:
+
+  shader_type canvas_item;
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  uniform float schwellwert = 0.8;
+  uniform float staerke = 0.3;
+
+  void fragment() {
+      vec2 uv = SCREEN_UV;
+      vec4 original = texture(SCREEN_TEXTURE, uv);
+
+      // Große Unschärfe als Bloom-Simulation:
+      vec3 bloom = vec3(0.0);
+      float gesamt_gewicht = 0.0;
+
+      for (int x = -4; x <= 4; x++) {
+          for (int y = -4; y <= 4; y++) {
+              vec2 offset = vec2(float(x), float(y)) * 0.003;
+              vec3 probe = texture(SCREEN_TEXTURE, uv + offset).rgb;
+
+              // Nur helle Pixel zum Bloom beitragen lassen:
+              float helligkeit = dot(probe, vec3(0.299, 0.587, 0.114));
+              float gewicht = smoothstep(schwellwert, 1.0, helligkeit);
+
+              bloom += probe * gewicht;
+              gesamt_gewicht += gewicht;
+          }
+      }
+
+      if (gesamt_gewicht > 0.0) bloom /= gesamt_gewicht;
+
+      COLOR = vec4(original.rgb + bloom * staerke, 1.0);
+  }
+
+TIPP: Echter Bloom nutzt SubViewports und Downsampling — das ist viel
+effizienter. Godot 4 hat auch eingebauten Bloom in den WorldEnvironment-
+Einstellungen (für 3D und mit CanvasLayer auch für 2D).
+
+------------------------------------------------------------------------
+10.5  Film Grain und Scanlines
+------------------------------------------------------------------------
+
+FILM GRAIN:
+  shader_type canvas_item;
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  uniform float intensitaet : hint_range(0.0, 0.5) = 0.05;
+
+  float rand(vec2 co) {
+      return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  void fragment() {
+      vec4 bildschirm = texture(SCREEN_TEXTURE, SCREEN_UV);
+      float rauschen = rand(SCREEN_UV + fract(TIME));  // TIME-Seed = jeder Frame anders
+      vec3 mit_rauschen = bildschirm.rgb + (rauschen - 0.5) * intensitaet;
+      COLOR = vec4(mit_rauschen, 1.0);
+  }
+
+SCANLINES (Retro-Monitor):
+  void fragment() {
+      vec4 bildschirm = texture(SCREEN_TEXTURE, SCREEN_UV);
+
+      // Scanlines:
+      float scanline = sin(SCREEN_UV.y * 800.0);  // 800 = Auflösung anpassen
+      scanline = scanline * 0.5 + 0.5;
+      scanline = pow(scanline, 2.0);  // Stärker kontrasten
+
+      float dunkel = mix(1.0, scanline, 0.3);
+      COLOR = vec4(bildschirm.rgb * dunkel, 1.0);
+  }
+
+------------------------------------------------------------------------
+10.6  SubViewport für mehrere Post-Processing-Passes
+------------------------------------------------------------------------
+
+Für komplexe Effekte (echter Bloom, Motion Blur, DOF) brauchst du mehrere
+Render-Passes. Godot 4 macht das mit SubViewport:
+
+  Szene:
+  SubViewportContainer (anchors: Full Rect)
+  └── SubViewport
+      └── ... (dein Spiel-Inhalt)
+  CanvasLayer
+  └── ColorRect (Full Rect)
+      └── ShaderMaterial (Post-Processing, liest SubViewport-Textur)
+
+  # In GDScript: SubViewport-Textur an Shader übergeben:
+  @onready var viewport: SubViewport = $SubViewportContainer/SubViewport
+  @onready var mat: ShaderMaterial = $CanvasLayer/ColorRect.material
+
+  func _ready() -> void:
+      mat.set_shader_parameter("szenen_textur", viewport.get_texture())
+
+Das erlaubt dir beliebig viele Post-Processing-Stufen zu kaskadieren —
+jede SubViewport verarbeitet die vorherige. Das ist die Basis für
+professionelle Post-Processing-Pipelines (vollständig in Teil 4).
+
+--------------------------------------------------------------------------------
+ÜBUNG 10:
+1. Baue einen "CRT-Monitor"-Effekt:
+     - Scanlines (leicht dunklere horizontale Linien)
+     - Leichte Vignette
+     - Slight Chromatic Aberration an den Rändern (stärker als in der Mitte)
+     - Farbton leicht grünlich/gelblich (alte Monitore)
+2. "Unterwasser"-Effekt: Wellige Verzerrung des Bildschirms (sin-basiert,
+   UV-Versatz), leicht blaue Tönung, vignette-ähnliche Verdunkelung an den Rändern.
+3. "Schaden"-Effekt: Rote Vignette die pulst (TIME), Chromatic Aberration
+   die bei hohem schaden-Wert stärker wird. Gesteuert von uniform float schaden.
+4. "Traum"-Effekt: Leichter Bloom auf hellen Bereichen, leichte Unschärfe,
+   sanfte Farbentsättigung, langsam schwingende Wellen-Verzerrung.
+5. Bonus: Baue mit SubViewport einen zweistufigen Effekt: Stufe 1 macht
+   Bloom (nur helle Pixel extrakt), Stufe 2 überlagert das Original mit
+   dem Bloom-Bild. Implementiere in GDScript die Material-Zuweisung.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 2
+################################################################################
+
+FARBE:
+  rgb → hsv → rgb:  rgb_zu_hsv() / hsv_zu_rgb() (eigene Hilfsfunktionen)
+  luminanz: dot(farbe.rgb, vec3(0.299, 0.587, 0.114))
+  mix(a, b, t)  — linearer Übergang
+
+SDFs:
+  float sdf_kreis(vec2 p, float r) { return length(p) - r; }
+  float sdf_rect(vec2 p, vec2 s) { vec2 d = abs(p)-s; return length(max(d,0.))+min(max(d.x,d.y),0.); }
+  union: min(a,b)  subtraktion: max(a,-b)  schnitt: max(a,b)
+  zeichnen: smoothstep(0.01, 0.0, sdf_wert)
+
+NOISE:
+  rand(vec2)     → Pseudozufalls-float (0-1)
+  value_noise()  → Geglättetes Noise
+  fbm()          → Mehrschichtiges Noise (Wolken, Terrain)
+  worley_noise() → Zell-Muster
+
+ANIMATION:
+  TIME              → Sekunden seit Start
+  sin(TIME)         → -1 bis 1 Pendel
+  fract(TIME)       → 0-1 Sägezahn
+  UV + vec2(TIME*s, 0)  → Scrollen
+
+POST-PROCESSING:
+  uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
+  texture(SCREEN_TEXTURE, SCREEN_UV)
+
+================================================================================
+ENDE TEIL 2 — Weiter mit Teil 3: 3D-Shader
+================================================================================

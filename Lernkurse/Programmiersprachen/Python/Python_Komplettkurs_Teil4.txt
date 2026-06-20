@@ -1,0 +1,1664 @@
+================================================================================
+PYTHON KOMPLETTKURS — TEIL 4 von 4
+Dekoratoren · Generatoren · Iteratoren · Rekursion · Fortgeschrittene Muster
+Performance · Testing · Packaging · Projektstruktur
+================================================================================
+
+Voraussetzung: Teil 1–3
+
+Dieser Teil deckt fortgeschrittene Python-Konzepte ab, viele davon
+erklärt anhand von Mustern aus deinen eigenen Dateien:
+  rofi-menu-editor.py → flatten_dict (Rekursion), parse_desktop_file,
+                        get_desktop_entries (Generatoren-Muster, Closures)
+  alle Popups         → Dekoratoren-Muster (@property, @classmethod)
+  smGen.py            → Optimierungsmöglichkeiten, Sets, Generators
+
+================================================================================
+MODUL 21: Dekoratoren — Funktionen die Funktionen verändern
+================================================================================
+
+------------------------------------------------------------------------
+21.1  Was ist ein Dekorator?
+------------------------------------------------------------------------
+
+Ein Dekorator ist eine Funktion, die eine andere Funktion als Eingabe
+nimmt und eine modifizierte Version zurückgibt. Die @-Syntax ist
+syntaktischer Zucker (syntactic sugar) dafür.
+
+Das hier:
+  @mein_dekorator
+  def meine_funktion():
+      pass
+
+Ist exakt dasselbe wie:
+  def meine_funktion():
+      pass
+  meine_funktion = mein_dekorator(meine_funktion)
+
+Du kennst schon drei Dekoratoren aus Teil 2 und 3:
+  @property          → aus Python eingebaut (in allen deinen Popup-Klassen)
+  @classmethod       → aus Python eingebaut
+  @staticmethod      → aus Python eingebaut
+
+------------------------------------------------------------------------
+21.2  Einen einfachen Dekorator schreiben
+------------------------------------------------------------------------
+
+  import time
+
+  def zeitmesser(func):
+      """Dekorator der die Ausführungszeit misst."""
+
+      def wrapper(*args, **kwargs):
+          start = time.time()
+          ergebnis = func(*args, **kwargs)        ← Originalfunktion aufrufen
+          dauer = time.time() - start
+          print(f"{func.__name__} dauerte {dauer:.4f}s")
+          return ergebnis                          ← Ergebnis weitergeben!
+
+      return wrapper                               ← wrapper zurückgeben
+
+  @zeitmesser
+  def lade_wetter():
+      time.sleep(1.5)   ← simuliert Netzwerk-Anfrage
+      return {"temp": 21}
+
+  lade_wetter()   → "lade_wetter dauerte 1.5023s"
+
+  # Das passiert intern:
+  # lade_wetter = zeitmesser(lade_wetter)
+  # lade_wetter() ruft eigentlich wrapper() auf!
+
+Warum *args, **kwargs im wrapper?
+  Der wrapper muss die Originalfunktion mit ALLEN Argumenten aufrufen,
+  egal welche sie hat. *args und **kwargs fangen alles ab.
+
+------------------------------------------------------------------------
+21.3  functools.wraps — Metadaten erhalten
+------------------------------------------------------------------------
+
+Ohne wraps verliert die dekorierte Funktion ihren Namen und Docstring:
+
+  print(lade_wetter.__name__)   → "wrapper"   ← FALSCH!
+  print(lade_wetter.__doc__)    → None         ← FALSCH!
+
+Fix mit functools.wraps:
+  from functools import wraps
+
+  def zeitmesser(func):
+      @wraps(func)               ← kopiert __name__, __doc__, etc.
+      def wrapper(*args, **kwargs):
+          ...
+      return wrapper
+
+  print(lade_wetter.__name__)   → "lade_wetter"   ← richtig!
+  print(lade_wetter.__doc__)    → Docstring         ← richtig!
+
+Regel: Immer @wraps(func) in Dekoratoren benutzen!
+
+------------------------------------------------------------------------
+21.4  Dekoratoren mit Argumenten
+------------------------------------------------------------------------
+
+Was wenn der Dekorator selbst Parameter braucht?
+Dann brauchst du eine Fabrik-Funktion:
+
+  from functools import wraps
+
+  def wiederhole(n):          ← Dekorator-Fabrik nimmt Argument
+      def dekorator(func):    ← eigentlicher Dekorator
+          @wraps(func)
+          def wrapper(*args, **kwargs):
+              for _ in range(n):
+                  ergebnis = func(*args, **kwargs)
+              return ergebnis
+          return wrapper
+      return dekorator        ← gibt Dekorator zurück
+
+  @wiederhole(3)              ← Fabrik wird aufgerufen, gibt Dekorator zurück
+  def hallo():
+      print("Hallo!")
+
+  hallo()   → "Hallo!" dreimal
+
+Noch ein praktisches Beispiel — Retry bei Netzwerkfehlern:
+  import time
+  from functools import wraps
+
+  def retry(versuche=3, warte=1.0):
+      def dekorator(func):
+          @wraps(func)
+          def wrapper(*args, **kwargs):
+              for i in range(versuche):
+                  try:
+                      return func(*args, **kwargs)
+                  except Exception as e:
+                      if i == versuche - 1:
+                          raise    ← letzter Versuch: Exception weitergeben
+                      print(f"Versuch {i+1} fehlgeschlagen: {e}. Warte {warte}s...")
+                      time.sleep(warte)
+          return wrapper
+      return dekorator
+
+  @retry(versuche=3, warte=0.5)
+  def fetch_weather():
+      ...   ← wenn Netzwerkfehler: bis zu 3 Versuche
+
+------------------------------------------------------------------------
+21.5  Nützliche eingebaute Dekoratoren
+------------------------------------------------------------------------
+
+@property (du kennst ihn schon):
+  @property
+  def temperatur(self): return self._temp
+  @temperatur.setter
+  def temperatur(self, v): self._temp = v
+
+@classmethod und @staticmethod (kennst du auch):
+  @classmethod
+  def aus_dict(cls, d): return cls(d["name"])
+
+  @staticmethod
+  def ist_gültig(name): return bool(name)
+
+@functools.lru_cache — Ergebnis-Caching (Memoization):
+  from functools import lru_cache
+
+  @lru_cache(maxsize=128)
+  def fibonacci(n):
+      if n < 2:
+          return n
+      return fibonacci(n-1) + fibonacci(n-2)
+
+  fibonacci(100)   ← ohne Cache: ~10^20 Aufrufe. Mit Cache: 100 Aufrufe!
+  fibonacci.cache_info()   → CacheInfo(hits=98, misses=101, ...)
+  fibonacci.cache_clear()  ← Cache leeren
+
+  # Achtung: lru_cache funktioniert nur mit hashbaren Argumenten
+  # (keine Listen, Dicts — aber Strings, Zahlen, Tupel sind ok)
+
+@functools.cached_property — Einmal berechnetes Attribut (Python 3.8+):
+  from functools import cached_property
+
+  class WetterStation:
+      def __init__(self, lat, lon):
+          self.lat = lat
+          self.lon = lon
+
+      @cached_property
+      def api_url(self):
+          """Wird nur beim ersten Zugriff berechnet, dann gecacht."""
+          return (f"https://api.open-meteo.com/v1/forecast"
+                  f"?latitude={self.lat}&longitude={self.lon}")
+
+  station = WetterStation(48.05, 14.13)
+  station.api_url   ← berechnet
+  station.api_url   ← aus Cache (keine Berechnung!)
+
+@dataclass (aus Teil 2 — ist auch ein Dekorator!):
+  from dataclasses import dataclass
+
+  @dataclass
+  class Punkt:
+      x: float
+      y: float
+
+------------------------------------------------------------------------
+21.6  Klassen-Dekoratoren
+------------------------------------------------------------------------
+
+Dekoratoren können auch ganze Klassen dekorieren:
+
+  def singleton(cls):
+      """Stellt sicher dass nur eine Instanz existiert."""
+      instanzen = {}
+      @wraps(cls)
+      def get_instanz(*args, **kwargs):
+          if cls not in instanzen:
+              instanzen[cls] = cls(*args, **kwargs)
+          return instanzen[cls]
+      return get_instanz
+
+  @singleton
+  class Konfig:
+      def __init__(self):
+          self.daten = {}
+
+  k1 = Konfig()
+  k2 = Konfig()
+  k1 is k2   → True   ← dieselbe Instanz!
+
+------------------------------------------------------------------------
+21.7  Dekoratoren stapeln
+------------------------------------------------------------------------
+
+Mehrere Dekoratoren werden von unten nach oben angewandt:
+
+  @dekorator_a
+  @dekorator_b
+  @dekorator_c
+  def func():
+      pass
+
+  # Ist dasselbe wie:
+  func = dekorator_a(dekorator_b(dekorator_c(func)))
+
+  # Beispiel:
+  @zeitmesser
+  @retry(versuche=3)
+  def fetch_weather():
+      ...
+  # Zuerst retry angewandt, dann zeitmesser drumherum
+
+--------------------------------------------------------------------------------
+ÜBUNG 21:
+1. Schreibe einen Dekorator @cache_wetter(sekunden=60) der:
+   - Das Ergebnis einer Funktion für X Sekunden speichert
+   - Bei erneutem Aufruf das gecachte Ergebnis zurückgibt ohne neu zu laden
+   - time.time() für Zeitstempel nutzt
+
+2. Schreibe einen Dekorator @nur_hauptthread der prüft ob die Funktion
+   im Haupt-Thread läuft (threading.current_thread() is threading.main_thread())
+   und sonst eine RuntimeError wirft.
+
+3. Dekoriere fetch_weather() mit @retry(3, 0.5) und @cache_wetter(60)
+   und erkläre die Reihenfolge.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 22: Generatoren und Iteratoren
+================================================================================
+
+------------------------------------------------------------------------
+22.1  Iteratoren — was steckt hinter for?
+------------------------------------------------------------------------
+
+Wenn du for x in something: schreibst, ruft Python intern zwei
+Protokoll-Methoden auf:
+  __iter__()  → gibt einen Iterator zurück
+  __next__()  → gibt das nächste Element zurück (StopIteration am Ende)
+
+  # Manuell:
+  liste = [1, 2, 3]
+  it = iter(liste)     ← ruft liste.__iter__() auf
+  next(it)             → 1
+  next(it)             → 2
+  next(it)             → 3
+  next(it)             → StopIteration!
+
+  # for macht das automatisch:
+  for x in liste:
+      print(x)   ← kein StopIteration sichtbar
+
+Eigener Iterator:
+  class Zähler:
+      def __init__(self, bis):
+          self.bis = bis
+          self.aktuell = 0
+
+      def __iter__(self):
+          return self            ← gibt sich selbst zurück
+
+      def __next__(self):
+          if self.aktuell >= self.bis:
+              raise StopIteration
+          wert = self.aktuell
+          self.aktuell += 1
+          return wert
+
+  for i in Zähler(5):
+      print(i)   → 0, 1, 2, 3, 4
+
+------------------------------------------------------------------------
+22.2  Generatoren — Iteratoren einfach schreiben
+------------------------------------------------------------------------
+
+Generatoren sind Funktionen mit yield. Sie sind die einfachere Art,
+Iteratoren zu erstellen.
+
+  def zähler(bis):
+      aktuell = 0
+      while aktuell < bis:
+          yield aktuell      ← gibt Wert zurück UND pausiert die Funktion!
+          aktuell += 1
+
+  for i in zähler(5):
+      print(i)   → 0, 1, 2, 3, 4
+
+Was passiert bei yield?
+  1. Funktionsausführung pausiert
+  2. Wert wird an den Aufrufer zurückgegeben
+  3. Beim nächsten next() läuft die Funktion weiter ab der yield-Zeile
+  4. Am Funktionsende: automatisch StopIteration
+
+Wichtiger Unterschied zu return:
+  def liste_erstellen(n):
+      result = []
+      for i in range(n):
+          result.append(i * i)
+      return result   ← ALLE Werte auf einmal im Speicher
+
+  def generator_erstellen(n):
+      for i in range(n):
+          yield i * i   ← EIN Wert auf einmal, kaum Speicher
+
+  # Für 1.000.000 Elemente:
+  liste_erstellen(1_000_000)     ← ~8 MB Speicher
+  generator_erstellen(1_000_000) ← kaum Speicher (lazy evaluation!)
+
+------------------------------------------------------------------------
+22.3  Generator-Expressions
+------------------------------------------------------------------------
+
+Wie List Comprehensions, aber mit () statt []:
+
+  # List Comprehension — alles sofort im Speicher:
+  quadrate_liste = [x**2 for x in range(1_000_000)]
+
+  # Generator Expression — lazy, kaum Speicher:
+  quadrate_gen = (x**2 for x in range(1_000_000))
+
+  # Benutzen wie ein Iterator:
+  next(quadrate_gen)    → 0
+  next(quadrate_gen)    → 1
+
+  # In sum/max/min direkt benutzen (kein extra [] nötig!):
+  summe = sum(x**2 for x in range(100))    ← effizienter als sum([...])
+  größte = max(len(s) for s in wortliste)
+
+Aus deinem smGen.py — ähnliches Muster (könnte Generator sein):
+  # Aktuell:
+  found_files = []
+  for root, dirs, files in os.walk(directory):
+      for filename in files:
+          found_files.append(url_path)
+
+  # Als Generator (für sehr große Verzeichnisse effizienter):
+  def finde_dateien(directory, erlaubte_endungen):
+      for root, dirs, files in os.walk(directory):
+          dirs[:] = [d for d in dirs if d != ".git"]
+          for filename in files:
+              name, ext = os.path.splitext(filename)
+              if ext.lower() in erlaubte_endungen:
+                  rel = os.path.relpath(os.path.join(root, filename), directory)
+                  yield rel.replace("\\", "/")   ← ein Pfad auf einmal
+
+  # Benutzen:
+  for pfad in finde_dateien(".", ALLOWED_EXTENSIONS):
+      sitemap_lines.append(f"  <url><loc>{pfad}</loc></url>")
+
+------------------------------------------------------------------------
+22.4  yield from — Generatoren delegieren
+------------------------------------------------------------------------
+
+  def alle_dateien(ordner):
+      for pfad in ordner.iterdir():
+          if pfad.is_dir():
+              yield from alle_dateien(pfad)  ← Delegation an rekursiven Aufruf
+          else:
+              yield pfad
+
+  # Ohne yield from:
+  def alle_dateien_alt(ordner):
+      for pfad in ordner.iterdir():
+          if pfad.is_dir():
+              for sub_pfad in alle_dateien_alt(pfad):   ← extra Schleife nötig
+                  yield sub_pfad
+          else:
+              yield pfad
+
+  # yield from chain von iterables:
+  def kombiniert(*iterables):
+      for it in iterables:
+          yield from it
+
+  list(kombiniert([1,2], [3,4], [5,6]))   → [1, 2, 3, 4, 5, 6]
+
+  from itertools import chain
+  list(chain([1,2], [3,4], [5,6]))        → dasselbe, eingebaut
+
+------------------------------------------------------------------------
+22.5  itertools — Werkzeugkasten für Iteratoren
+------------------------------------------------------------------------
+
+  import itertools as it
+
+  # chain — mehrere Iterables verbinden:
+  list(it.chain([1,2], [3,4], "abc"))    → [1, 2, 3, 4, 'a', 'b', 'c']
+
+  # count — unendlicher Zähler:
+  for i in it.count(10, 2):   → 10, 12, 14, 16, ...
+      if i > 20: break
+
+  # cycle — endlos wiederholen:
+  farben = it.cycle(["rot", "grün", "blau"])
+  [next(farben) for _ in range(5)]   → ["rot", "grün", "blau", "rot", "grün"]
+
+  # repeat — n-mal wiederholen:
+  list(it.repeat("x", 3))   → ["x", "x", "x"]
+
+  # islice — Generator aufschneiden (wie List-Slicing):
+  list(it.islice(it.count(), 5))   → [0, 1, 2, 3, 4]
+
+  # takewhile / dropwhile — bedingt aufhören/überspringen:
+  list(it.takewhile(lambda x: x < 5, [1,2,3,4,5,6,7]))  → [1, 2, 3, 4]
+  list(it.dropwhile(lambda x: x < 5, [1,2,3,4,5,6,7]))  → [5, 6, 7]
+
+  # product — kartesisches Produkt:
+  list(it.product("AB", "12"))   → [('A','1'),('A','2'),('B','1'),('B','2')]
+
+  # combinations und permutations:
+  list(it.combinations("ABC", 2))    → [('A','B'),('A','C'),('B','C')]
+  list(it.permutations("ABC", 2))    → [('A','B'),('A','C'),('B','A'),...]
+
+  # groupby — Gruppen bilden (Eingabe muss sortiert sein!):
+  from itertools import groupby
+  daten = [("Mo",1),("Mo",2),("Di",3),("Di",4)]
+  for tag, gruppe in groupby(daten, key=lambda x: x[0]):
+      print(tag, list(gruppe))
+  # → Mo [("Mo",1),("Mo",2)]
+  # → Di [("Di",3),("Di",4)]
+
+  # starmap — map mit Tuple-Unpacking:
+  list(it.starmap(lambda a,b: a+b, [(1,2),(3,4),(5,6)]))   → [3, 7, 11]
+
+--------------------------------------------------------------------------------
+ÜBUNG 22:
+1. Schreibe einen Generator wmo_codes() der alle (code, icon, beschreibung)
+   Tripel aus WMO_ICONS und WMO_DESC erzeugt.
+   (Nutze WMO_ICONS.items() und WMO_DESC.get())
+
+2. Benutze itertools.groupby um die WMO-Codes nach Icon-Typ zu gruppieren
+   (gleiche Icons = gleiche Gruppe). Gib jede Gruppe aus.
+
+3. Schreibe einen Generator pfade_streamen(verzeichnis) der alle .py-Dateien
+   aus dem Verzeichnis lazy zurückgibt (mit os.walk und yield).
+   Benutze ihn mit itertools.islice um nur die ersten 5 zurückzugeben.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 23: Rekursion
+================================================================================
+
+------------------------------------------------------------------------
+23.1  Was ist Rekursion?
+------------------------------------------------------------------------
+
+Eine Funktion die sich selbst aufruft. Nützlich für Probleme die
+natürlich in gleiche Teilprobleme zerfallen (Bäume, verschachtelte Dicts).
+
+  def fakultät(n):
+      if n <= 1:           ← Basisfall — MUSS existieren!
+          return 1
+      return n * fakultät(n - 1)   ← rekursiver Aufruf
+
+  fakultät(5)   → 5 * 4 * 3 * 2 * 1 = 120
+
+Basisfall ist KRITISCH. Ohne ihn: unendliche Rekursion → RecursionError!
+
+Pythons Rekursionslimit:
+  import sys
+  sys.getrecursionlimit()      → 1000 (Standard)
+  sys.setrecursionlimit(5000)  ← erhöhen wenn nötig (vorsichtig!)
+
+------------------------------------------------------------------------
+23.2  Verschachtelte Dicts — dein flatten_dict erklärt
+------------------------------------------------------------------------
+
+Dein rofi-menu-editor.py hat eine klassische rekursive Funktion:
+
+  def flatten_dict(d: dict, parent_key: str = '') -> dict:
+      items = {}
+      if parent_key and parent_key not in items:
+          items[parent_key] = {}
+      if not isinstance(d, dict):
+          return items
+      for k, v in d.items():
+          if isinstance(v, dict):
+              new_key = f"{parent_key}/{k}" if parent_key else k
+              if new_key not in items:
+                  items[new_key] = {}
+              child_items = flatten_dict(v, new_key)  ← REKURSION!
+              for ck, cv in child_items.items():
+                  if ck not in items:
+                      items[ck] = {}
+                  items[ck].update(cv)
+          else:
+              target_key = parent_key if parent_key else "(Root)"
+              if target_key not in items:
+                  items[target_key] = {}
+              items[target_key][k] = str(v)
+      return items
+
+Vereinfachtes Beispiel zum Verstehen:
+  menü = {
+      "Internet": {
+          "Firefox": "firefox",
+          "Chromium": "chromium"
+      },
+      "Spiele": {
+          "Arcade": {
+              "Pac-Man": "pacman"
+          }
+      },
+      "Dateimanager": "thunar"
+  }
+
+  # Ziel: {"Internet": {"Firefox": "firefox", ...}, "Spiele/Arcade": {...}}
+  # Internet → keine Tiefe → bleibt "Internet"
+  # Spiele/Arcade → verschachtelt → wird zu "Spiele/Arcade"
+
+  def flatten_einfach(d, prefix=""):
+      result = {}
+      for key, value in d.items():
+          voller_key = f"{prefix}/{key}" if prefix else key
+          if isinstance(value, dict):
+              # Rekursiver Aufruf mit erweitertem Präfix
+              tiefer = flatten_einfach(value, voller_key)
+              result.update(tiefer)
+          else:
+              result[voller_key] = value
+      return result
+
+  flatten_einfach(menü)
+  # → {
+  #     "Internet/Firefox": "firefox",
+  #     "Internet/Chromium": "chromium",
+  #     "Spiele/Arcade/Pac-Man": "pacman",
+  #     "Dateimanager": "thunar"
+  #   }
+
+------------------------------------------------------------------------
+23.3  Baumstrukturen traversieren
+------------------------------------------------------------------------
+
+  def durchsuche(d, ziel_key):
+      """Sucht rekursiv in verschachteltem Dict nach einem Key."""
+      if ziel_key in d:
+          return d[ziel_key]                    ← gefunden!
+      for v in d.values():
+          if isinstance(v, dict):
+              ergebnis = durchsuche(v, ziel_key)
+              if ergebnis is not None:
+                  return ergebnis               ← in Tiefe gefunden
+      return None                               ← nicht gefunden
+
+  def alle_werte(d):
+      """Generator der alle nicht-Dict-Werte liefert."""
+      for v in d.values():
+          if isinstance(v, dict):
+              yield from alle_werte(v)          ← Rekursion mit yield from
+          else:
+              yield v
+
+------------------------------------------------------------------------
+23.4  Memoization — Rekursion beschleunigen
+------------------------------------------------------------------------
+
+Naive Rekursion berechnet oft die gleichen Werte mehrfach:
+
+  # fibonacci ohne Memoization — exponentiell langsam:
+  def fib(n):
+      if n < 2: return n
+      return fib(n-1) + fib(n-2)   ← fib(30) = ~2^30 Aufrufe!
+
+  # Mit lru_cache — linear schnell:
+  from functools import lru_cache
+
+  @lru_cache(maxsize=None)
+  def fib(n):
+      if n < 2: return n
+      return fib(n-1) + fib(n-2)   ← fib(30) = 30 Aufrufe!
+
+  # Manuell mit Dict:
+  cache = {}
+  def fib(n):
+      if n in cache:
+          return cache[n]
+      if n < 2:
+          return n
+      cache[n] = fib(n-1) + fib(n-2)
+      return cache[n]
+
+------------------------------------------------------------------------
+23.5  Rekursion vs Iteration — wann was?
+------------------------------------------------------------------------
+
+Rekursion:
+  + Eleganter Code für baumartige Probleme
+  + Natürliche Abbildung von Problemen die sich selbst ähneln
+  - Speicher-Overhead (jeder Aufruf = Stack-Frame)
+  - Pythons Limit: 1000 Ebenen
+  - Langsamer als Iteration
+
+Iteration:
+  + Schneller, kein Stack-Limit
+  + Besser für flache Probleme
+  - Komplexer Code für verschachtelte Strukturen
+
+  # Rekursives flatten_einfach als Iteration (mit explizitem Stack):
+  def flatten_iterativ(d, prefix=""):
+      result = {}
+      stack = [(d, prefix)]          ← manueller Stack ersetzt Aufruf-Stack
+      while stack:
+          aktuell, prä = stack.pop()
+          for key, value in aktuell.items():
+              voller_key = f"{prä}/{key}" if prä else key
+              if isinstance(value, dict):
+                  stack.append((value, voller_key))   ← Stack statt Rekursion
+              else:
+                  result[voller_key] = value
+      return result
+
+Faustregel: Für Dateisysteme, Menü-Strukturen, JSON-Bäume →
+Rekursion ok (selten tiefer als 100). Für algorithmische Probleme
+mit potenziell tiefer Rekursion → Iteration oder @lru_cache.
+
+--------------------------------------------------------------------------------
+ÜBUNG 23:
+Dein unflatten_dict macht das Gegenteil von flatten:
+Aus {"Spiele/Arcade/Pac-Man": "pacman"} → {"Spiele": {"Arcade": {"Pac-Man": "pacman"}}}
+
+1. Erkläre Schritt für Schritt was unflatten_dict macht:
+   parts = path.split('/')  → was ergibt das für "Spiele/Arcade/Pac-Man"?
+
+2. Schreibe eine rekursive Variante von unflatten die:
+   für jeden Pfad "a/b/c" rekursiv verschachteltes Dict aufbaut
+
+3. Schreibe tiefe_suche(d, wert) die rekursiv in einem
+   verschachtelten Dict nach einem VALUE sucht und den Pfad zurückgibt:
+   tiefe_suche({"a": {"b": {"c": "gefunden"}}}, "gefunden") → "a/b/c"
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 24: Fortgeschrittene Muster aus deinen Dateien
+================================================================================
+
+------------------------------------------------------------------------
+24.1  Closures in Funktionen — _load_data_async erklärt
+------------------------------------------------------------------------
+
+Aus deinem rofi-menu-editor.py:
+
+  def _load_data_async(self):
+      self._loading_spinner.start()
+
+      def load():                          ← Innere Funktion = Closure!
+          d_entries = get_desktop_entries()
+          b_entries = get_binary_entries()
+          GLib.idle_add(self._on_data_loaded, d_entries, b_entries)
+          ←  self ist eingeschlossen!
+          ←  load() "erinnert sich" an self aus _load_data_async()
+
+      import threading
+      threading.Thread(target=load, daemon=True).start()
+
+Was das elegant macht:
+  - load() braucht keine Parameter — self ist durch Closure verfügbar
+  - Statt self._load_thread_func() eine Methode zu definieren,
+    ist load() lokal und sauber eingekapselt
+  - Das Muster: define-function-use-immediately ist sehr pythonisch
+
+Allgemeines Muster:
+  def erstelle_handler(kontext):
+      """Fabrik-Funktion die Handler mit eingeschlossenem Kontext erstellt."""
+
+      def handler(event):
+          kontext.verarbeite(event)  ← kontext ist eingeschlossen
+
+      return handler
+
+------------------------------------------------------------------------
+24.2  partition() statt split() — robustes Parsen
+------------------------------------------------------------------------
+
+Aus deinem parse_desktop_file in rofi-menu-editor.py:
+
+  key, _, val = line.partition("=")
+  ←  partition(sep) teilt beim ERSTEN Vorkommen von sep auf
+  ←  Gibt IMMER 3 Teile zurück: (vor_sep, sep, nach_sep)
+  ←  Wenn sep nicht gefunden: ("original", "", "")
+
+Warum nicht split("=", 1)?
+  "Name=Firefox=Browser".split("=", 1)   → ["Name", "Firefox=Browser"] ✓
+  "Name=Firefox=Browser".partition("=")  → ("Name", "=", "Firefox=Browser") ✓
+
+  "Keine Gleichung".split("=", 1)        → ["Keine Gleichung"]   ← unpack-Fehler!
+  "Keine Gleichung".partition("=")       → ("Keine Gleichung", "", "")  ← sicher!
+
+  # partition ist sicherer beim Unpacking:
+  key, _, val = zeile.partition("=")
+  if not _:       ← _ ist leer wenn = nicht gefunden
+      continue    ← keine Gleichung in dieser Zeile
+
+------------------------------------------------------------------------
+24.3  seen_execs-Set für Deduplizierung
+------------------------------------------------------------------------
+
+Aus deinem get_desktop_entries() und get_binary_entries():
+
+  seen_execs = set()
+  entries = []
+  for f in sorted(d.glob("*.desktop")):
+      entry = parse_desktop_file(f)
+      if entry and entry["exec"].split()[0] not in seen_execs:
+          seen_execs.add(entry["exec"].split()[0])
+          entries.append(entry)
+
+Warum Set und nicht Liste?
+  # Prüfen ob Element vorhanden:
+  "firefox" in gesehene_liste   ← O(n) — durchsucht jedes Element!
+  "firefox" in gesehene_set     ← O(1) — konstante Zeit, egal wie groß!
+
+  # Bei 10.000 Binaries: Set ist ~10.000x schneller für in-Check!
+
+Das split()[0] Muster:
+  "firefox --new-tab".split()[0]   → "firefox"   ← nur ausführbare Datei
+  "/usr/bin/python3 -u".split()[0] → "/usr/bin/python3"
+
+------------------------------------------------------------------------
+24.4  partition() des PATH für Binary-Suche
+------------------------------------------------------------------------
+
+Aus get_binary_entries():
+
+  for path_dir in os.environ.get("PATH", "").split(os.pathsep):
+  ←  os.environ.get("PATH", "") → "/usr/bin:/usr/local/bin:/home/trafk/.local/bin"
+  ←  os.pathsep → ":" auf Linux, ";" auf Windows
+  ←  .split(os.pathsep) → ["/usr/bin", "/usr/local/bin", ...]
+
+  p = Path(path_dir)
+  if not p.is_dir(): continue   ← überspringen wenn Verzeichnis nicht existiert
+
+  for child in p.iterdir():
+      if child.is_file() and os.access(child, os.X_OK):
+      ←  os.access(child, os.X_OK) → ist Datei ausführbar?
+      ←  os.X_OK = "execute" Bit
+
+------------------------------------------------------------------------
+24.5  sorted() mit key=lambda — flexibles Sortieren
+------------------------------------------------------------------------
+
+Das Muster kommt in beiden get_*_entries() Funktionen vor:
+
+  return sorted(entries, key=lambda e: e["name"].lower())
+
+Warum .lower()?
+  Ohne: "Zenity" kommt vor "apt" (Großbuchstaben vor Kleinbuchstaben in ASCII!)
+  Mit:  "apt", "firefox", "zenity" (alphabetisch korrekt)
+
+Mehr Sortier-Beispiele:
+  # Mehrere Kriterien (Tupel-Vergleich):
+  sorted(personen, key=lambda p: (p["nachname"], p["vorname"]))
+  ← Erst nach Nachname, bei Gleichheit nach Vorname
+
+  # Umgekehrt:
+  sorted(einträge, key=lambda e: e["priorität"], reverse=True)
+
+  # Stabil (Python's sort ist immer stabil):
+  liste = [{"name": "a", "prio": 1}, {"name": "b", "prio": 1}]
+  sorted(liste, key=lambda x: x["prio"])
+  ← Gleiche Priorität: ursprüngliche Reihenfolge bleibt
+
+------------------------------------------------------------------------
+24.6  os.access() und Berechtigungs-Checks
+------------------------------------------------------------------------
+
+  import os
+
+  os.access(pfad, os.R_OK)  ← Lesbar?
+  os.access(pfad, os.W_OK)  ← Schreibbar?
+  os.access(pfad, os.X_OK)  ← Ausführbar?
+  os.access(pfad, os.F_OK)  ← Existiert?
+
+  # Kombinierbar:
+  os.access(pfad, os.R_OK | os.W_OK)   ← Les- UND schreibbar?
+
+Hinweis: os.access() prüft die REAL User ID, nicht die effektive.
+In den meisten Fällen ist das was du willst.
+
+--------------------------------------------------------------------------------
+ÜBUNG 24:
+Aus deinem parse_desktop_file:
+
+1. Erkläre warum path.read_text(errors="replace") benutzt wird
+   statt path.read_text(). Was macht errors="replace"?
+
+2. Das in_desktop-Flag verhindert dass Daten außerhalb von [Desktop Entry]
+   gelesen werden. Schreibe eine vereinfachte Version die:
+   - Eine .ini-ähnliche Datei parst
+   - Alle Sektionen ([Sektion]) als Keys eines Dicts zurückgibt
+   - Den Inhalt jeder Sektion als Dict speichert
+   parse_ini("pfad") → {"Desktop Entry": {"Name": "...", "Exec": "..."}, ...}
+
+3. Schreibe eine Funktion dedupliziere(einträge, key_func) die:
+   - Eine Liste von Dicts nimmt
+   - key_func anwendet um den "eindeutigen Key" zu bestimmen
+   - Duplikate entfernt (erstes Vorkommen behalten)
+   - dedupliziere(entries, lambda e: e["exec"].split()[0]) aufrufen
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 25: Performance und Optimierung
+================================================================================
+
+------------------------------------------------------------------------
+25.1  Profiling — wo ist der Flaschenhals?
+------------------------------------------------------------------------
+
+  # cProfile — eingebauter Profiler:
+  import cProfile
+  cProfile.run("meine_funktion()")
+
+  # Von der Kommandozeile:
+  python3 -m cProfile -s cumulative mein_skript.py
+
+  # Mit Stats:
+  import cProfile, pstats
+  pr = cProfile.Profile()
+  pr.enable()
+  meine_funktion()
+  pr.disable()
+  stats = pstats.Stats(pr)
+  stats.sort_stats("cumulative")
+  stats.print_stats(10)   ← Top 10 langsamste Funktionen
+
+  # timeit — kleine Code-Snippets messen:
+  import timeit
+  timeit.timeit("x = [i**2 for i in range(1000)]", number=1000)
+  ← Führt den Code 1000x aus und gibt Gesamtzeit zurück
+
+  # In der REPL:
+  %timeit x = [i**2 for i in range(1000)]   ← in Jupyter/IPython
+
+------------------------------------------------------------------------
+25.2  Schnelle Datenstrukturen
+------------------------------------------------------------------------
+
+  # set statt list für in-Checks (O(1) vs O(n)):
+  erlaubt = {".html", ".py", ".js", ".css"}    ← set (mit {})
+  # ext in erlaubt   ← schnell!
+
+  # aus deinem smGen.py:
+  allowed_extensions = (
+      ".html", ".md", ".txt", ".css", ".js", ...
+  )
+  ← Tuple ist hier ok (kleine Menge), Set wäre minimal schneller
+
+  # dict.get() vs try/except:
+  WMO_ICONS.get(code, "❓")    ← schneller wenn Key oft vorhanden
+  # try: return d[key] except KeyError: return "❓"
+  ← try/except schneller wenn Key oft NICHT vorhanden
+
+  # Strings konkatenieren — str.join ist viel schneller als +:
+  # Langsam:
+  result = ""
+  for teil in teile:
+      result += teil   ← erstellt jedes Mal einen neuen String!
+
+  # Schnell:
+  result = "".join(teile)   ← einmal am Ende
+
+  # aus smGen.py:
+  content = "\n".join(sitemap_lines)   ← richtig! join statt +=
+
+  # collections.deque für Queue (schnelles append/pop links und rechts):
+  from collections import deque
+  q = deque()
+  q.append(1)     ← rechts, O(1)
+  q.appendleft(0) ← links, O(1)
+  q.pop()         ← rechts, O(1)
+  q.popleft()     ← links, O(1)
+  ← Liste: l.pop(0) ist O(n)! deque ist O(1)!
+
+------------------------------------------------------------------------
+25.3  Speicher-Effizienz
+------------------------------------------------------------------------
+
+  # __slots__ — spart Speicher bei vielen Instanzen:
+  class Popup:
+      __slots__ = ["titel", "breite", "höhe"]   ← nur diese Attribute!
+
+      def __init__(self, titel):
+          self.titel = titel
+          self.breite = 400
+          self.höhe = 300
+
+  # Ohne __slots__: jede Instanz hat ein __dict__ (~200-400 Bytes extra)
+  # Mit __slots__: kein __dict__, ~3x weniger Speicher bei vielen Instanzen
+  # Nachteil: keine dynamischen Attribute mehr möglich
+
+  # Generator statt Liste für große Datenmengen:
+  # Nicht: [zeile.strip() for zeile in datei.readlines()]
+  # Sondern:
+  with open("groß.txt") as f:
+      for zeile in f:           ← Zeile für Zeile, kaum Speicher
+          verarbeite(zeile.strip())
+
+  # sys.getsizeof — Speicherbedarf prüfen:
+  import sys
+  sys.getsizeof([])         → 56 Bytes
+  sys.getsizeof(range(1000000))   → 48 Bytes   ← range-Objekt: immer klein!
+  sys.getsizeof(list(range(1000000)))   → ~8 MB  ← Liste: linear
+
+------------------------------------------------------------------------
+25.4  Kontext-Manager für Ressourcen
+------------------------------------------------------------------------
+
+Immer with benutzen für:
+  - Dateien (open)
+  - Netzwerk-Verbindungen (urllib.request.urlopen)
+  - Datenbank-Verbindungen
+  - Sperren (threading.Lock)
+
+  # threading.Lock als Context Manager:
+  lock = threading.Lock()
+
+  with lock:                # acquire()
+      kritischer_code()
+  # lock.release() automatisch!
+
+  # sqlite3:
+  import sqlite3
+  with sqlite3.connect("daten.db") as conn:
+      conn.execute("CREATE TABLE IF NOT EXISTS ...")
+  # commit und close automatisch
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 26: Testing — Code sicher verändern
+================================================================================
+
+------------------------------------------------------------------------
+26.1  unittest — eingebautes Test-Framework
+------------------------------------------------------------------------
+
+  import unittest
+
+  # Zu testender Code:
+  def get_priority(url_path):
+      if "/backup/" in url_path.lower():
+          return "0.10"
+      if url_path.endswith((".py", ".js", ".css")):
+          return "0.65"
+      return "0.85"
+
+  # Tests:
+  class TestGetPriority(unittest.TestCase):
+
+      def test_backup_pfad(self):
+          self.assertEqual(get_priority("/old/backup/test.html"), "0.10")
+
+      def test_code_datei(self):
+          self.assertEqual(get_priority("skript.py"), "0.65")
+          self.assertEqual(get_priority("style.css"), "0.65")
+
+      def test_default(self):
+          self.assertEqual(get_priority("index.html"), "0.85")
+
+      def test_leer(self):
+          self.assertEqual(get_priority(""), "0.85")
+
+  # Ausführen:
+  if __name__ == "__main__":
+      unittest.main()
+
+  # Von der Kommandozeile:
+  python3 -m unittest test_mein_modul.py
+  python3 -m unittest -v   ← verbose (zeigt alle Tests)
+
+Wichtige assert-Methoden:
+  self.assertEqual(a, b)         ← a == b
+  self.assertNotEqual(a, b)      ← a != b
+  self.assertTrue(x)             ← bool(x) ist True
+  self.assertFalse(x)            ← bool(x) ist False
+  self.assertIsNone(x)           ← x is None
+  self.assertIsNotNone(x)        ← x is not None
+  self.assertIn(a, b)            ← a in b
+  self.assertRaises(ValueError, func, arg)   ← func(arg) wirft ValueError
+  self.assertAlmostEqual(a, b, places=5)    ← für Floats!
+
+setUp und tearDown:
+  class TestPopup(unittest.TestCase):
+
+      def setUp(self):
+          """Läuft vor JEDEM Test."""
+          self.popup = MeinPopup("Test")
+
+      def tearDown(self):
+          """Läuft nach JEDEM Test."""
+          self.popup.schließen()
+
+      def test_irgendwas(self):
+          self.assertEqual(self.popup.titel, "Test")
+
+------------------------------------------------------------------------
+26.2  pytest — das beliebtere Test-Framework
+------------------------------------------------------------------------
+
+  pip install pytest
+
+Pytest-Tests sind einfacher — keine Klassen nötig, einfach assert:
+
+  # test_wetter.py:
+  from wetter_utils import get_icon, get_priority
+
+  def test_get_icon_klar():
+      assert get_icon(0) == "☀️"
+
+  def test_get_icon_fallback():
+      assert get_icon(999) == "❓"
+
+  def test_get_priority_backup():
+      assert get_priority("/backup/alt.html") == "0.10"
+
+  def test_get_priority_python():
+      assert get_priority("skript.py") == "0.65"
+
+  # Ausführen:
+  pytest              ← findet alle test_*.py Dateien
+  pytest -v           ← verbose
+  pytest test_wetter.py::test_get_icon_klar   ← einzelner Test
+
+  # Parametrisierte Tests:
+  import pytest
+
+  @pytest.mark.parametrize("code,erwartetes_icon", [
+      (0, "☀️"),
+      (1, "🌤"),
+      (95, "⛈"),
+      (999, "❓"),
+  ])
+  def test_wmo_icons(code, erwartetes_icon):
+      assert get_icon(code) == erwartetes_icon
+  ← Führt den Test 4x aus, einmal für jeden Parametersatz
+
+------------------------------------------------------------------------
+26.3  Mocking — externe Abhängigkeiten ersetzen
+------------------------------------------------------------------------
+
+Wie testest du fetch_weather() ohne echte Netzwerk-Anfrage?
+
+  from unittest.mock import patch, MagicMock
+
+  def test_fetch_weather_erfolg():
+      fake_response = {
+          "current": {"temperature_2m": 21.5, "weathercode": 2},
+          "daily": {"time": ["2026-06-13"], "temperature_2m_max": [23.0],
+                    "temperature_2m_min": [15.0], "weathercode": [2]}
+      }
+      with patch("urllib.request.urlopen") as mock_open:
+          mock_cm = MagicMock()
+          mock_cm.__enter__.return_value.read.return_value = json.dumps(fake_response).encode()
+          mock_open.return_value = mock_cm
+          result = fetch_weather()
+          assert result["current"]["temperature_2m"] == 21.5
+
+  def test_fetch_weather_offline():
+      with patch("urllib.request.urlopen", side_effect=Exception("Kein Netz")):
+          result = fetch_weather()
+          assert result is None
+
+--------------------------------------------------------------------------------
+ÜBUNG 26:
+Schreibe Tests für diese Funktionen aus deinen Popups:
+
+1. Teste should_skip_path() aus smGen.py mit mindestens 4 Fällen:
+   - Pfad mit ".git" → True
+   - Pfad mit "games" → False (nur im spezifischen Subpfad!)
+   - Normaler Pfad → False
+   - Pfad mit raufbold3bs... → True
+
+2. Teste get_priority() aus smGen.py:
+   - Backup-Pfad → "0.10"
+   - .py-Datei → "0.65"
+   - .html-Datei → "0.85"
+   - Leerer String → "0.85"
+
+3. Nutze @pytest.mark.parametrize für alle WMO-Codes in WMO_ICONS.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 27: Projektstruktur und Packaging
+================================================================================
+
+------------------------------------------------------------------------
+27.1  Typische Python-Projektstruktur
+------------------------------------------------------------------------
+
+Für ein größeres Projekt wie deine TrafkHop-Popups:
+
+  trafkhop-popups/
+  ├── README.md
+  ├── LICENSE
+  ├── pyproject.toml         ← modernes Paket-Konfig-Format
+  ├── requirements.txt       ← externe Abhängigkeiten
+  ├── .gitignore
+  ├── trafkhop/             ← Hauptpaket
+  │   ├── __init__.py
+  │   ├── utils/
+  │   │   ├── __init__.py
+  │   │   ├── wetter.py     ← fetch_weather, WMO_ICONS
+  │   │   ├── subprocess.py ← run() Hilfsfunktion
+  │   │   └── gtk_common.py ← gemeinsame GTK-Setup-Funktionen
+  │   └── popups/
+  │       ├── __init__.py
+  │       ├── base_popup.py ← gemeinsame Basis-Klasse
+  │       ├── calendar.py
+  │       ├── volume.py
+  │       └── network.py
+  └── tests/
+      ├── test_wetter.py
+      └── test_utils.py
+
+------------------------------------------------------------------------
+27.2  Eine Basis-Klasse für alle Popups
+------------------------------------------------------------------------
+
+Alle deine Popups haben das gleiche Muster. Das schreit nach Vererbung:
+
+  # trafkhop/popups/base_popup.py
+  import gi
+  gi.require_version("Gtk", "3.0")
+  try:
+      gi.require_version("GtkLayerShell", "0.1")
+      from gi.repository import GtkLayerShell
+      HAS_LAYER_SHELL = True
+  except (ValueError, ImportError):
+      HAS_LAYER_SHELL = False
+
+  from gi.repository import Gtk, Gdk, GLib
+  import cairo
+
+  WAYBAR_OFFSET = 55
+
+  class BasePopup(Gtk.Window):
+      """Basis-Klasse für alle TrafkHop-Popups."""
+
+      def __init__(self):
+          super().__init__(type=Gtk.WindowType.TOPLEVEL)
+          self._setup_transparency()
+          self._setup_layer_shell()
+          self._setup_events()
+
+      def _setup_transparency(self):
+          """Transparenz einrichten — gleich in allen Popups."""
+          screen = self.get_screen()
+          visual = screen.get_rgba_visual()
+          if visual and screen.is_composited():
+              self.set_visual(visual)
+          self.set_app_paintable(True)
+          self.connect("draw", self._clear_bg)
+
+      def _clear_bg(self, _w, cr):
+          """Transparenten Hintergrund zeichnen."""
+          cr.set_source_rgba(0, 0, 0, 0)
+          cr.set_operator(cairo.OPERATOR_SOURCE)
+          cr.paint()
+          cr.set_operator(cairo.OPERATOR_OVER)
+
+      def _setup_layer_shell(self):
+          """Layer Shell oder X11-Fallback."""
+          if HAS_LAYER_SHELL:
+              GtkLayerShell.init_for_window(self)
+              GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
+              GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.BOTTOM, True)
+              GtkLayerShell.set_anchor(self, GtkLayerShell.Edge.RIGHT, True)
+              GtkLayerShell.set_margin(self, GtkLayerShell.Edge.BOTTOM, WAYBAR_OFFSET)
+              GtkLayerShell.set_margin(self, GtkLayerShell.Edge.RIGHT, 16)
+              try:
+                  GtkLayerShell.set_keyboard_mode(
+                      self, GtkLayerShell.KeyboardMode.ON_DEMAND)
+              except AttributeError:
+                  GtkLayerShell.set_keyboard_interactivity(self, True)
+          else:
+              self.set_decorated(False)
+              self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU)
+              self.set_keep_above(True)
+              self.set_skip_taskbar_hint(True)
+              self.set_skip_pager_hint(True)
+
+      def _setup_events(self):
+          """Standard-Events verbinden."""
+          self.connect("key-press-event",
+              lambda _w, e: Gtk.main_quit() if e.keyval == Gdk.KEY_Escape else None)
+          self.connect("focus-out-event", self._on_focus_out)
+
+      def _on_focus_out(self, *_):
+          GLib.timeout_add(150, self._check_focus)
+
+      def _check_focus(self):
+          if not self.has_toplevel_focus():
+              Gtk.main_quit()
+          return False
+
+      def _fallback_position(self):
+          display = Gdk.Display.get_default()
+          mon = display.get_primary_monitor() or display.get_monitor(0)
+          if not mon:
+              return
+          g = mon.get_geometry()
+          w, h = self.get_size()
+          self.move(g.x + g.width - w - 16,
+                    g.y + g.height - h - WAYBAR_OFFSET)
+
+      def lade_css(self, css: str):
+          """CSS laden."""
+          provider = Gtk.CssProvider()
+          provider.load_from_data(css.encode())
+          Gtk.StyleContext.add_provider_for_screen(
+              self.get_screen(), provider,
+              Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+  # Dann jeder Popup erbt:
+  class KalenderPopup(BasePopup):
+      def __init__(self):
+          super().__init__()       ← ALLES von BasePopup automatisch!
+          self.lade_css(CSS)
+          self._build_ui()
+          self.show_all()
+
+------------------------------------------------------------------------
+27.3  requirements.txt und pyproject.toml
+------------------------------------------------------------------------
+
+requirements.txt (welche Pakete braucht das Projekt?):
+  # trafkhop-popups/requirements.txt
+  requests>=2.28.0      ← optionale bessere HTTP-Lib
+  # gi.repository und cairo kommen über das Betriebssystem, nicht pip!
+
+pyproject.toml (modernes Paket-Format):
+  [build-system]
+  requires = ["setuptools>=61.0"]
+  build-backend = "setuptools.backends.legacy:build"
+
+  [project]
+  name = "trafkhop-popups"
+  version = "2.0.0"
+  description = "TrafkHop Entertainment Wayland Popups"
+  requires-python = ">=3.10"
+
+  [project.scripts]
+  kalender-popup = "trafkhop.popups.calendar:main"
+  volume-popup = "trafkhop.popups.volume:main"
+
+------------------------------------------------------------------------
+27.4  .gitignore für Python
+------------------------------------------------------------------------
+
+  # Python
+  __pycache__/
+  *.pyc
+  *.pyo
+  *.pyd
+  .Python
+  build/
+  dist/
+  *.egg-info/
+  .eggs/
+
+  # Virtuelle Umgebung
+  venv/
+  .venv/
+  env/
+
+  # Testing
+  .pytest_cache/
+  .coverage
+  htmlcov/
+
+  # IDE
+  .vscode/
+  .idea/
+  *.swp
+
+  # Projekt-spezifisch
+  *.log
+  konfig_lokal.json
+
+------------------------------------------------------------------------
+27.5  Logging statt print()
+------------------------------------------------------------------------
+
+In Produktions-Code ersetzt das Logging print():
+
+  import logging
+
+  # Setup (einmal pro Programm):
+  logging.basicConfig(
+      level=logging.DEBUG,
+      format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+      datefmt="%H:%M:%S"
+  )
+  logger = logging.getLogger(__name__)
+
+  # Benutzen:
+  logger.debug("Wetter-URL: %s", url)      ← nur bei DEBUG sichtbar
+  logger.info("Wetter geladen: %d°C", temp)
+  logger.warning("Wetter-API offline, benutze Cache")
+  logger.error("Kritischer Fehler: %s", e)
+  logger.exception("Fehler mit Traceback")   ← wie error + Traceback
+
+  # Statt:
+  print(f"Fehler beim Laden: {e}")   ← verschwindet in Logs, kein Level
+
+  # Level-Hierarchie:
+  # DEBUG < INFO < WARNING < ERROR < CRITICAL
+  # basicConfig(level=WARNING) → nur WARNING und höher sichtbar
+
+  # In Datei loggen:
+  logging.basicConfig(
+      filename="trafkhop.log",
+      level=logging.INFO
+  )
+
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 28: Python-Tricks und Idiome — die Krönung
+================================================================================
+
+------------------------------------------------------------------------
+28.1  Walrus-Operator := (Python 3.8+)
+------------------------------------------------------------------------
+
+Zuweisung und Nutzung in einem Ausdruck:
+
+  # Ohne Walrus:
+  daten = fetch_weather()
+  if daten:
+      verarbeite(daten)
+
+  # Mit Walrus:
+  if daten := fetch_weather():
+      verarbeite(daten)   ← daten ist hier verfügbar!
+
+  # Nützlich in while-Schleifen:
+  while chunk := datei.read(8192):
+      verarbeite(chunk)
+
+  # In List Comprehensions:
+  ergebnisse = [y for x in daten if (y := berechne(x)) > 0]
+
+------------------------------------------------------------------------
+28.2  Strukturelles Pattern Matching (Python 3.10+)
+------------------------------------------------------------------------
+
+match/case für komplexe Bedingungen:
+
+  def verarbeite_event(event):
+      match event:
+          case {"type": "wetter", "code": code, "temp": temp}:
+              return f"Wetter: {WMO_DESC.get(code)} {temp}°C"
+
+          case {"type": "fehler", "msg": msg}:
+              logging.error(msg)
+              return None
+
+          case {"type": "wetter", "code": code}:
+              return WMO_DESC.get(code, "Unbekannt")
+
+          case str() as text:
+              return text
+
+          case _:
+              return "Unbekanntes Event"
+
+  # Tuple Matching:
+  match koordinaten:
+      case (0, 0):
+          print("Ursprung")
+      case (x, 0):
+          print(f"X-Achse: {x}")
+      case (0, y):
+          print(f"Y-Achse: {y}")
+      case (x, y):
+          print(f"Punkt: ({x}, {y})")
+
+------------------------------------------------------------------------
+28.3  Nützliche Einzeiler
+------------------------------------------------------------------------
+
+  # Dict aus zwei Listen:
+  keys = ["a", "b", "c"]
+  vals = [1, 2, 3]
+  d = dict(zip(keys, vals))      → {"a": 1, "b": 2, "c": 3}
+
+  # Flache Liste aus verschachtelter:
+  nested = [[1, 2], [3, 4], [5, 6]]
+  flat = [x for sublist in nested for x in sublist]   → [1, 2, 3, 4, 5, 6]
+  # oder:
+  import itertools
+  flat = list(itertools.chain.from_iterable(nested))
+
+  # Häufigste Elemente:
+  from collections import Counter
+  häufig = Counter(["a","b","a","c","a","b"]).most_common(2)
+  # → [("a", 3), ("b", 2)]
+
+  # String umkehren:
+  "TrafkHop"[::-1]   → "poHkfarT"
+
+  # Liste mischen:
+  import random
+  random.shuffle(liste)   ← In-Place
+  random.sample(liste, k=3)   ← k zufällige Elemente (neue Liste)
+
+  # Alle Unterklassen finden:
+  Tier.__subclasses__()   → [Hund, Katze, ...]
+
+  # Zeitmessung (kurze Version):
+  from time import perf_counter
+  start = perf_counter()
+  ...
+  print(f"{perf_counter()-start:.4f}s")
+
+------------------------------------------------------------------------
+28.4  Pythonische Muster — was gut aussieht
+------------------------------------------------------------------------
+
+  # NICHT:
+  if len(liste) > 0:     → if liste:
+  if x == True:          → if x:
+  if x == None:          → if x is None:
+  for i in range(len(l)): # → for item in l:
+  l.append(x); l.append(y) → l.extend([x, y])
+
+  # BESSER:
+  ergebnis = [x**2 for x in daten if x > 0]    statt for + if + append
+  "".join(teile)                                 statt teil1 + teil2 + ...
+  a, b = b, a                                    statt temp = a; a = b; b = temp
+  for i, v in enumerate(l):                     statt range(len(l)) + l[i]
+  for k, v in d.items():                        statt d.keys() + d[k]
+  x = d.get("key", default)                     statt if "key" in d: ... else ...
+  with open(...) as f:                           statt f = open(...); f.close()
+
+  # Naming:
+  GROSS_BUCHSTABEN      für Konstanten
+  klein_buchstaben      für Variablen und Funktionen
+  _einfach_unterstrich  für "interne" Attribute
+  __doppelt             für Name Mangling in Klassen
+  KlassenName           für Klassen (PascalCase)
+  _                     als "wegwerf"-Variable (ignoriertes Argument)
+
+------------------------------------------------------------------------
+28.5  Python-Versionen — was du wissen musst
+------------------------------------------------------------------------
+
+Python 3.8  (2019): Walrus-Operator :=, f-String = Debugging (f"{x=}")
+Python 3.9  (2020): dict | dict Merge, list[str] statt List[str] in Type Hints
+Python 3.10 (2021): match/case, bessere Fehlermeldungen
+Python 3.11 (2022): 60% schneller, noch bessere Fehlermeldungen
+Python 3.12 (2023): f-Strings mächtiger, Performance besser
+Python 3.13 (2024): experimenteller GIL-freier Modus
+
+Dein shebang #!/usr/bin/env python3 nimmt die System-Python3-Version.
+Unter Arch/Hyprland (was du wohl benutzt): python3 --version prüfen!
+
+------------------------------------------------------------------------
+28.6  f-String Debugging (Python 3.8+)
+------------------------------------------------------------------------
+
+  x = 42
+  name = "TrafkHop"
+  breite = 400
+
+  print(f"{x=}")         → "x=42"
+  print(f"{name=}")      → "name='TrafkHop'"
+  print(f"{breite=}")    → "breite=400"
+  print(f"{x + breite=}") → "x + breite=442"
+
+  # Sehr nützlich zum Debuggen statt print(f"x ist {x}")!
+
+------------------------------------------------------------------------
+28.7  __all__ — öffentliche API eines Moduls definieren
+------------------------------------------------------------------------
+
+  # wetter_utils.py
+  __all__ = ["fetch_weather", "WMO_ICONS", "WMO_DESC", "get_icon"]
+  ← Nur diese Namen werden bei "from wetter_utils import *" importiert
+  ← Auch nützlich für IDE-Autovervollständigung und Dokumentation
+
+  _INTERN = "wird bei import * nicht exportiert"
+
+--------------------------------------------------------------------------------
+ÜBUNG 28 — Abschlussprojekt:
+Erstelle ein verbessertes smGen.py mit:
+1. Einem Generator finde_dateien(verzeichnis, endungen) statt found_files-Liste
+2. @lru_cache auf get_priority() für Performance (str als Argument = hashbar)
+3. Logging statt print(): logger.info(f"Generating Sitemap...")
+4. Type Hints für alle Funktionen
+5. Eine Klasse SitemapGenerator mit:
+   - __init__(self, base_url, verzeichnis)
+   - generiere(self) → gibt Sitemap als str zurück (statt direkt in Datei)
+   - speichere(self, pfade: list[str]) → speichert in mehrere Dateien
+   - __str__ → "SitemapGenerator(base_url, N Einträge)"
+6. if __name__ == "__main__": Block der die Klasse benutzt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+GESAMTSCHNELLREFERENZ — Python Komplettkurs
+================================================================================
+
+DEKORATOREN:
+  def deko(func):
+      @wraps(func)
+      def wrapper(*args, **kwargs):
+          return func(*args, **kwargs)
+      return wrapper
+  @lru_cache(maxsize=128)   @cached_property   @property   @classmethod
+
+GENERATOREN:
+  def gen(): yield wert           ← Generator-Funktion
+  (x**2 for x in range(n))       ← Generator-Expression
+  yield from anderer_generator    ← Delegation
+
+REKURSION:
+  def f(n):
+      if basisfall: return ...    ← IMMER Basisfall!
+      return f(n-1)               ← rekursiver Aufruf
+  @lru_cache für Memoization
+
+ITERTOOLS:
+  chain, islice, cycle, count, product
+  combinations, permutations, groupby, starmap, takewhile, dropwhile
+
+PERFORMANCE:
+  set statt list für in-Checks (O(1))
+  "".join(teile) statt +=
+  Generator statt Liste für große Daten
+  @lru_cache für teure Berechnungen
+  cProfile / timeit für Messung
+
+TESTING:
+  def test_func(): assert f(x) == y   ← pytest
+  class Test(unittest.TestCase): self.assertEqual(...)
+  @pytest.mark.parametrize("x,y", [(1,2),(3,4)])
+  with patch("modul.funktion") as mock:
+
+PROJEKTSTRUKTUR:
+  paket/__init__.py    requirements.txt    pyproject.toml
+  tests/test_*.py      .gitignore
+
+IDIOME:
+  if liste:          statt if len(liste) > 0:
+  x if bedingung else y                    ← ternär
+  if daten := fetch():                     ← Walrus :=
+  a, b = b, a                              ← Tausch
+  for i, v in enumerate(l):
+  "".join(teile)
+  d.get("key", default)
+  with open(...) as f:
+
+================================================================================
+VOLLSTÄNDIGE KURSÜBERSICHT — Python Komplettkurs (alle 4 Teile)
+================================================================================
+
+TEIL 1: Grundlagen (Module 1-7)
+  Shebang, Datentypen (int/float/str/bool/None), f-Strings,
+  Listen, Tupel, Sets, Dicts, if/for/while, Funktionen, Lambda
+
+TEIL 2: Mittelstufe (Module 8-13)
+  OOP (Klassen, Vererbung, Dunder, Properties), Module, Pakete,
+  Fehlerbehandlung (try/except/finally), Regex (re), JSON, pathlib,
+  os.walk, Type Hints, dataclass
+
+TEIL 3: GTK und System (Module 14-20)
+  subprocess (check_output/run/Popen), threading + GLib.idle_add,
+  GLib.timeout_add, GTK 3 (Fenster/Widgets/Signale/CSS),
+  GtkLayerShell, cairo (Transparenz), urllib.request, das
+  vollständige Popup-Architektur-Muster
+
+TEIL 4: Fortgeschritten (Module 21-28)
+  Dekoratoren (@wraps, @lru_cache, @cached_property, eigene),
+  Generatoren (yield, yield from, Generator-Expressions),
+  Itertools, Rekursion + Memoization, Fortgeschrittene Muster
+  (Closures, partition, seen-Sets, sorted+lambda), Performance,
+  Testing (pytest, unittest, mocking), Projektstruktur,
+  Logging, Walrus, match/case, Pythonische Idiome
+
+================================================================================
+ABSCHLUSS — WAS JETZT?
+================================================================================
+
+Du hast jetzt solides Python-Wissen das weit über "ich kann Skripte
+schreiben" hinausgeht. Du verstehst:
+
+  Warum deine Popups so aufgebaut sind wie sie sind
+  Was jede Zeile in calendar-popup.py, volume-popup.py und rofi-menu-editor.py macht
+  Wie Threading + GLib.idle_add zusammenspielen müssen
+  Wie Rekursion in flatten_dict/unflatten_dict funktioniert
+  Wie du eigene Dekoratoren, Generatoren und Klassen schreibst
+
+Mögliche nächste Schritte:
+  → Eine BasePopup-Klasse schreiben die allen Popups gemeinsam ist
+  → smGen.py in eine SitemapGenerator-Klasse umbauen
+  → Tests für deine Hilfsfunktionen schreiben
+  → async/await (asyncio) erkunden wenn du Netzwerk-Anfragen ohne
+    threading.Thread machen willst
+  → Pygame oder Pyglet für kleine Spiele
+  → FastAPI oder Flask für Web-APIs
+  → mypy für statische Typprüfung einrichten
+
+Nützliche Ressourcen:
+  Offizielle Docs    → https://docs.python.org/3/
+  Real Python        → https://realpython.com
+  PEP 8 Styleguide  → https://peps.python.org/pep-0008/
+  Python Patterns    → https://python-patterns.guide
+  pytest Docs        → https://docs.pytest.org
+  mypy Docs          → https://mypy-lang.org
+
+================================================================================
+Ende Python-Komplettkurs — Alle 4 Teile vollständig!
+================================================================================
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

@@ -1,0 +1,2143 @@
+================================================================================
+MODUL 1: Das Fundament — Shebang, Variablen, Quoting, Arithmetik
+================================================================================
+
+------------------------------------------------------------------------
+1.1  Shebang und warum sie wichtig ist
+------------------------------------------------------------------------
+
+Jede deiner Dateien beginnt mit #!/bin/bash. Das ist die "Shebang-Zeile"
+(kurz für "sharp-bang", also #!). Das Betriebssystem liest genau diese
+erste Zeile und startet das dort genannte Programm als Interpreter.
+
+  #!/bin/bash        → benutze explizit Bash (nicht sh, dash, zsh...)
+  #!/bin/sh          → benutze die System-Shell (oft dash, nicht bash!)
+  #!/usr/bin/env bash → suche bash im PATH (portabler für andere Systeme)
+
+Warum ist das relevant? Auf Ubuntu ist /bin/sh meistens "dash" — eine
+schlanke, schnelle, aber inkompatible Shell. Alles Bash-spezifische
+(Arrays, [[...]], Prozesssubstitution, Regex mit =~) funktioniert unter
+dash NICHT. Deine Skripte benutzen bash-spezifische Features überall,
+also ist #!/bin/bash die einzig richtige Wahl.
+
+Das Skript muss außerdem ausführbar sein:
+  chmod +x mein_skript.sh
+  ./mein_skript.sh
+
+Oder du rufst es direkt mit bash auf (Shebang dann egal):
+  bash mein_skript.sh
+
+------------------------------------------------------------------------
+1.2  Variablen — Zuweisung, Abruf, Gültigkeit
+------------------------------------------------------------------------
+
+In Bash gibt es KEINE Leerzeichen um das Gleichheitszeichen.
+Das ist eine der häufigsten Fehlerquellen für Anfänger:
+
+  NAME="TrafkHop"       ← richtig
+  NAME = "TrafkHop"     ← FEHLER: bash denkt NAME ist ein Befehl
+
+Abruf mit $:
+  echo "$NAME"          → TrafkHop
+
+Doppelte Anführungszeichen sind fast immer Pflicht. Ohne sie passiert
+"Word Splitting" — Bash zerhackt den Wert an Leerzeichen:
+
+  DATEI="mein dokument.txt"
+  cat $DATEI             ← FEHLER: cat kriegt "mein" und "dokument.txt"
+  cat "$DATEI"           ← richtig: ein Argument mit Leerzeichen
+
+Variablen mit ${} — die geschweifte Klammer-Syntax:
+  echo "${NAME}_backup"  → TrafkHop_backup
+  echo "$NAME_backup"    → leer! Bash sucht Variable namens "NAME_backup"
+
+Variablen-Typen in der Übersicht:
+  NAME="wert"            → lokale Variable (nur im aktuellen Prozess)
+  export NAME="wert"     → Umgebungsvariable (auch für Kind-Prozesse sichtbar)
+  local NAME="wert"      → nur innerhalb einer Funktion gültig (wichtig!)
+  readonly NAME="wert"   → kann nicht überschrieben werden
+  declare -i ZAHL=42     → Integer-Variable (erzwingt Zahlen-Typ)
+  declare -a ARRAY=()    → Array explizit deklarieren
+  declare -A HASHMAP=()  → Assoziatives Array (Key-Value-Map)
+
+Aus deinem wallpaper.sh:
+  DIR="$HOME/.config/wallpapers"
+  RANDOM_PIC=$(find "$DIR" -type f -not -name "current_wallpaper" | shuf -n 1)
+
+Hier ist DIR eine lokale Variable. $HOME ist eine Umgebungsvariable,
+die von der Login-Shell gesetzt wird — daher immer verfügbar.
+
+------------------------------------------------------------------------
+1.3  Quoting — Einfach, Doppelt, ANSI-C, Kein
+------------------------------------------------------------------------
+
+Das ist das Herzstück von Shell-Scripting und der häufigste Fehlergrund.
+
+  'einfache Anführungszeichen'
+    → ALLES ist literal. Kein $, kein \, keine Expansion.
+    → echo '$HOME' gibt wirklich $HOME aus, nicht den Pfad.
+
+  "doppelte Anführungszeichen"
+    → $Variablen werden expandiert.
+    → \n, \t etc. werden NICHT interpretiert (außer in $'...' oder echo -e).
+    → Globbing (* ? []) wird verhindert.
+    → STANDARD für die meisten Variablen.
+
+  $'...' (ANSI-C Quoting)
+    → Escape-Sequenzen werden interpretiert: \n, \t, \x1f, \0 etc.
+    → In deinem app-menu.sh siehst du genau das:
+      printf "Name\0icon\x1fwert\n"
+      Das \0 ist ein Null-Byte, \x1f ist ASCII 31 (Unit Separator).
+      Rofi benutzt diese Sonderzeichen zur Trennung von Feldern.
+
+  Kein Quoting
+    → Word Splitting: "a b c" wird zu drei Argumenten.
+    → Globbing: * expandiert zu allen Dateien.
+    → Nur benutzen wenn du das explizit willst.
+
+Merksatz: Immer "$VARIABLE" in Anführungszeichen. Ausnahme: du willst
+absichtlich Word Splitting oder Globbing nutzen.
+
+------------------------------------------------------------------------
+1.4  Spezialvariablen
+------------------------------------------------------------------------
+
+  $0          Name des Skripts
+  $1, $2...   Argumente 1, 2, ...
+  $@          Alle Argumente als separate Strings (in Anführungszeichen: "$@")
+  $*          Alle Argumente als ein String (selten nützlich)
+  $#          Anzahl der Argumente
+  $?          Exit-Code des letzten Befehls (0=Erfolg, alles andere=Fehler)
+  $$          PID (Prozess-ID) des aktuellen Skripts
+  $!          PID des zuletzt gestarteten Hintergrundprozesses
+  $-          Aktive Shell-Optionen
+  $_          Letztes Argument des vorherigen Befehls
+
+Aus deinem app-menu.sh:
+  SCRIPT_PATH="$(realpath "$0")"
+  # $0 ist der Pfad wie das Skript aufgerufen wurde (z.B. "./app-menu.sh")
+  # realpath macht daraus den absoluten Pfad ohne Symlinks
+
+In popup-toggle.sh:
+  SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+  # dirname nimmt einen Pfad und gibt nur den Ordner zurück
+  # So findet das Skript seine "Geschwister"-Dateien, egal wo es liegt
+
+------------------------------------------------------------------------
+1.5  Arithmetik
+------------------------------------------------------------------------
+
+Bash rechnet nicht automatisch mit Zahlen — alles ist erstmal Text.
+Es gibt drei Wege zu rechnen:
+
+  1. $(( )) — Arithmetik-Expansion (modern, bevorzugt):
+     ERGEBNIS=$(( 3 + 4 ))        → 7
+     $(( ZAHL * 2 ))              → Variable ohne $ (innerhalb von (( )))
+     $(( ZAHL ** 2 ))             → Potenz
+     $(( ZAHL % 3 ))              → Modulo (Rest bei Division)
+
+  2. let — ältere Syntax:
+     let ERGEBNIS=3+4
+
+  3. expr — externer Befehl (langsam, vermeiden):
+     ERGEBNIS=$(expr 3 + 4)
+
+Aus deinem autohide.sh:
+  THRESHOLD=$((SCREEN_H - 165))
+  THRESHOLD2=$((SCREEN_H - 15))
+  # SCREEN_H enthält die Bildschirmhöhe in Pixeln (z.B. 1080)
+  # THRESHOLD = 1080 - 165 = 915
+  # Wenn die Maus über Y=915 hinauskommt, wird die Waybar versteckt.
+
+Fließkomma-Rechnung geht in Bash NICHT mit $(( )). Dafür braucht man:
+  echo "scale=2; 10 / 3" | bc    → 3.33
+  awk "BEGIN {print 10/3}"       → 3.33333
+
+In deinem brightness-status.sh:
+  local float_val=$(awk "BEGIN {print $val/100}")
+  # Aus einem Integer-Prozent (z.B. 75) wird 0.75 für gammastep.
+
+------------------------------------------------------------------------
+1.6  Übung 1
+------------------------------------------------------------------------
+
+Erstelle ein Skript monitor-info.sh:
+- Es soll mit $0 seinen eigenen Namen ausgeben.
+- Speichere die aktuelle Bildschirmauflösung mit hyprctl in einer Variable.
+- Berechne mit $(( )) 10% der Bildschirmhöhe und gib das Ergebnis aus.
+- Probiere bewusst einen Fehler: lass ein Leerzeichen ums = stehen
+  und beobachte die Fehlermeldung.
+
+
+================================================================================
+MODUL 2: Bedingungen & Tests — if, case, [[...]]
+================================================================================
+
+------------------------------------------------------------------------
+2.1  if und Test-Syntax
+------------------------------------------------------------------------
+
+Die Grundstruktur:
+  if BEFEHL; then
+      ...
+  elif BEFEHL; then
+      ...
+  else
+      ...
+  fi
+
+"BEFEHL" ist hier wörtlich gemeint — if prüft den Exit-Code eines Befehls.
+0 = true (Erfolg), alles andere = false (Fehler). Das klingt umgekehrt,
+ist aber Unix-Tradition (ein Befehl hat viele Wege zu scheitern, aber
+nur einen Erfolg).
+
+  if ls /tmp; then
+      echo "ls hat funktioniert"
+  fi
+
+Für Vergleiche nutzt man den [[ ]]-Test-Operator (bash-spezifisch) oder
+den alten [ ]-Befehl (POSIX-kompatibel):
+
+------------------------------------------------------------------------
+2.2  [[ ]] vs [ ] — was du wirklich benutzen solltest
+------------------------------------------------------------------------
+
+  [[ ]]  → bash-spezifisch, sicherer, mächtiger. Immer bevorzugen.
+  [ ]    → POSIX, funktioniert auch in sh/dash. Mehr Fallen.
+  (( ))  → für reine Zahlen-Vergleiche, sehr bequem.
+
+Vergleichsoperatoren für Strings in [[ ]]:
+  [[ "$A" == "$B" ]]       → gleich
+  [[ "$A" != "$B" ]]       → ungleich
+  [[ "$A" < "$B" ]]        → lexikographisch kleiner (selten nötig)
+  [[ -z "$A" ]]            → leer (zero length)
+  [[ -n "$A" ]]            → nicht leer (non-zero length)
+  [[ "$A" =~ REGEX ]]      → Regex-Match (nur in [[ ]])
+
+Vergleichsoperatoren für Zahlen:
+  [[ "$A" -eq "$B" ]]      → gleich        (equal)
+  [[ "$A" -ne "$B" ]]      → ungleich      (not equal)
+  [[ "$A" -lt "$B" ]]      → kleiner als   (less than)
+  [[ "$A" -le "$B" ]]      → kleiner gleich(less or equal)
+  [[ "$A" -gt "$B" ]]      → größer als    (greater than)
+  [[ "$A" -ge "$B" ]]      → größer gleich (greater or equal)
+
+  # Oder mit (( )) — hier sind normale Vergleichszeichen möglich:
+  if (( MOUSE_Y >= THRESHOLD2 )); then ...
+
+Aus deinem autohide.sh:
+  if [ "$MOUSE_Y" -ge "$THRESHOLD2" ] && [ "$HIDDEN" = true ]; then
+  # Hier wird der alte [ ] benutzt — funktioniert, aber [[ ]] wäre moderner:
+  if [[ "$MOUSE_Y" -ge "$THRESHOLD2" && "$HIDDEN" == true ]]; then
+  # In [[ ]] kann man && direkt drin benutzen statt außen.
+
+------------------------------------------------------------------------
+2.3  Datei- und Verzeichnis-Tests
+------------------------------------------------------------------------
+
+Das sind die wichtigsten -Flags für Dateien:
+
+  [[ -f "$DATEI" ]]    → ist eine reguläre Datei (file)
+  [[ -d "$PFAD" ]]     → ist ein Verzeichnis (directory)
+  [[ -e "$PFAD" ]]     → existiert (exist) — egal ob Datei oder Ordner
+  [[ -L "$PFAD" ]]     → ist ein Symlink (link)
+  [[ -r "$DATEI" ]]    → ist lesbar (readable)
+  [[ -w "$DATEI" ]]    → ist schreibbar (writable)
+  [[ -x "$DATEI" ]]    → ist ausführbar (executable)
+  [[ -s "$DATEI" ]]    → existiert und ist nicht leer (size > 0)
+
+Aus deinem app-menu.sh:
+  if [ -f "$MENU_JSON_FILE" ]; then
+      MENU_JSON="$(cat "$MENU_JSON_FILE")"
+  else
+      MENU_JSON='{"1 System":{}, ...}'
+  fi
+  # Prüft ob die JSON-Konfigurationsdatei existiert.
+
+Aus deinem autohide.sh:
+  is_cache_valid() {
+      [ -f "$CACHE_FILE" ] || return 1
+      ...
+  }
+  # return 1 gibt Fehler-Exit-Code zurück = die Funktion "schlägt fehl"
+  # Das ist in Bash der Weg, aus einer Funktion "false" zurückzugeben.
+
+------------------------------------------------------------------------
+2.4  case — Muster-Vergleiche
+------------------------------------------------------------------------
+
+case ist Bash's switch-Statement. Besonders nützlich für Menüoptionen
+oder Befehlszeilen-Argumente:
+
+  case "$VARIABLE" in
+      muster1)
+          echo "Muster 1 gefunden"
+          ;;
+      muster2|muster3)
+          echo "Muster 2 oder 3"
+          ;;
+      *.sh)
+          echo "Eine .sh-Datei"
+          ;;
+      *)
+          echo "Nichts passt — Default"
+          ;;
+  esac
+
+Die ;; am Ende jedes Blocks sind Pflicht (wie break in C).
+Das *) am Ende ist der Default (wie default: in C).
+Muster nutzen Glob-Syntax: *, ?, [abc], nicht Regex!
+
+Aus deinem popup-toggle.sh:
+  case "$POPUP" in
+      volume)    SCRIPT="$SCRIPT_DIR/volume-popup.py" ;;
+      brightness) SCRIPT="$SCRIPT_DIR/brightness-popup.py" ;;
+      calendar)  SCRIPT="$SCRIPT_DIR/calendar-popup.py" ;;
+      network)   SCRIPT="$SCRIPT_DIR/network-popup.py" ;;
+      bluetooth) SCRIPT="$SCRIPT_DIR/bluetooth-popup.py" ;;
+      *) echo "Unbekanntes Popup: $POPUP"; exit 1 ;;
+  esac
+
+Aus deinem power-menu.sh:
+  case "$chosen" in
+      Close)    hyprctl dispatch closewindow address:"$last_active" ;;
+      Shutdown) systemctl poweroff ;;
+      Reboot)   systemctl reboot ;;
+      ...
+  esac
+
+Genau das richtige Werkzeug: ein Argument, viele mögliche Werte.
+
+Aus deinem brightness-status.sh:
+  case "$ACTION" in
+      up)   set_value $(( current + 5 )) ;;
+      down) set_value $(( current - 5 )) ;;
+  esac
+  # Kein default (*) nötig — bei leerem ACTION passiert einfach nichts.
+
+------------------------------------------------------------------------
+2.5  Übung 2
+------------------------------------------------------------------------
+
+Schreibe ein Skript test-env.sh:
+- Prüfe ob die Datei ~/.bashrc existiert und ob sie lesbar ist.
+- Nimm ein Argument ($1) entgegen (up/down/status).
+- Benutze case um drei verschiedene Aktionen auszuführen.
+- Bei unbekanntem Argument: gib einen Fehler aus und exit 1.
+
+
+================================================================================
+MODUL 3: Arrays — Normale und Assoziative
+================================================================================
+
+------------------------------------------------------------------------
+3.1  Normale Arrays (Indexed Arrays)
+------------------------------------------------------------------------
+
+Arrays in Bash sind ein-dimensional und 0-basiert. Keine Typen, alles
+Strings (wie überall in Bash):
+
+  # Deklaration:
+  SPIELE=("Tetris" "Pong" "Snake")
+  SPIELE[3]="Breakout"        # Direkte Index-Zuweisung
+
+  # Zugriff:
+  echo "${SPIELE[0]}"         → Tetris
+  echo "${SPIELE[@]}"         → Tetris Pong Snake Breakout (alle Elemente)
+  echo "${#SPIELE[@]}"        → 4 (Länge des Arrays)
+  echo "${!SPIELE[@]}"        → 0 1 2 3 (alle Indizes)
+
+  # Slicing — Teilarray:
+  echo "${SPIELE[@]:1:2}"     → Pong Snake (ab Index 1, 2 Elemente)
+
+  # Letztes Element:
+  echo "${SPIELE[-1]}"        → Breakout  (Bash 4.3+)
+  echo "${SPIELE[${#SPIELE[@]}-1]}"  → Breakout (kompatibel)
+
+  # Element hinzufügen:
+  SPIELE+=("Galaga")
+
+  # Element löschen (Lücke bleibt, Index nicht neu nummeriert!):
+  unset "SPIELE[1]"
+
+  # Kompaktes Re-Indexieren nach unset:
+  SPIELE=("${SPIELE[@]}")
+
+  # In Schleife:
+  for spiel in "${SPIELE[@]}"; do
+      echo "Spiel: $spiel"
+  done
+
+  # Mit Index:
+  for i in "${!SPIELE[@]}"; do
+      echo "[$i] ${SPIELE[$i]}"
+  done
+
+Das "${SPIELE[@]}" mit Anführungszeichen ist KRITISCH. Ohne würden
+Spielnamen mit Leerzeichen aufgespalten. Teste den Unterschied:
+
+  SPIELE=("Super Mario" "Half Life")
+  for s in ${SPIELE[@]};  do echo "$s"; done  → 4 Elemente! (aufgespalten)
+  for s in "${SPIELE[@]}"; do echo "$s"; done → 2 Elemente (korrekt)
+
+Aus deinem app-menu.sh:
+  local desktop_dirs=(
+      "/usr/share/applications"
+      "$HOME/.local/share/applications"
+      "/usr/local/share/applications"
+  )
+  for dir in "${desktop_dirs[@]}"; do
+      [ -d "$dir" ] || continue
+      ...
+  done
+  # Genau das richtige Muster: Array mit local deklariert, in "" iteriert.
+
+------------------------------------------------------------------------
+3.2  Assoziative Arrays (Hash Maps / Dicts)
+------------------------------------------------------------------------
+
+Bash 4+ unterstützt assoziative Arrays — Key-Value-Maps wie in Python:
+
+  # Deklaration MUSS mit declare -A sein!
+  declare -A KONFIGURATION
+
+  # Befüllen:
+  KONFIGURATION["host"]="localhost"
+  KONFIGURATION["port"]="8080"
+  KONFIGURATION["debug"]="true"
+
+  # Oder direkt bei Deklaration:
+  declare -A FARBEN=(["rot"]="#FF0000" ["grün"]="#00FF00" ["blau"]="#0000FF")
+
+  # Zugriff:
+  echo "${KONFIGURATION["host"]}"    → localhost
+  echo "${KONFIGURATION[port]}"      → 8080 (Anführungszeichen optional bei einfachen Keys)
+
+  # Alle Keys:
+  echo "${!KONFIGURATION[@]}"        → host port debug
+
+  # Alle Werte:
+  echo "${KONFIGURATION[@]}"         → localhost 8080 true
+
+  # Key-Value-Iteration:
+  for key in "${!KONFIGURATION[@]}"; do
+      echo "$key = ${KONFIGURATION[$key]}"
+  done
+
+  # Prüfen ob Key existiert:
+  if [[ -v KONFIGURATION["host"] ]]; then
+      echo "Key host existiert"
+  fi
+
+  # Key löschen:
+  unset "KONFIGURATION[debug]"
+
+Aus deinem app-menu.sh (fortgeschrittenes Beispiel):
+  declare -A exclude
+  while IFS=$'\t' read -r s_name s_cmd; do
+      exclude["${s_cmd%% *}"]=1
+  done < <(...)
+  # Eine assoziative Array als "Set" benutzen — Wert (=1) egal,
+  # nur Existenz des Keys zählt: if [ -z "${exclude[$cmd]}" ]
+
+------------------------------------------------------------------------
+3.3  mapfile / readarray — Array aus Ausgabe oder Datei befüllen
+------------------------------------------------------------------------
+
+mapfile (Synonym: readarray) liest Zeilen in ein Array:
+
+  # Aus einer Datei:
+  mapfile -t ZEILEN < datei.txt
+  # -t entfernt das abschließende Newline von jeder Zeile
+
+  # Aus einem Befehl (mit Process Substitution — dazu mehr in Modul 6):
+  mapfile -t PAKETE < <(dpkg --list | awk '{print $2}')
+
+  # Mit Separator (statt Newline):
+  mapfile -t -d $'\0' DATEIEN < <(find . -name "*.sh" -print0)
+  # -print0 und -d $'\0' für Dateinamen mit Leerzeichen — wichtige Praxis!
+
+  # Iterieren:
+  for zeile in "${ZEILEN[@]}"; do
+      echo "Verarbeite: $zeile"
+  done
+
+------------------------------------------------------------------------
+3.4  Übung 3
+------------------------------------------------------------------------
+
+Erstelle ein Skript desktop-scan.sh:
+- Befülle ein Array mit den Pfaden aller *.desktop-Dateien in /usr/share/applications.
+  Nutze mapfile mit find -print0 (wegen Leerzeichen in Namen).
+- Iteriere über das Array und gib für jede Datei den Inhalt der Zeile
+  "Name=" aus (mit grep).
+- Deklariere ein assoziatives Array und speichere Name→Pfad ab.
+- Gib am Ende die Anzahl gefundener Einträge aus.
+
+
+================================================================================
+MODUL 4: Funktionen — Aufbau, Parameter, Rückgabe, Scope
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Funktions-Syntax und Aufruf
+------------------------------------------------------------------------
+
+Es gibt zwei äquivalente Schreibweisen:
+
+  # Bash-Stil (bevorzugt):
+  meine_funktion() {
+      echo "Hallo aus der Funktion"
+  }
+
+  # POSIX-Stil:
+  function meine_funktion {
+      echo "Hallo"
+  }
+
+  # Aufruf (kein () beim Aufruf!):
+  meine_funktion
+
+  # Mit Argumenten:
+  meine_funktion "arg1" "arg2"
+
+Argumente innerhalb der Funktion:
+  - $1, $2... → Funktions-Argumente (überschreiben die globalen!)
+  - $# → Anzahl Funktions-Argumente
+  - $@ → alle Funktions-Argumente
+
+------------------------------------------------------------------------
+4.2  Rückgabe-Werte — Exit Codes und Output
+------------------------------------------------------------------------
+
+Das ist ein wichtiger Unterschied zu anderen Sprachen. Bash-Funktionen
+haben KEINEN return-Wert im Sinne von C oder JS. return gibt nur einen
+Exit-Code zurück (0-255):
+
+  ist_gerade() {
+      (( $1 % 2 == 0 ))     # Arithmetik: 0 wenn wahr, 1 wenn falsch
+  }
+
+  if ist_gerade 4; then echo "Gerade"; fi      → Gerade
+  if ist_gerade 3; then echo "Gerade"; fi      → (nichts)
+
+  # Exit-Code abfragen:
+  ist_gerade 5
+  echo "$?"    → 1 (false = Fehler)
+
+Um echte Werte zurückzugeben, gibt die Funktion Text aus und man
+fängt ihn mit $() ab:
+
+  get_brightness() {
+      brightnessctl -m | cut -d',' -f4 | tr -d '%'
+  }
+
+  WERT=$(get_brightness)
+  echo "Helligkeit: $WERT%"
+
+Genau das macht dein brightness-status.sh überall:
+  current=$(get_value)
+  icon=$(get_icon "$current")
+
+------------------------------------------------------------------------
+4.3  local — Scope und warum er wichtig ist
+------------------------------------------------------------------------
+
+Ohne local sind alle Variablen in einer Funktion global — eine häufige
+Fehlerquelle:
+
+  WERT="global"
+
+  setze_wert() {
+      WERT="lokal"       # überschreibt global!
+  }
+
+  setze_wert
+  echo "$WERT"    → lokal  (Überraschung!)
+
+  setze_wert_richtig() {
+      local WERT="lokal"   # bleibt in der Funktion
+  }
+
+  setze_wert_richtig
+  echo "$WERT"    → global  (korrekt)
+
+Aus deinem brightness-status.sh:
+  has_brightnessctl() {
+      command -v brightnessctl &>/dev/null && \
+      brightnessctl -m 2>/dev/null | grep -q '%'
+  }
+
+  get_icon() {
+      local v="$1"         ← lokal!
+      if   (( v < 34 )); then echo "󰃞"
+      elif (( v < 67 )); then echo "󰃟"
+      else                     echo "󰃠"
+      fi
+  }
+
+  set_value() {
+      local val="$1"       ← lokal!
+      (( val < 1  )) && val=1
+      (( val > 100 )) && val=100
+      ...
+  }
+
+Merksatz: Jede Variable am Anfang einer Funktion mit local deklarieren.
+Die einzige Ausnahme: wenn du absichtlich eine globale Variable setzen willst.
+
+------------------------------------------------------------------------
+4.4  Rekursion
+------------------------------------------------------------------------
+
+Bash unterstützt Rekursion, aber nutze sie sparsam — Bash startet für
+jeden Aufruf einen neuen Subprozess-Kontext, was langsam ist.
+
+  countdown() {
+      local n="$1"
+      if (( n <= 0 )); then
+          echo "Start!"
+          return
+      fi
+      echo "$n..."
+      countdown $(( n - 1 ))
+  }
+
+  countdown 5
+
+------------------------------------------------------------------------
+4.5  Funktionen als Bibliotheken — source
+------------------------------------------------------------------------
+
+Größere Projekte lagern wiederverwendbare Funktionen in separate Dateien aus:
+
+  # In lib/utils.sh:
+  log_info()  { echo "[INFO]  $*"; }
+  log_error() { echo "[ERROR] $*" >&2; }
+
+  # Im Haupt-Skript:
+  source "$SCRIPT_DIR/lib/utils.sh"
+  # oder:
+  . "$SCRIPT_DIR/lib/utils.sh"     # . ist synonym zu source
+
+  log_info "Skript gestartet"
+
+------------------------------------------------------------------------
+4.6  Übung 4
+------------------------------------------------------------------------
+
+Schreibe eine Bibliothek hypr-utils.sh mit Funktionen:
+- get_focused_monitor_height() → gibt Bildschirmhöhe zurück (per hyprctl + jq)
+- get_active_window_addr() → gibt Adresse des aktiven Fensters zurück
+- window_exists(addr) → true wenn Fenster mit dieser Adresse existiert
+
+Importiere sie mit source in ein anderes Skript und teste alle drei.
+
+
+================================================================================
+MODUL 5: Pipes, Umleitungen und Streams — Datenstrom-Management
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Die drei Standard-Streams
+------------------------------------------------------------------------
+
+Jeder Prozess in Linux hat drei Standard-Datenkanäle:
+
+  0 = stdin   → Eingabe (normalerweise Tastatur)
+  1 = stdout  → Ausgabe (normalerweise Terminal)
+  2 = stderr  → Fehlerausgabe (normalerweise Terminal)
+
+Das wird ausgedrückt durch Datei-Deskriptoren:
+
+  echo "Hallo"           → stdout (Deskriptor 1)
+  echo "Fehler" >&2      → stderr (Deskriptor 2) — wichtig für Fehlermeldungen!
+  read -r EINGABE < /dev/stdin   → liest aus stdin
+
+------------------------------------------------------------------------
+5.2  Umleitung — >, >>, <
+------------------------------------------------------------------------
+
+  > datei.txt      → stdout in Datei schreiben (Datei wird überschrieben)
+  >> datei.txt     → stdout anhängen
+  < datei.txt      → stdin aus Datei lesen
+  2> fehler.txt    → stderr in Datei umleiten
+  2>&1             → stderr auf stdout umlenken (beide zusammenführen)
+  &> datei.txt     → stdout + stderr in Datei (Kurzform für 2>&1 >)
+  &>/dev/null      → alles verwerfen (Mülleimer-Umleitung)
+  /dev/null > datei.txt  → Datei leeren (kürzer: : > datei.txt oder truncate)
+
+Aus deinem app-menu.sh:
+  : > "$tmp"
+  # : ist der no-op Befehl (tut nichts, Exit-Code 0).
+  # Damit wird $tmp geleert oder neu angelegt, ohne echo aufzurufen.
+
+Aus deinen Skripten immer wieder:
+  hyprctl dispatch pin address:"$addr" >/dev/null 2>&1
+  # stdout und stderr wegwerfen — wir wollen nur die Aktion, nicht die Ausgabe
+  # Kurzform: &>/dev/null
+
+  git push origin HEAD 2>/dev/null
+  # Nur stderr unterdrücken — stdout (Push-Ergebnis) bleibt sichtbar.
+
+------------------------------------------------------------------------
+5.3  Pipes (|) — Befehle verketten
+------------------------------------------------------------------------
+
+  befehl1 | befehl2 | befehl3
+
+Der stdout von links wird zum stdin von rechts. Das ist das Herzstück
+der Unix-Philosophie: viele kleine Tools, jedes macht eine Sache gut.
+
+Aus deinem autohide.sh:
+  SCREEN_H=$(hyprctl monitors | grep -A 12 "focused: yes" | grep "res" | \
+             awk '{print $2}' | cut -d'x' -f2 | cut -d'@' -f1)
+
+Schritt für Schritt:
+  1. hyprctl monitors     → gibt alle Monitor-Infos aus
+  2. grep -A 12 "focused: yes"  → nimmt nur den fokussierten Monitor (+ 12 Folgezeilen)
+  3. grep "res"           → findet die Auflösungszeile
+  4. awk '{print $2}'     → nimmt das zweite Wort (z.B. "1920x1080@60")
+  5. cut -d'x' -f2        → schneidet bei 'x', nimmt Teil 2 ("1080@60")
+  6. cut -d'@' -f1        → schneidet bei '@', nimmt Teil 1 ("1080")
+
+Das ist Unix-Pipelines in Aktion: kein eigenes Parsing-Code, nur
+vorhandene Tools kombinieren.
+
+Aus deiner SingleScreenLayout.sh:
+  socat -U - "UNIX-CONNECT:..." | while read -r line; do
+      event="${line%%>>*}"
+      data="${line#*>>}"
+      ...
+  done
+  # socat verbindet sich zu einem Unix-Socket und gibt die Events aus.
+  # while read liest die Ausgabe Zeile für Zeile.
+
+------------------------------------------------------------------------
+5.4  Tee — Ausgabe duplizieren
+------------------------------------------------------------------------
+
+  tee schreibt stdin auf stdout UND in eine Datei gleichzeitig:
+
+  befehl | tee protokoll.txt | weiterer_befehl
+  befehl | tee -a protokoll.txt    # -a für Append statt Überschreiben
+
+------------------------------------------------------------------------
+5.5  Here-Strings und Here-Documents
+------------------------------------------------------------------------
+
+  # Here-String: kurzer Multi-Word Input an einen Befehl:
+  grep "Wort" <<< "Dieser Satz hat das gesuchte Wort darin"
+  # <<< schickt einen String als stdin an grep — kein echo | grep nötig!
+
+  # Here-Document: mehrzeiliger Input:
+  cat << EOF
+  Zeile 1
+  Zeile 2
+  EOF
+  # EOF ist frei wählbar, muss nur oben und unten gleich sein.
+  # Variablen werden expandiert: echo "Hallo $USER"
+
+  # Mit Anführungszeichen um EOF: keine Expansion:
+  cat << 'EOF'
+  Dies ist $wirklich literal
+  EOF
+
+  # Mit - vor EOF: führende Tabs werden ignoriert (gut für Einrückung):
+  cat <<- EOF
+      Diese Tabs werden entfernt
+  EOF
+
+------------------------------------------------------------------------
+5.6  Named Pipes (FIFOs)
+------------------------------------------------------------------------
+
+Eine Named Pipe ist eine spezielle Datei, die wie eine Pipe wirkt,
+aber zwischen nicht-verwandten Prozessen genutzt werden kann:
+
+  mkfifo /tmp/meine_pipe
+  cat /tmp/meine_pipe &    # Liest aus der Pipe (blockiert im Hintergrund)
+  echo "Hallo" > /tmp/meine_pipe  # Schreibt in die Pipe
+  rm /tmp/meine_pipe
+
+------------------------------------------------------------------------
+5.7  Übung 5
+------------------------------------------------------------------------
+
+Schreibe ein Skript process-monitor.sh:
+- Nutze ps aux als Quelle.
+- Filtere per Pipe mit grep nach einem Prozessnamen (als Argument $1).
+- Gib CPU-Nutzung und PID jedes gefundenen Prozesses aus (awk).
+- Speichere die Ausgabe per tee sowohl auf der Konsole als auch in /tmp/procs.log.
+- Nutze 2>/dev/null für Fehlersuppression.
+
+
+================================================================================
+MODUL 6: Command Substitution & Process Substitution
+================================================================================
+
+------------------------------------------------------------------------
+6.1  Command Substitution $() — Befehlsausgabe als Variable
+------------------------------------------------------------------------
+
+Du kennst das schon, aber hier die vollständige Erklärung:
+
+  ERGEBNIS=$(befehl)    → moderne Syntax (bevorzugt)
+  ERGEBNIS=`befehl`     → alte Syntax (backticks), vermeiden
+
+  # Verschachtelung geht nur mit $():
+  TIEF=$(echo $(date +%Y))   # gibt das Jahr aus
+
+  # Zeilenumbrüche werden entfernt (wichtig zu wissen!):
+  ZEILEN=$(cat datei.txt)
+  # Wenn datei.txt "Zeile1\nZeile2" enthält, ist ZEILEN "Zeile1 Zeile2"
+  # Um Zeilen zu erhalten: IFS=$'\n' lesen oder mapfile benutzen.
+
+Aus deinem autohide.sh:
+  SCREEN_H=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .height')
+
+Aus deinem SingleScreenLayout.sh:
+  active_addr=$(hyprctl activewindow -j | jq -r '.address // empty')
+  # Das // empty in jq gibt "" zurück wenn .address null ist, statt null
+
+------------------------------------------------------------------------
+6.2  Process Substitution <() und >() — Befehle als Dateien
+------------------------------------------------------------------------
+
+Das ist echte Bash-Magie und ein zentrales Feature in deinen Skripten.
+
+  <(befehl)   → die Ausgabe des Befehls wird wie eine Datei behandelt
+  >(befehl)   → die Eingabe geht in den Befehl als wäre er eine Datei
+
+  # Beispiel — zwei Befehlsausgaben vergleichen:
+  diff <(ls /tmp) <(ls /var)
+  # diff braucht zwei Datei-Argumente. Mit <() kriegt es zwei "Pseudodateien".
+
+  # Wäre sonst umständlich:
+  ls /tmp > /tmp/a.txt
+  ls /var > /tmp/b.txt
+  diff /tmp/a.txt /tmp/b.txt
+  rm /tmp/a.txt /tmp/b.txt
+
+  # mapfile liest aus einer Datei, aber wir haben Befehlsausgabe:
+  mapfile -t PAKETE < <(apt list --installed 2>/dev/null | grep -v "Listing")
+  # < ist die Input-Umleitung, <() ist die Process Substitution.
+  # Zusammen: "lies die Ausgabe des Befehls als wäre es eine Datei".
+
+Aus deinem SingleScreenLayout.sh:
+  socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/..." | while read -r line; do
+  # while read liest die Pipe-Ausgabe — das ist keine Process Substitution,
+  # aber ein ähnliches Muster: eine Schleife konsumiert eine Stream.
+
+Die wichtige Regel:
+  - $() ersetzt einen Befehl durch seine Ausgabe (als Text).
+  - <() macht aus einem Befehl eine temporäre Pseudodatei.
+  - while ... | read läuft in einer Subshell (Variablen gehen verloren!).
+    Lösung: while read ... done < <(befehl)  — die Schleife bleibt in der
+    aktuellen Shell, nur der Befehl ist in einer Subshell.
+
+Subshell-Problem demonstriert:
+  ZAEHLER=0
+  ls | while read -r f; do
+      (( ZAEHLER++ ))
+  done
+  echo "$ZAEHLER"  → 0!  (Schleife lief in Subshell, ZAEHLER dort != hier)
+
+  # Lösung mit Process Substitution:
+  while read -r f; do
+      (( ZAEHLER++ ))
+  done < <(ls)
+  echo "$ZAEHLER"  → korrekte Zahl!
+
+------------------------------------------------------------------------
+6.3  Übung 6
+------------------------------------------------------------------------
+
+Erstelle ein Skript window-list.sh:
+- Nutze mapfile < <(...) um eine Liste aller Hyprland-Fenster-Adressen
+  in ein Array zu laden (hyprctl clients -j | jq -r '.[].address').
+- Iteriere über das Array und gib für jedes Fenster die Klasse aus
+  (hyprctl clients -j | jq -r '.[] | select(.address == "ADDR") | .class').
+- Zähle die Fenster und gib die Gesamtzahl aus.
+  (Dieser Ansatz zeigt, warum mapfile+Process Substitution der Pipe bevorzugt wird.)
+
+
+================================================================================
+MODUL 7: Regex in Bash — =~, grep, sed, awk
+================================================================================
+
+------------------------------------------------------------------------
+7.1  Bash-interne Regex mit =~
+------------------------------------------------------------------------
+
+In [[ ]] kann man mit =~ direkt gegen Extended Regular Expressions testen:
+
+  [[ "$STRING" =~ REGEX ]]
+
+  # Beispiele:
+  IP="192.168.1.100"
+  [[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && echo "Gültige IP"
+
+  # Gruppen werden in BASH_REMATCH gespeichert:
+  [[ "2026-06-12" =~ ^([0-9]{4})-([0-9]{2})-([0-9]{2})$ ]]
+  echo "${BASH_REMATCH[0]}"   → 2026-06-12   (ganzer Match)
+  echo "${BASH_REMATCH[1]}"   → 2026          (erste Gruppe)
+  echo "${BASH_REMATCH[2]}"   → 06            (zweite Gruppe)
+  echo "${BASH_REMATCH[3]}"   → 12            (dritte Gruppe)
+
+Aus deinem autohide.sh:
+  if [[ "$pos" =~ ^[0-9]+,\ ([0-9]+)$ ]]; then
+      MOUSE_Y="${BASH_REMATCH[1]}"
+  fi
+  # hyprctl cursorpos gibt z.B. "1234, 567" aus.
+  # Regex: ^[0-9]+,\ ([0-9]+)$
+  #   ^        → Anfang
+  #   [0-9]+   → eine oder mehr Ziffern (X-Koordinate)
+  #   ,\       → Komma gefolgt von Leerzeichen (\ quotiert das Leerzeichen)
+  #   ([0-9]+) → Gruppe: eine oder mehr Ziffern (Y-Koordinate → BASH_REMATCH[1])
+  #   $        → Ende
+  # Kein Anführungszeichen um den Regex! (sonst wird er literal genommen)
+
+Wichtig: Der Regex darf keine Anführungszeichen haben:
+  [[ "$s" =~ "^foo" ]]    → FALSCH: sucht literal "^foo"
+  [[ "$s" =~ ^foo ]]      → RICHTIG: Regex
+  REGEX="^foo"
+  [[ "$s" =~ $REGEX ]]    → auch richtig (Variable für komplexe Regex)
+
+------------------------------------------------------------------------
+7.2  grep — Zeilen filtern
+------------------------------------------------------------------------
+
+grep sucht nach Mustern in Text:
+
+  grep "muster" datei.txt          → Zeilen mit "muster" ausgeben
+  grep -i "muster" datei.txt       → case-insensitive
+  grep -v "muster" datei.txt       → invertiert (Zeilen OHNE muster)
+  grep -n "muster" datei.txt       → mit Zeilennummer
+  grep -c "muster" datei.txt       → zählt Treffer-Zeilen
+  grep -l "muster" *.txt           → nur Dateinamen ausgeben
+  grep -r "muster" verzeichnis/    → rekursiv suchen
+  grep -E "regex+"  datei.txt      → Extended Regex (+ ? | () )
+  grep -P "regex\d" datei.txt      → Perl-Regex (noch mächtiger)
+  grep -q "muster" datei.txt       → quiet, nur Exit-Code (0=gefunden)
+
+  # Mehrere Muster:
+  grep -E "foo|bar" datei.txt       → foo oder bar
+  grep -e "foo" -e "bar" datei.txt  → äquivalent
+
+Aus deinem app-menu.sh:
+  grep -qE '^(NoDisplay|Hidden)=true' "$desktop"
+  # -q: silent (nur Exit-Code, keine Ausgabe)
+  # -E: Extended Regex
+  # ^: Zeilenanfang
+  # (NoDisplay|Hidden): eine von beiden Strings
+  # =true: gefolgt von "=true"
+  # → Überspringt .desktop-Dateien die nicht angezeigt werden sollen
+
+  name=$(grep -m1 '^Name=' "$desktop" | cut -d= -f2-)
+  # -m1: nur ersten Treffer
+  # cut -d= -f2-: bei '=' teilen, alles ab Feld 2 (also ohne "Name=")
+
+------------------------------------------------------------------------
+7.3  sed — Stream Editor (Suchen und Ersetzen)
+------------------------------------------------------------------------
+
+sed verarbeitet Text Zeile für Zeile:
+
+  # Einfaches Ersetzen:
+  echo "Hallo Welt" | sed 's/Welt/Shell/'   → Hallo Shell
+  # s/Muster/Ersatz/  = substitute
+
+  # Global (alle Vorkommen):
+  echo "a a a" | sed 's/a/b/g'              → b b b
+
+  # Case-insensitive:
+  echo "Hallo HALLO" | sed 's/hallo/Hi/gI'  → Hi Hi
+
+  # Regex in sed:
+  echo "2026-06-12" | sed 's/\([0-9]*\)-\([0-9]*\)-\([0-9]*\)/\3.\2.\1/'
+  # → 12.06.2026 (Datum umdrehen mit Capture-Groups)
+  # Mit -E für Extended Regex (sauberer):
+  echo "2026-06-12" | sed -E 's/([0-9]+)-([0-9]+)-([0-9]+)/\3.\2.\1/'
+
+  # Zeilen löschen:
+  sed '/muster/d' datei.txt         → Zeilen mit "muster" entfernen
+
+  # Zeilen ausgeben:
+  sed -n '5,10p' datei.txt          → nur Zeilen 5-10
+
+  # In-place Bearbeitung (Datei direkt ändern):
+  sed -i 's/alt/neu/g' datei.txt
+  sed -i.bak 's/alt/neu/g' datei.txt  # .bak Backup erstellen
+
+Aus deinem app-menu.sh:
+  exec_cmd=$(grep -m1 '^Exec=' "$desktop" | cut -d= -f2- | \
+             sed 's/%[a-zA-Z]//g;s/^[[:space:]]*//;s/[[:space:]]*$//')
+  # sed führt 3 Ersetzungen durch (durch ; getrennt):
+  # 1. s/%[a-zA-Z]//g   → entfernt %f, %u, %F etc. (Desktop-Placeholders)
+  # 2. s/^[[:space:]]*// → entfernt führende Leerzeichen
+  # 3. s/[[:space:]]*$// → entfernt abschließende Leerzeichen
+  # [[:space:]] ist POSIX für Leerzeichen+Tab+etc.
+
+------------------------------------------------------------------------
+7.4  awk — Spaltenverarbeitung und Programmierung
+------------------------------------------------------------------------
+
+awk ist eine vollständige Programmiersprache für Text-Verarbeitung.
+Es verarbeitet Zeilen und kennt Spalten (Fields):
+
+  # Grundstruktur:
+  awk 'MUSTER { AKTION }' datei.txt
+
+  # Spalten ausgeben ($1=erste, $2=zweite, $NF=letzte, $0=ganze Zeile):
+  echo "Hallo Welt Bash" | awk '{print $2}'     → Welt
+  echo "Hallo Welt Bash" | awk '{print $NF}'    → Bash
+
+  # Mit Trennzeichen (-F):
+  echo "user:1000:gruppe" | awk -F: '{print $1}'   → user
+  echo "user:1000:gruppe" | awk -F: '{print $3}'   → gruppe
+
+  # Berechnung:
+  echo "10 20 30" | awk '{print $1 + $2 + $3}'     → 60
+  echo "10 20 30" | awk '{summe=$1+$2+$3; print "Summe:", summe}'
+
+  # Bedingungen:
+  ps aux | awk '$3 > 5 {print $1, $11}'   → Prozesse mit CPU > 5%
+
+  # BEGIN und END:
+  ps aux | awk 'BEGIN{print "Prozesse:"} NR>1{print $11} END{print "Fertig"}'
+  # BEGIN: vor der ersten Zeile
+  # END: nach der letzten Zeile
+  # NR: aktuelle Zeilennummer (Number of Record)
+
+  # Summieren:
+  ps aux | awk 'NR>1{cpu+=$3} END{printf "CPU gesamt: %.1f%%\n", cpu}'
+
+Aus deinem autohide.sh (Fallback-Pfad):
+  SCREEN_H=$(hyprctl monitors | grep -A 12 "focused: yes" | grep "res" | \
+             awk '{print $2}' | cut -d'x' -f2 | cut -d'@' -f1)
+  # awk '{print $2}' nimmt das zweite Wort der Zeile
+
+------------------------------------------------------------------------
+7.5  String-Manipulation in Bash (intern, ohne externe Tools)
+------------------------------------------------------------------------
+
+Bash hat eingebaute String-Operationen — schneller als externe Tools:
+
+  STR="Hallo Welt"
+
+  # Länge:
+  echo "${#STR}"            → 10
+
+  # Substring:
+  echo "${STR:6}"           → Welt  (ab Position 6)
+  echo "${STR:0:5}"         → Hallo (Position 0, Länge 5)
+  echo "${STR: -4}"         → Welt  (von hinten, Leerzeichen wichtig!)
+
+  # Groß/Kleinschreibung (Bash 4+):
+  echo "${STR,,}"           → hallo welt  (alles klein)
+  echo "${STR^^}"           → HALLO WELT  (alles groß)
+  echo "${STR,}"            → hallo Welt  (nur erster Buchstabe klein)
+  echo "${STR^}"            → Hallo Welt  (nur erster Buchstabe groß)
+
+  # Muster entfernen:
+  DATEI="foto.backup.tar.gz"
+  echo "${DATEI#*.}"        → backup.tar.gz  (kürzestes Muster vom Anfang)
+  echo "${DATEI##*.}"       → gz             (längstes Muster vom Anfang)
+  echo "${DATEI%.*}"        → foto.backup.tar (kürzestes Muster vom Ende)
+  echo "${DATEI%%.*}"       → foto            (längstes Muster vom Ende)
+
+  # Ersetzen:
+  echo "${STR/Welt/Shell}"  → Hallo Shell    (erstes Vorkommen)
+  echo "${STR//l/L}"        → HaLLo WeLt     (alle Vorkommen)
+  echo "${STR/#Hallo/Hi}"   → Hi Welt        (nur am Anfang)
+  echo "${STR/%Welt/Du}"    → Hallo Du       (nur am Ende)
+
+Aus deinem app-menu.sh:
+  name="${name//[$'\t\n\0']/ }"    # Tabs, Newlines, Nullbytes → Leerzeichen
+  exec_cmd="${exec_cmd//[$'\t\n\0']/ }"
+
+Aus deinem SingleScreenLayout.sh:
+  local clean_addr="${target_addr#0x}"    # "0x" Prefix entfernen
+  event="${line%%>>*}"                    # alles ab ">>" entfernen
+  data="${line#*>>}"                      # alles bis ">>" entfernen
+  new_path="${path}.${name}"
+  [ "$path" = "." ] && new_path="$name"  # kein Punkt am Anfang wenn root
+
+------------------------------------------------------------------------
+7.6  Default-Werte und Fehler-Variablen
+------------------------------------------------------------------------
+
+  ${VAR:-default}    → Wert von VAR, oder "default" wenn VAR leer/ungesetzt
+  ${VAR:=default}    → wie :-, setzt aber VAR auch auf default
+  ${VAR:+ersatz}     → "ersatz" wenn VAR gesetzt, sonst leer
+  ${VAR:?fehlermsg}  → Fehler + Meldung wenn VAR leer/ungesetzt
+
+  # Aus deinem app-menu.sh:
+  STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
+  # XDG_RUNTIME_DIR ist normalerweise /run/user/1000
+  # Falls nicht gesetzt: /tmp als Fallback
+
+  # Aus deinem brightness-status.sh:
+  cat "$STATE_FILE" 2>/dev/null || echo "100"
+  # Alternative zu :- für Befehls-Fallbacks
+
+------------------------------------------------------------------------
+7.7  Übung 7
+------------------------------------------------------------------------
+
+Schreibe ein Skript log-parser.sh:
+- Nimm einen Log-Datei-Pfad als $1 entgegen.
+- Benutze grep um alle ERROR-Zeilen zu finden.
+- Benutze awk um Datum und Fehlermeldung zu extrahieren.
+- Benutze sed um IP-Adressen durch [ZENSIERT] zu ersetzen.
+- Benutze =~ mit BASH_REMATCH um Zeilen zu finden die einen HTTP-Status-Code
+  (3 Ziffern) enthalten, und gib den Code aus.
+
+
+================================================================================
+MODUL 8: Fehlerbehandlung, Exit Codes und Debugging
+================================================================================
+
+------------------------------------------------------------------------
+8.1  Exit Codes — das unsichtbare Rückgabe-System
+------------------------------------------------------------------------
+
+Jeder Befehl gibt einen Exit-Code zurück. 0 = Erfolg, 1-255 = Fehler.
+$? enthält immer den letzten Exit-Code:
+
+  ls /tmp
+  echo "$?"    → 0 (Erfolg)
+
+  ls /gibts_nicht
+  echo "$?"    → 2 (ls: Fehler)
+
+  exit 0       → Skript erfolgreich beenden
+  exit 1       → Skript mit Fehler beenden (Standard für allgemeine Fehler)
+  exit 2       → falsche Verwendung (Konvention)
+  exit 127     → Befehl nicht gefunden
+
+------------------------------------------------------------------------
+8.2  set -e, set -u, set -o pipefail — defensives Scripting
+------------------------------------------------------------------------
+
+Diese drei Optionen machen Skripte deutlich robuster:
+
+  set -e         → "exit on error" — Skript abbricht bei jedem Fehler
+  set -u         → "undefined vars" — Fehler bei ungesetzten Variablen
+  set -o pipefail → Pipe schlägt fehl wenn irgendein Teil fehlschlägt
+  set -x         → jede ausgeführte Zeile ausgeben (Debug-Modus)
+
+  # Alle zusammen (Standardpraxis für robuste Skripte):
+  set -euo pipefail
+
+  # Probleme mit set -e:
+  # Manchmal will man einen Fehler ignorieren:
+  ls /gibts_nicht || true   # || true: "oder true" verhindert Abbruch
+  grep "evtl_nicht_da" datei.txt || true
+
+  # oder mit 'if':
+  if ls /gibts_nicht; then
+      echo "existiert"
+  fi
+
+  # set -e deaktivieren für einen Block:
+  set +e
+  riskanter_befehl
+  set -e
+
+------------------------------------------------------------------------
+8.3  trap — Signal Handler
+------------------------------------------------------------------------
+
+trap ist eines der mächtigsten Konzepte in Shell-Scripting. Es lässt
+dich Code ausführen wenn bestimmte Events auftreten:
+
+  trap 'BEFEHLE' SIGNAL
+
+  # Wichtige Signale:
+  EXIT      → immer wenn das Skript endet (normal oder Fehler)
+  ERR       → bei jedem Fehler (Alternative zu set -e)
+  INT       → Ctrl+C (SIGINT)
+  TERM      → kill-Signal (SIGTERM)
+  HUP       → Terminal geschlossen (SIGHUP)
+  USR1      → benutzerdefiniertes Signal 1
+  USR2      → benutzerdefiniertes Signal 2
+
+  # Aufräumen beim Beenden:
+  TMP_FILE=$(mktemp)
+  trap "rm -f '$TMP_FILE'" EXIT
+  # egal wie das Skript endet (normal, Fehler, Ctrl+C) — Datei wird gelöscht
+
+  # Mehrere Signale:
+  trap "cleanup_funktion" EXIT INT TERM
+
+  # Cleanup-Muster mit Funktion:
+  cleanup() {
+      rm -f /tmp/meine_lock_datei
+      echo "Aufgeräumt"
+  }
+  trap cleanup EXIT
+
+Aus deinem autohide.sh:
+  HIDDEN=false
+  trap "HIDDEN=false" USR2
+  # Wenn das Skript USR2 empfängt (kill -USR2 <PID>),
+  # wird HIDDEN auf false gesetzt.
+  # Das erlaubt externe Programme, den Zustand zu steuern.
+
+------------------------------------------------------------------------
+8.4  Signale senden — kill und pkill
+------------------------------------------------------------------------
+
+  kill PID              → sendet SIGTERM (15) = freundliche Aufforderung zu beenden
+  kill -9 PID           → SIGKILL = sofort beenden, nicht abfangbar
+  kill -SIGUSR1 PID     → benutzerdefiniertes Signal
+  kill -SIGUSR2 PID
+  pkill -SIGUSR1 waybar → sendet Signal an Prozess nach Name
+
+Aus deinem autohide.sh:
+  pkill -SIGUSR1 waybar
+  # Waybar reagiert auf SIGUSR1 mit Sichtbarkeit togglen
+  # Das ist ein elegantes IPC (Inter-Process Communication) System
+
+------------------------------------------------------------------------
+8.5  Debugging-Techniken
+------------------------------------------------------------------------
+
+  # 1. set -x — Trace-Modus:
+  set -x
+  VARIABLE="test"
+  echo "$VARIABLE"
+  set +x
+  # Ausgabe zeigt: + VARIABLE=test  + echo test  → test
+
+  # 2. Nur bestimmten Teil debuggen:
+  bash -x skript.sh     → ganzes Skript im Trace-Modus
+
+  # 3. Eigene Debug-Funktion:
+  DEBUG="${DEBUG:-false}"
+  debug() {
+      [[ "$DEBUG" == "true" ]] && echo "[DEBUG] $*" >&2
+  }
+  debug "Variable ist: $VARIABLE"
+  # Aufruf: DEBUG=true ./skript.sh
+
+  # 4. Bash-Syntax prüfen ohne ausführen:
+  bash -n skript.sh     → nur Syntax-Check, keine Ausführung
+
+  # 5. shellcheck — externer Linter (sehr empfehlenswert):
+  shellcheck skript.sh  → findet häufige Fehler und Antipatterns
+
+------------------------------------------------------------------------
+8.6  Übung 8
+------------------------------------------------------------------------
+
+Erweitere eines deiner Skripte (z.B. wallpaper.sh):
+- Füge set -euo pipefail am Anfang ein.
+- Baue einen trap EXIT handler ein der aufräumt (temporäre Dateien löscht).
+- Füge eine eigene debug()-Funktion ein, gesteuert über DEBUG=true.
+- Nutze bash -n um die Syntax zu prüfen.
+- Schau dir shellcheck-Warnungen an und behebe sie.
+
+
+================================================================================
+MODUL 9: Fortgeschrittene Schleifen und Kontrollfluß
+================================================================================
+
+------------------------------------------------------------------------
+9.1  while, until, for — alle Varianten
+------------------------------------------------------------------------
+
+  # while: läuft solange Bedingung true ist:
+  ZAEHLER=0
+  while (( ZAEHLER < 5 )); do
+      echo "$ZAEHLER"
+      (( ZAEHLER++ ))
+  done
+
+  # until: läuft solange Bedingung false ist (umgekehrtes while):
+  until pgrep -x "waybar" > /dev/null; do
+      echo "Warte auf waybar..."
+      sleep 1
+  done
+
+  # Endlosschleife:
+  while true; do
+      echo "Läuft..."
+      sleep 1
+  done
+  # oder:
+  while :; do    # : ist immer true
+      ...
+  done
+
+  # for mit Zahlen-Bereich (Bash-spezifisch):
+  for i in {1..10}; do echo $i; done
+  for i in {0..100..5}; do echo $i; done   # in 5er-Schritten
+
+  # for C-Stil:
+  for (( i=0; i<10; i++ )); do
+      echo "$i"
+  done
+
+  # for über Befehlsausgabe — VORSICHT (Wortspaltung!):
+  for datei in $(ls *.sh); do   # SCHLECHT wenn Leerzeichen in Namen
+      ...
+  done
+  # Besser:
+  for datei in *.sh; do          # Globbing statt ls
+      ...
+  done
+
+------------------------------------------------------------------------
+9.2  read in Schleifen — Zeilenweise Verarbeitung
+------------------------------------------------------------------------
+
+  # Datei zeilenweise:
+  while IFS= read -r zeile; do
+      echo "Zeile: $zeile"
+  done < datei.txt
+  # IFS= verhindert Whitespace-Entfernung am Anfang/Ende
+  # -r verhindert Backslash-Interpretation
+
+  # Aus Befehl:
+  while IFS= read -r zeile; do
+      echo "Zeile: $zeile"
+  done < <(find . -name "*.sh")
+  # < <() ist Process Substitution — Schleife bleibt in aktueller Shell!
+
+  # Mit Trennzeichen lesen (z.B. TSV — Tab-Separated):
+  while IFS=$'\t' read -r name cmd icon; do
+      echo "Name: $name, Cmd: $cmd"
+  done < tsv_datei.txt
+
+  # Null-Byte getrennt (für Dateinamen mit Leerzeichen):
+  while IFS= read -r -d '' datei; do
+      echo "Datei: $datei"
+  done < <(find . -name "*.sh" -print0)
+  # -d '' setzt das Trennzeichen auf Null-Byte
+
+Aus deinem app-menu.sh:
+  while IFS= read -r desktop; do
+      grep -qE '^(NoDisplay|Hidden)=true' "$desktop" && continue
+      name=$(grep -m1 '^Name=' "$desktop" | cut -d= -f2-)
+      ...
+  done < <(find "$dir" -name "*.desktop" -type f 2>/dev/null)
+  # Perfektes Muster: null-safe, whitespace-safe, Subshell-safe.
+
+------------------------------------------------------------------------
+9.3  break, continue, return
+------------------------------------------------------------------------
+
+  # break: Schleife sofort verlassen:
+  for i in {1..10}; do
+      [[ "$i" -eq 5 ]] && break
+      echo "$i"
+  done    → 1 2 3 4
+
+  # break N: N Ebenen verlassen:
+  for i in {1..3}; do
+      for j in {1..3}; do
+          [[ "$i" -eq 2 && "$j" -eq 2 ]] && break 2   # beide Schleifen
+      done
+  done
+
+  # continue: nächste Iteration:
+  for i in {1..5}; do
+      [[ "$i" -eq 3 ]] && continue
+      echo "$i"
+  done    → 1 2 4 5
+
+  # continue in while:
+  while IFS= read -r desktop; do
+      grep -qE '^NoDisplay=true' "$desktop" && continue   # überspringen
+      # ... verarbeiten
+  done < <(find ...)
+
+------------------------------------------------------------------------
+9.4  Parallele Ausführung — & und wait
+------------------------------------------------------------------------
+
+  # Im Hintergrund starten:
+  langer_befehl &
+  echo "Gestartet, PID: $!"
+
+  # Mehrere parallel:
+  befehl1 &
+  befehl2 &
+  befehl3 &
+  wait     # warte bis alle fertig sind
+
+  # Auf spezifischen Prozess warten:
+  befehl1 &
+  PID1=$!
+  befehl2
+  wait $PID1
+
+  # Exit-Code des Hintergrundprozesses:
+  befehl &
+  PID=$!
+  wait $PID
+  echo "Exit: $?"
+
+Aus deinem app-menu.sh:
+  if [ -z "$ROFI_RETV" ] && ! is_cache_valid; then
+      build_desktop_cache &
+  fi
+  # Cache im Hintergrund aufbauen — Benutzer muss nicht warten.
+  # Nächster Start hat dann den frischen Cache.
+
+------------------------------------------------------------------------
+9.5  Übung 9
+------------------------------------------------------------------------
+
+Schreibe ein Skript parallel-fetch.sh:
+- Nimm eine Liste von URLs (als Argument-Array oder aus einer Datei).
+- Lade jede URL parallel im Hintergrund herunter (curl -s URL > /tmp/URL_basename).
+- Speichere alle PIDs in einem Array.
+- Warte mit wait auf alle und zähle Erfolge/Fehler.
+
+
+================================================================================
+MODUL 10: jq — JSON aus der Shell verarbeiten
+================================================================================
+
+------------------------------------------------------------------------
+10.1  Warum jq?
+------------------------------------------------------------------------
+
+Moderne System-Tools (hyprctl, systemctl --output=json, curl APIs) geben
+JSON aus. jq ist der Standard-Tool dafür — eine Mini-Programmiersprache
+speziell für JSON.
+
+  # Basis-Syntax:
+  echo '{"name":"TrafkHop","version":3}' | jq '.name'    → "TrafkHop"
+  echo '{"name":"TrafkHop","version":3}' | jq '.version' → 3
+  echo '{"name":"TrafkHop","version":3}' | jq '.name' -r → TrafkHop
+  # -r: raw output (keine Anführungszeichen, direkt als Shell-String nutzbar)
+
+------------------------------------------------------------------------
+10.2  Arrays und Objekte in jq
+------------------------------------------------------------------------
+
+  JSON='[{"id":1,"name":"Alpha"},{"id":2,"name":"Beta"}]'
+
+  # Array-Element:
+  echo "$JSON" | jq '.[0]'             → {"id":1,"name":"Alpha"}
+  echo "$JSON" | jq '.[0].name'        → "Alpha"
+  echo "$JSON" | jq '.[] | .name'      → "Alpha" "Beta" (alle names)
+  echo "$JSON" | jq -r '.[] | .name'   → Alpha \n Beta  (ohne Anführungszeichen)
+
+  # Array-Länge:
+  echo "$JSON" | jq 'length'           → 2
+
+  # Filtern:
+  echo "$JSON" | jq '.[] | select(.id == 2)'   → {"id":2,"name":"Beta"}
+
+  # Ausgabe als Array:
+  echo "$JSON" | jq '[.[] | .name]'    → ["Alpha","Beta"]
+
+  # Felder kombinieren:
+  echo "$JSON" | jq '.[] | "\(.id): \(.name)"'  → "1: Alpha" "2: Beta"
+
+------------------------------------------------------------------------
+10.3  jq in deinen Skripten — echte Beispiele
+------------------------------------------------------------------------
+
+Aus deinem hideAll.sh:
+  CURRENT_WS=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.id')
+  # .[] → iteriere über alle Monitore
+  # select(.focused == true) → nimm nur den fokussierten
+  # .activeWorkspace.id → hole die Workspace-ID
+
+  for addr in $(hyprctl clients -j | jq -r ".[] | select(.workspace.name == \"$HIDDEN_WS\") | .address"); do
+  # Vorsicht: $() + jq-Output = Wortspaltung. Für Adressen ohne Leerzeichen ok,
+  # aber für allgemeinen Fall: mapfile + process substitution bevorzugen.
+
+Aus deinem pipToggle.sh:
+  active=$(hyprctl activewindow -j) || exit 1
+  addr=$(echo "$active" | jq -r '.address')
+  ws=$(echo "$active" | jq -r '.workspace.id')
+  # Erst JSON in Variable, dann zweimal parsen → nur ein hyprctl-Aufruf nötig
+
+  if ! hyprctl clients -j | jq -e ".[] | select(.address == \"$addr\")" >/dev/null; then
+  # jq -e: exit code 1 wenn Ergebnis null/false (nützlich für if-Bedingungen)
+
+Aus deinem SingleScreenLayout.sh:
+  win_data=$(echo "$clients_json" | jq ".[] | select(.address | endswith(\"$clean_addr\"))")
+  is_floating=$(echo "$win_data" | jq -r '.floating')
+  fs_mode=$(echo "$win_data" | jq -r '.fullscreen')
+
+------------------------------------------------------------------------
+10.4  Fortgeschrittenes jq
+------------------------------------------------------------------------
+
+  # Verschachtelte Objekte aufbauen:
+  jq -n '{"status":"ok","data":["a","b"]}'
+
+  # Variablen in jq:
+  NAME="TrafkHop"
+  jq -n --arg name "$NAME" '{"name":$name}'
+
+  # Zwei JSON-Dateien mergen:
+  jq -s '.[0] * .[1]' datei1.json datei2.json
+
+  # Alle Keys eines Objekts:
+  echo '{"a":1,"b":2}' | jq 'keys'    → ["a","b"]
+
+  # Bedingte Logik:
+  echo '{"val":5}' | jq '.val | if . > 3 then "groß" else "klein" end'
+
+  # Rekursiv suchen (..):
+  echo '{"a":{"b":{"c":"ziel"}}}' | jq '.. | strings'   → alle Strings tief drin
+
+Aus deinem app-menu.sh (komplexestes jq-Beispiel):
+  echo "$MENU_JSON" | jq -r --arg p "$path" '
+      (if $p == "." then . else getpath($p | split(".")) end) | to_entries[]
+      | "\(.key)\t\(if (.value|type)=="object" then "dir" else "cmd" end)\t\(if (.value|type)=="object" then "" else .value end)"
+  '
+  # $p ist das Pfad-Argument von Bash → jq-Variable
+  # getpath() navigiert tief in verschachteltem JSON
+  # to_entries[] macht Key-Value-Paare aus einem Objekt
+  # Mehrzeiliger jq — bei komplexen Abfragen gut lesbar mit Einrückung
+
+------------------------------------------------------------------------
+10.5  Übung 10
+------------------------------------------------------------------------
+
+Schreibe ein Skript workspace-summary.sh:
+- Lade alle Hyprland-Clients als JSON (hyprctl clients -j).
+- Zähle per jq wie viele Fenster auf jedem Workspace laufen.
+- Gruppiere nach Workspace-ID und gib aus: "Workspace 1: 3 Fenster".
+- Filtere schwimmende (floating) Fenster heraus und zähle sie separat.
+
+
+================================================================================
+MODUL 11: Subshells, Prozesse und Jobverwaltung
+================================================================================
+
+------------------------------------------------------------------------
+11.1  Was ist eine Subshell?
+------------------------------------------------------------------------
+
+Wenn Bash einen Befehl in runden Klammern ausführt, startet es eine
+Subshell — eine Kopie der aktuellen Shell. Variablen, die in der Subshell
+gesetzt werden, sind in der Eltern-Shell nicht sichtbar:
+
+  (
+      LOKAL="nur in Subshell"
+      echo "$LOKAL"   → "nur in Subshell"
+  )
+  echo "$LOKAL"   → leer
+
+  # Wann passiert das implizit?
+  # - Bei jeder Pipe: cmd1 | cmd2 (cmd2 läuft in Subshell)
+  # - Bei $() (etwas anders — technisch fork+exec)
+  # - Bei Hintergrundprozessen (&)
+  # - Bei <() und >() (Process Substitution)
+
+  # Subshell für Isolation (Verzeichniswechsel ohne Auswirkung):
+  ( cd /tmp && ls )
+  # Aktuelles Verzeichnis im Eltern-Prozess unverändert
+
+------------------------------------------------------------------------
+11.2  Hintergrundprozesse mit setsid
+------------------------------------------------------------------------
+
+Aus deinem app-menu.sh:
+  setsid bash -c "$value" >/dev/null 2>&1 &
+
+setsid erstellt eine neue Session — der Prozess ist vom Terminal komplett
+getrennt. Er überlebt auch wenn das Terminal-Fenster geschlossen wird.
+Wichtig für GUI-Anwendungen die von einem Skript gestartet werden:
+
+  # Normal:
+  firefox &     → stirbt wenn das Bash-Skript endet oder Terminal schließt
+
+  # Mit setsid:
+  setsid firefox &     → läuft weiter, komplett unabhängig
+
+  # disown ist eine Alternative:
+  firefox &
+  disown          → Bash "vergisst" den Job
+
+------------------------------------------------------------------------
+11.3  Prozess-Informationen
+------------------------------------------------------------------------
+
+  ps aux                → alle Prozesse mit Details
+  ps aux | grep "name"  → nach Name filtern
+  pgrep -x "waybar"     → PID von waybar (exakter Name-Match)
+  pgrep -f "python.*popup" → PID per vollem Kommandozeilen-String
+  pidof "waybar"         → ähnlich wie pgrep
+  $!                    → PID des zuletzt gestarteten Hintergrundprozesses
+
+  # Aus deinem popup-toggle.sh:
+  if pkill -f "$SCRIPT" 2>/dev/null; then
+      exit 0
+  fi
+  # pkill -f: sendet SIGTERM an Prozesse deren Kommandozeile matcht
+  # Rückgabewert: 0 wenn mindestens ein Prozess gefunden und beendet wurde
+  # → Toggle-Logik: läuft es? → beenden (return). Läuft es nicht? → starten.
+
+------------------------------------------------------------------------
+11.4  command — Wenn Befehle nicht gefunden werden
+------------------------------------------------------------------------
+
+  command -v befehl     → Pfad des Befehls, leer wenn nicht gefunden
+  command -v befehl &>/dev/null && echo "Vorhanden"
+
+  # Aus deinem brightness-status.sh:
+  has_brightnessctl() {
+      command -v brightnessctl &>/dev/null && \
+      brightnessctl -m 2>/dev/null | grep -q '%'
+  }
+  # command -v statt which — POSIX, funktioniert überall, kein externe Tool
+
+  # In popup-toggle.sh:
+  if command -v hyprlock &>/dev/null; then
+      hyprlock
+  else
+      loginctl lock-session
+  fi
+
+------------------------------------------------------------------------
+11.5  Jobverwaltung
+------------------------------------------------------------------------
+
+  befehl &      → im Hintergrund starten
+  fg            → Hintergrundprozess in Vordergrund holen
+  bg            → gestoppten Prozess im Hintergrund weiterführen
+  jobs          → alle aktuellen Hintergrundprozesse
+  Ctrl+Z        → aktuellen Prozess stoppen (suspend)
+  Ctrl+C        → Prozess abbrechen (SIGINT)
+  wait          → warte auf alle Hintergrundprozesse
+  wait $PID     → warte auf spezifischen Prozess
+
+------------------------------------------------------------------------
+11.6  Übung 11
+------------------------------------------------------------------------
+
+Schreibe ein Skript daemon-manager.sh das einen einfachen Daemon simuliert:
+- Starte einen Hintergrundprozess (z.B. "while true; do sleep 1; done") mit setsid.
+- Speichere die PID in /tmp/mein_daemon.pid.
+- Das Skript kann mit start/stop/status aufgerufen werden.
+- start: Prozess starten und PID speichern.
+- stop: PID lesen und kill senden.
+- status: prüfen ob Prozess noch läuft.
+
+
+================================================================================
+MODUL 12: Unix Sockets, socat und IPC
+================================================================================
+
+------------------------------------------------------------------------
+12.1  Was sind Unix Domain Sockets?
+------------------------------------------------------------------------
+
+Unix Sockets sind wie Named Pipes, aber bidirektional und für komplexere
+Kommunikation geeignet. Viele System-Programme kommunizieren darüber:
+- Hyprland nutzt Sockets für seine IPC-API
+- systemd, dbus, X11, Wayland — alle nutzen Sockets
+- Docker, Podman, kubelet — Socket-basiert
+
+Ein Socket ist eine spezielle Datei (Typ 's' in ls -la) die als
+Kommunikations-Endpunkt fungiert.
+
+  ls -la /tmp/*.sock    → zeigt Socket-Dateien
+
+------------------------------------------------------------------------
+12.2  socat — SOcket CAT
+------------------------------------------------------------------------
+
+socat verbindet zwei Datenströme — beliebige Kombination aus:
+Stdin/Stdout, Dateien, TCP, UDP, Unix Sockets, Seriell...
+
+  # Einfachste Nutzung — wie netcat:
+  socat TCP:example.com:80 -          # verbinde zu TCP und gib stdin/stdout
+
+  # Unix Socket lesen:
+  socat - UNIX-CONNECT:/pfad/zu/socket.sock
+
+  # Als Empfänger:
+  socat UNIX-LISTEN:/tmp/test.sock -
+
+Aus deinem SingleScreenLayout.sh:
+  socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock" | while read -r line; do
+  # -U: UNIX-Domain Socket
+  # -: stdin/stdout
+  # Hyprland schreibt Events auf socket2.sock
+  # Format: "eventname>>daten"
+  # Das Skript liest und reagiert auf jeden Event in Echtzeit
+
+  # Verarbeitung:
+  event="${line%%>>*}"    # alles vor ">>"
+  data="${line#*>>}"      # alles nach ">>"
+
+  case "$event" in
+      openwindow)
+          ( sleep 0.08; manage_window "$event" "$data" ) &
+          ;;
+      workspace|workspacev2)
+          manage_window "$event" "$data" &
+          ;;
+  esac
+
+------------------------------------------------------------------------
+12.3  Hyprland IPC — das konkrete Beispiel
+------------------------------------------------------------------------
+
+Hyprland (ein Wayland Compositor) hat eine Socket-basierte API.
+socket.sock: Befehle senden
+socket2.sock: Events empfangen (wie in SingleScreenLayout.sh)
+
+  # Alle verfügbaren Events ansehen:
+  socat -U - "UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+  # (dann Fenster bewegen, klicken etc. → Events strömen herein)
+
+  # Beispiel-Event-Zeilen:
+  "openwindow>>addr,1,workspace.name,firefox"
+  "activewindowv2>>addr"
+  "workspace>>name"
+
+  # Ein Befehl senden (socket.sock):
+  hyprctl dispatch fullscreen 1
+  # Intern macht hyprctl: schreib Befehl in socket.sock, lies Antwort
+
+------------------------------------------------------------------------
+12.4  Event-Driven Architektur in Shell
+------------------------------------------------------------------------
+
+SingleScreenLayout.sh ist ein Event-Driven Daemon:
+1. Es öffnet eine permanente Verbindung zu Hyprlands Socket.
+2. Es liest Events in einer Endlos-Schleife.
+3. Für jeden relevanten Event führt es eine Aktion aus.
+
+Das ist das Shell-Äquivalent von EventEmitter/addEventListener in JS.
+
+  # Vereinfachtes Muster:
+  socat -U - "UNIX-CONNECT:$SOCKET" | while read -r event_line; do
+      event="${event_line%%>>*}"
+      data="${event_line#*>>}"
+
+      case "$event" in
+          openwindow)  handle_open "$data" ;;
+          closewindow) handle_close "$data" ;;
+          *) ;;   # ignoriere unbekannte Events
+      esac
+  done
+
+  # Warum Subprozesse für Handler?
+  ( sleep 0.08; manage_window "$event" "$data" ) &
+  # 1. sleep 0.08: kleines Delay damit Hyprland den Zustand aktualisiert hat
+  # 2. (): Subshell isoliert die Ausführung
+  # 3. &: im Hintergrund — die Event-Schleife blockiert nicht!
+
+------------------------------------------------------------------------
+12.5  Übung 12
+------------------------------------------------------------------------
+
+Schreibe ein Skript hypr-logger.sh:
+- Verbinde dich mit dem Hyprland socket2.sock.
+- Schreibe alle Events mit Zeitstempel in eine Log-Datei /tmp/hypr_events.log.
+- Filtere dabei "mousemove"-Events heraus (zu viele).
+- Implementiere einen trap EXIT der die socat-Verbindung sauber schließt.
+
+
+================================================================================
+MODUL 13: Rofi-Integration und Skript-Architekturen
+================================================================================
+
+------------------------------------------------------------------------
+13.1  Wie Rofi mit Skripten kommuniziert
+------------------------------------------------------------------------
+
+Rofi kann externe Skripte als "modi" (Betriebsmodus) nutzen. Das ist
+ein raffiniertes IPC-System über stdout/stdin und Environment-Variablen:
+
+  rofi -show menu -modi "menu:/pfad/zum/skript.sh"
+
+Rofi ruft das Skript mehrfach auf:
+  1. Erster Aufruf (ROFI_RETV=0): Skript gibt Einträge aus.
+  2. Bei Auswahl (ROFI_RETV>0): Skript kriegt die Selektion als $1.
+
+Environment-Variablen von Rofi:
+  $ROFI_RETV   → 0=erster Aufruf, 1=Auswahl, 2=Auswahl+Enter, 10=Hotkey1...
+  $ROFI_INFO   → Info-String der beim ausgewählten Eintrag mitgegeben wurde
+
+------------------------------------------------------------------------
+13.2  Rofi-Protokoll — das Ausgabeformat
+------------------------------------------------------------------------
+
+Rofi versteht dieses spezielle Format für Einträge:
+
+  "Anzeigetext\0icon\x1fICON_NAME\x1finfo\x1fMEIN_INFO\n"
+
+  # \0   = Null-Byte: trennt Anzeigetext von Metadaten
+  # \x1f = ASCII 31 (Unit Separator): trennt Key und Value in Metadaten
+  # \n   = neue Zeile = neuer Eintrag
+
+  # Steueranweisungen (an Rofi selbst, kein Eintrag):
+  printf "\0prompt\x1fNeuer Prompt\n"    → Prompt-Text ändern
+  printf "\0no-custom\x1ffalse\n"        → Freie Eingabe erlauben/verbieten
+  printf "\0keep-selection\x1ftrue\n"    → Auswahl behalten
+
+Aus deinem app-menu.sh:
+  printf "← Zurück\0icon\x1fgo-previous\x1finfo\x1fback:\n"
+  # Anzeige: "← Zurück"
+  # icon: go-previous (System-Icon)
+  # info: "back:" → wird in $ROFI_INFO stehen wenn ausgewählt
+
+  printf "%s\0icon\x1f%s\x1finfo\x1fcmd:%s\n" "$name" "$icon" "$exec_cmd"
+  # Dynamisch: Name, Icon und Befehl eingesetzt mit printf %s
+
+------------------------------------------------------------------------
+13.3  State-Management zwischen Skript-Aufrufen
+------------------------------------------------------------------------
+
+Da Rofi das Skript neu aufruft für jeden Schritt, muss der Zustand
+(welcher Ordner bin ich gerade?) irgendwo gespeichert werden.
+Lösung: State-File.
+
+Aus deinem app-menu.sh:
+  STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
+
+  get_path() { [ -f "$STATE_FILE" ] && cat "$STATE_FILE" || echo "."; }
+  set_path() { echo "$1" > "$STATE_FILE"; }
+
+  # Navigation:
+  case "$type" in
+      dir)   set_path "$value" ;;
+      back)  set_path "${path%.*}" ;;  # ein Level hoch
+      cmd)   setsid bash -c "$value" >/dev/null 2>&1 &; exit 0 ;;
+      quit)  rm -f "$STATE_FILE"; exit 0 ;;
+  esac
+
+  # Reset bei sauberem Start:
+  start() {
+      rm -f "$STATE_FILE"
+      rofi -show menu -modi "menu:$SCRIPT_PATH" ...
+  }
+
+  # Entry-Point:
+  if [ -n "$ROFI_RETV" ]; then
+      run_mode "$1"   # Rofi hat uns aufgerufen
+  else
+      start           # Benutzer hat uns direkt aufgerufen
+  fi
+
+------------------------------------------------------------------------
+13.4  Cache-Strategien
+------------------------------------------------------------------------
+
+Desktop-Einträge aus hunderten .desktop-Dateien zu lesen ist langsam.
+Lösung: Cache mit Ablaufzeit.
+
+Aus deinem app-menu.sh:
+  CACHE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-desktop-cache"
+  CACHE_MAX_AGE=120    # Sekunden
+
+  is_cache_valid() {
+      [ -f "$CACHE_FILE" ] || return 1
+      local now mod age
+      now=$(date +%s)                                  # aktuelle Zeit in Sekunden
+      mod=$(stat -c %Y "$CACHE_FILE" 2>/dev/null) || return 1  # Änderungszeit der Datei
+      age=$((now - mod))                               # Alter in Sekunden
+      [ "$age" -lt "$CACHE_MAX_AGE" ]                  # true wenn jung genug
+  }
+
+  # stat -c %Y: gibt Änderungszeit als Unix-Timestamp (Sekunden seit 1970)
+  # date +%s: aktuelle Zeit als Unix-Timestamp
+  # Differenz = Alter in Sekunden
+
+  # Cache im Hintergrund auffrischen wenn nötig:
+  if [ -z "$ROFI_RETV" ] && ! is_cache_valid; then
+      build_desktop_cache &   # ← im Hintergrund!
+  fi
+
+------------------------------------------------------------------------
+13.5  Übung 13
+------------------------------------------------------------------------
+
+Baue ein vereinfachtes Rofi-Skript rofi-workspaces.sh:
+- Zeige alle Hyprland-Workspaces als Rofi-Einträge (hyprctl workspaces -j).
+- Wenn ein Workspace ausgewählt wird, wechsle dorthin.
+- Füge einen "Neuer Workspace"-Eintrag ein.
+- Nutze Cache mit 30 Sekunden Ablaufzeit für die Workspace-Liste.
+
+
+================================================================================
+MODUL 14: Fortgeschrittene Patterns und Architektur
+================================================================================
+
+------------------------------------------------------------------------
+14.1  Das Dispatcher/Handler Pattern
+------------------------------------------------------------------------
+
+Viele deiner Skripte folgen einem klaren Muster:
+1. Eingabe entgegennehmen (Argumente, Umgebung, Events).
+2. Entscheiden was zu tun ist (case, if, Lookup-Table).
+3. Aktion ausführen (Funktion, Befehl, Signal).
+
+In SingleScreenLayout.sh:
+  case "$event" in
+      openwindow)  handler_open "$data" ;;
+      workspace)   handler_ws "$data" ;;
+  esac
+
+In popup-toggle.sh:
+  case "$POPUP" in
+      volume)    SCRIPT="...volume-popup.py" ;;
+      ...
+  esac
+  # Lookup-Table: Eingabe → Ressource
+
+In power-menu.sh:
+  case "$chosen" in
+      Shutdown) systemctl poweroff ;;
+      ...
+  esac
+
+------------------------------------------------------------------------
+14.2  Idempotenz — Skripte die man mehrfach aufrufen kann
+------------------------------------------------------------------------
+
+Ein idempotentes Skript kann man mehrfach aufrufen und es hat beim
+zweiten Mal die gleiche Wirkung wie beim ersten. Das ist gut bei
+Setup- und Konfigurations-Skripten.
+
+  # Nicht idempotent:
+  echo "Zeile" >> datei.txt   # jeder Aufruf fügt eine Zeile hinzu
+
+  # Idempotent:
+  grep -qF "Zeile" datei.txt || echo "Zeile" >> datei.txt
+  # Nur hinzufügen wenn noch nicht vorhanden
+
+  # Nicht idempotent:
+  mkdir neuer_ordner   # Fehler beim zweiten Aufruf
+
+  # Idempotent:
+  mkdir -p neuer_ordner   # -p: kein Fehler wenn schon vorhanden
+
+  # Nicht idempotent:
+  ln -s quelle ziel   # Fehler wenn Symlink schon existiert
+
+  # Idempotent:
+  ln -sf quelle ziel  # -f: überschreibt bestehenden Symlink
+
+Aus deinem wallpaper.sh:
+  ln -sf "$RANDOM_PIC" "$DIR/current_wallpaper"
+  # -sf macht das idempotent — beliebig oft aufrufbar
+
+------------------------------------------------------------------------
+14.3  Lock-Files — Race Conditions vermeiden
+------------------------------------------------------------------------
+
+Wenn ein Skript mehrfach parallel gestartet werden kann (z.B. durch
+Hotkey), braucht man manchmal einen Mutex (Gegenseitiger Ausschluss):
+
+  LOCK_FILE="/tmp/mein_skript.lock"
+
+  # Einfaches Lock (hat Race-Condition wenn sehr gleichzeitig):
+  if [ -f "$LOCK_FILE" ]; then
+      echo "Läuft bereits"
+      exit 1
+  fi
+  touch "$LOCK_FILE"
+  trap "rm -f '$LOCK_FILE'" EXIT
+  # ... Arbeit ...
+
+  # Atomares Lock mit flock (besser, kein Race-Condition):
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || { echo "Läuft bereits"; exit 1; }
+  # flock ist atomar: Lock-Datei öffnen und sperren in einem Schritt
+
+------------------------------------------------------------------------
+14.4  Config-Dateien lesen und schreiben
+------------------------------------------------------------------------
+
+  # INI-Stil lesen:
+  while IFS='=' read -r key value; do
+      [[ "$key" =~ ^[[:space:]]*# ]] && continue  # Kommentare überspringen
+      [[ -z "$key" ]] && continue                  # Leerzeilen überspringen
+      key="${key// /}"                              # Leerzeichen entfernen
+      value="${value//\"}"                          # Anführungszeichen entfernen
+      declare -g "CONFIG_${key^^}=$value"           # Als Variable speichern
+  done < "$CONFIG_FILE"
+
+  echo "$CONFIG_HOST"    # → was in config stand: host=localhost
+
+  # JSON-Config mit jq:
+  CONFIG=$(cat "$CONFIG_FILE")
+  HOST=$(echo "$CONFIG" | jq -r '.host')
+  PORT=$(echo "$CONFIG" | jq -r '.port // 8080')  # mit Default
+
+------------------------------------------------------------------------
+14.5  Testen von Shell-Skripten
+------------------------------------------------------------------------
+
+Es gibt keine standard-Test-Framework für Bash, aber Muster:
+
+  # Einfache Tests:
+  assert() {
+      local erwartet="$1"
+      local tatsaechlich="$2"
+      local beschreibung="$3"
+      if [[ "$erwartet" == "$tatsaechlich" ]]; then
+          echo "✓ $beschreibung"
+      else
+          echo "✗ $beschreibung"
+          echo "  Erwartet:    $erwartet"
+          echo "  Tatsächlich: $tatsaechlich"
+          return 1
+      fi
+  }
+
+  # Test einer Funktion:
+  source ./brightness-status.sh  # Funktionen importieren
+  result=$(get_icon 20)
+  assert "󰃞" "$result" "get_icon unter 34 gibt dunkles Icon"
+
+  result=$(get_icon 50)
+  assert "󰃟" "$result" "get_icon 34-66 gibt mittleres Icon"
+
+  # BATS (Bash Automated Testing System) — echter Test-Framework:
+  # https://github.com/bats-core/bats-core
+
+------------------------------------------------------------------------
+14.6  Performance-Tipps
+------------------------------------------------------------------------
+
+Shell-Skripte sind langsam für intensive Berechnungen, aber schnell für
+Prozess-Orchestrierung. Trotzdem gibt es Optimierungen:
+
+  # Langsam: externe Tools in Schleifen aufrufen
+  for i in {1..1000}; do
+      echo "$(date)"   # 1000 date-Aufrufe = 1000 Prozesse
+  done
+
+  # Schnell: einmal aufrufen
+  DATE=$(date)
+  for i in {1..1000}; do
+      echo "$DATE"
+  done
+
+  # Langsam: cat + pipe
+  cat datei.txt | grep "muster"
+
+  # Schnell: direkte Umleitung
+  grep "muster" < datei.txt
+  grep "muster" datei.txt     # noch einfacher
+
+  # Bash-intern statt externe Tools (wenn möglich):
+  # Statt: echo "$STR" | tr '[:upper:]' '[:lower:]'
+  echo "${STR,,}"   # bash-interne Kleinschreibung
+
+  # Cache teurer Operationen:
+  # Statt bei jedem Schleifendurchlauf hyprctl aufzurufen:
+  clients_json=$(hyprctl clients -j)  # einmal
+  for addr in ...; do
+      echo "$clients_json" | jq ...  # JSON wiederverwenden
+  done
+
+  # Aus SingleScreenLayout.sh:
+  local clients_json
+  clients_json=$(hyprctl clients -j)   # einmal abrufen
+  # dann mehrfach mit jq verarbeiten — kein weiterer hyprctl-Aufruf
+
+------------------------------------------------------------------------
+14.7  Abschlussübung
+------------------------------------------------------------------------
+
+Kombiniere alles Gelernte in einem Skript workspace-daemon.sh:
+- Verbindet sich mit dem Hyprland Socket (wie SingleScreenLayout.sh).
+- Reagiert auf Workspace-Wechsel Events.
+- Bei Wechsel: logge den Event mit Zeitstempel.
+- Wenn auf Workspace 1 oder 2 gewechselt wird: rufe wallpaper.sh auf.
+- Implementiere idempotentes Start/Stop: Lock-File, trap EXIT zum Aufräumen.
+- Schreibe eine is_running()-Funktion die per PID-Datei prüft ob der
+  Daemon läuft.
+- Das Skript wird mit start/stop/status aufgerufen.
+
+
+================================================================================
+SCHNELLREFERENZ — Die wichtigsten Dinge auf einen Blick
+================================================================================
+
+SHEBANG:       #!/bin/bash  (immer, auch wenn auf Ubuntu /bin/sh === dash)
+VARIABLEN:     NAME="wert" (kein Leerzeichen), "$NAME" (immer quoten!)
+ARITHMETIK:    $(( 3 + 4 )), (( VAR++ )), awk/bc für Fließkomma
+QUOTING:       "double" für Variablen, 'single' für literal, $'...' für Escapes
+BEDINGUNGEN:   [[ ]] (modern), (( )) für Zahlen, [ ] nur POSIX-nötig
+TESTS:         -f file, -d dir, -z leer, -n nicht-leer, -e existiert, -x ausführbar
+CASE:          case "$VAR" in muster) ;; esac — für Menüs, Argumente
+ARRAYS:        ARRAY=("a" "b"), "${ARRAY[@]}", "${#ARRAY[@]}", mapfile < <(...)
+ASSOC ARRAYS:  declare -A MAP; MAP["key"]="val"; "${!MAP[@]}" für Keys
+FUNKTIONEN:    func() { local VAR; ... }, Rückgabe via echo + $(), return 0/1
+SCOPE:         Immer local in Funktionen — sonst globale Seiteneffekte!
+PIPES:         cmd1 | cmd2 — stdout→stdin, in Subshell
+UMLEITUNG:     >, >>, <, 2>, 2>&1, &>/dev/null, <<< "string"
+PROCESS SUB:   <(cmd) als "Datei", < <(cmd) für while-Schleifen (Subshell-safe!)
+REGEX:         [[ "$s" =~ ^regex$ ]], ${BASH_REMATCH[1]} für Gruppen
+STRING-OPS:    ${#STR} Länge, ${STR:N:L} Sub, ${STR//alt/neu} Ersetzen
+               ${STR#muster} ${STR##muster} Prefix, ${STR%muster} Suffix
+               ${STR,,} klein, ${STR^^} groß
+DEFAULTS:      ${VAR:-default}, ${VAR:=setzen}, ${VAR:?fehler}
+SED:           sed 's/alt/neu/g', sed -E für Extended Regex, sed -i für Datei
+AWK:           awk '{print $2}', awk -F: für Trennzeichen, awk 'NR>1{summe+=$3}'
+JQ:            jq -r '.field', jq '.[] | select(.x==y)', jq -e für Exit-Code
+SIGNALE:       trap "cleanup" EXIT INT TERM, kill -SIGNAL PID, pkill -f "name"
+BACKGROUND:    befehl &, PID=$!, wait, setsid für echte Entkopplung
+FEHLER:        set -euo pipefail, || { echo; exit 1; }, if cmd; then...
+DEBUG:         set -x, bash -x skript.sh, bash -n für Syntax, shellcheck
+SOCKET:        socat -U - "UNIX-CONNECT:/pfad/socket.sock"
+ROFI:          $ROFI_RETV, $ROFI_INFO, printf "text\0icon\x1fname\x1finfo\x1fwert\n"
+CACHE:         stat -c %Y für Dateialter, date +%s für Unix-Timestamp
+LOCK:          flock -n 9, exec 9>"lockfile"
+IDEMPOTENZ:    mkdir -p, ln -sf, grep || echo >>
+
+
+================================================================================
+QUELLEN FÜR WEITERES LERNEN
+================================================================================
+
+Bash Reference Manual (offizielle Doku):
+  https://www.gnu.org/software/bash/manual/bash.html
+
+Advanced Bash-Scripting Guide (sehr ausführlich, viele Beispiele):
+  https://tldp.org/LDP/abs/html/
+
+shellcheck (Linter, unbedingt nutzen):
+  https://www.shellcheck.net  /  apt install shellcheck
+
+Explainshell (erklärt jeden Befehl per UI):
+  https://explainshell.com
+
+jq Manual:
+  https://jqlang.github.io/jq/manual/
+
+Hyprland Wiki (für Socket/IPC):
+  https://wiki.hyprland.org/IPC/
+
+BATS (Bash Automated Testing System):
+  https://github.com/bats-core/bats-core
+
+The Art of Command Line (GitHub):
+  https://github.com/jlevy/the-art-of-command-line
+
+
+================================================================================
+Ende des Kurses
+================================================================================
+
+Dieser Kurs wurde speziell für TrafkHop Entertainment erstellt, basierend
+auf den tatsächlich vorhandenen Skripten (autohide.sh, app-menu.sh,
+brightness-status.sh, hideAll.sh, pipToggle.sh, popup-toggle.sh,
+power-menu.sh, SingleScreenLayout.sh, wallpaper.sh).
+
+Du schreibst bereits echten, fortgeschrittenen Code. Jetzt weißt du warum
+er funktioniert — und wie du ihn noch robuster, lesbarer und schneller
+machen kannst.
+
+//Copyright © 2026 TrafkHop Entertainment™, all rights reserved. — Kurs erstellt mit Unterstützung von Claude (Anthropic)

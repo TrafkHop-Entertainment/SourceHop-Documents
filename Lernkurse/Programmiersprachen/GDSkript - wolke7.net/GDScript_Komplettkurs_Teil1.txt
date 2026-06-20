@@ -1,0 +1,1179 @@
+================================================================================
+GDSCRIPT KOMPLETTKURS — GODOT 4 EDITION (Teil 1 von 4)
+================================================================================
+
+
+VORWORT — Was dich erwartet
+================================================================================
+
+Dieser Kurs bringt dir GDScript von Null auf Profi-Level. Du lernst nicht
+nur die Sprache — du lernst, wie du damit echte Spiele baust: Open-World-RPGs,
+Minecraft-Klone, Physics-Platformer wie Human: Fall Flat, und mehr.
+
+GDScript ist Godots eigene Skriptsprache. Sie ist Python-ähnlich (einrückungsbasiert,
+dynamisch typisiert), aber komplett auf Spieleentwicklung ausgelegt. Kein semicolon,
+kein {}, keine langen Klassen-Deklarationen — stattdessen kompakter, lesbarer Code
+der direkt mit Godots Engine kommuniziert.
+
+WARUM GDSCRIPT UND NICHT C#?
+  GDScript ist tighter in die Engine integriert: Auto-Vervollständigung
+  für alle Nodes, Signal-Verbindungen, Annotations (@export, @onready) —
+  alles funktioniert ohne Boilerplate. Für einen Solo-Entwickler oder
+  kleines Team ist GDScript die bessere Wahl. C# ist nur relevant wenn du
+  ein riesiges Team mit bestehender C#-Codebasis hast oder extreme
+  Performance-Kritikalität brauchst (seltener als du denkst).
+
+WAS DIESE KURSSERIE ABDECKT:
+
+  TEIL 1 — GDSCRIPT GRUNDLAGEN                          (Module 1–5)
+    1  Godot & GDScript — wie alles zusammenhängt
+    2  Variablen, Typen und Operatoren
+    3  Kontrollfluss — if, match, Schleifen
+    4  Funktionen — Verhalten kapseln
+    5  Nodes und Szenen — das Herzstück von Godot
+
+  TEIL 2 — BEWEGUNG, PHYSIK UND INPUT                   (Module 6–10)
+    6  Input-System — Tastatur, Maus, Controller
+    7  CharacterBody2D & 3D — Spieler-Bewegung
+    8  RigidBody & Physics — realistische Physik
+    9  Kollision, Areas und Trigger
+   10  Animationen — AnimationPlayer & AnimationTree
+
+  TEIL 3 — SPIELSYSTEME UND DATEN                       (Module 11–15)
+   11  Signals — das Event-System von Godot
+   12  Resources — Daten sauber strukturieren
+   13  Gruppen, Szenen-Wechsel und Autoloads
+   14  Inventory, Stats und Spieler-Daten (Speichern/Laden)
+   15  Prozedurale Generierung — Welten erschaffen
+
+  TEIL 4 — FORTGESCHRITTEN & PROJEKTREIF               (Module 16–22)
+   16  3D-Welt und Terrain
+   17  Shaders aus GDScript ansteuern
+   18  Navigation und KI
+   19  Multiplayer-Grundlagen
+   20  Performance und Optimierung
+   21  Plugin- und Tool-Skripte
+   22  Abschlussprojekte: RPG, Minecraft-Klon, Platformer
+
+Wie du den Kurs benutzt: Jedes Modul endet mit einer ÜBUNG. Lege dir einen
+Ordner "gdscript-kurs" an und für jede Übung ein eigenes Godot-Projekt. Du
+kannst klein anfangen (ein Node, ein Skript) — du wirst schnell merken, wie
+viel mit wenig Code möglich ist.
+
+
+################################################################################
+TEIL 1 — GDSCRIPT GRUNDLAGEN
+################################################################################
+
+
+================================================================================
+MODUL 1: Godot & GDScript — wie alles zusammenhängt
+================================================================================
+
+Bevor wir in die Syntax einsteigen: Was ist Godot überhaupt, wie hängen
+Engine, Szenen, Nodes und GDScript zusammen — und was unterscheidet das
+von normaler Programmierung?
+
+------------------------------------------------------------------------
+1.1  Die Node-Architektur — alles ist ein Baum
+------------------------------------------------------------------------
+
+Godot denkt in Szenen und Nodes. Ein Node ist das kleinste Baustein-Element:
+ein Sprite, eine Kamera, ein Kollisions-Körper, ein Timer. Jede Szene ist
+ein Baum aus Nodes. Und Szenen können in andere Szenen eingebettet werden
+(als "Instanzen").
+
+  Szene: Spieler
+  └── CharacterBody2D        ← der eigentliche Körper
+      ├── Sprite2D            ← das Bild
+      ├── CollisionShape2D    ← die Hitbox
+      └── Camera2D            ← Kamera folgt dem Spieler
+
+Diese Baumstruktur ist keine willkürliche Design-Entscheidung:
+  - Jeder Node erbt Transformationen vom Eltern-Node
+  - Du kannst komplexe Szenen als Prefabs speichern und beliebig instanzieren
+  - Die Engine weiß immer, in welcher Beziehung Nodes zueinander stehen
+
+GDScript kommt ins Spiel, wenn du einem Node Verhalten geben willst. Du
+"attachst" ein Skript an einen Node — und dieses Skript beschreibt, was
+dieser Node TUT. Der Sprite alleine bewegt sich nicht. Erst das Skript
+am CharacterBody2D macht den Spieler steuerbar.
+
+------------------------------------------------------------------------
+1.2  Dein erstes Skript — Aufbau und Pflichtteile
+------------------------------------------------------------------------
+
+Erstelle ein neues Godot 4 Projekt, füge einen Node2D hinzu und hänge
+ein neues Skript dran. Godot generiert automatisch:
+
+  extends Node2D
+
+  # Called when the node enters the scene tree for the first time.
+  func _ready() -> void:
+      pass # Replace with function body.
+
+  # Called every frame. 'delta' is the elapsed time since the previous frame.
+  func _process(delta: float) -> void:
+      pass
+
+Zeile für Zeile:
+
+  extends Node2D
+    → Dieses Skript erweitert den Node-Typ Node2D. Das bedeutet: alle
+      Eigenschaften und Methoden von Node2D stehen dir zur Verfügung.
+      Hängst du das Skript an einen Sprite2D, schreibst du extends Sprite2D.
+      WICHTIG: extends muss immer zum Node passen, an dem das Skript hängt.
+
+  # Kommentare beginnen mit #
+    → Genau wie in Bash/Python. Es gibt keine /* */ Multi-Line-Kommentare.
+
+  func _ready() -> void:
+    → _ready() wird einmal aufgerufen, wenn der Node in die Szene geladen
+      wurde. Hier initialisierst du alles: Variablen, Verbindungen, etc.
+      Der -> void sagt: diese Funktion gibt nichts zurück. (Optional, aber
+      guter Stil.)
+
+  func _process(delta: float) -> void:
+    → _process() wird JEDEN FRAME aufgerufen. Bei 60 FPS also 60x pro Sekunde.
+      Das delta ist die Zeit seit dem letzten Frame (in Sekunden, meistens ~0.016
+      bei 60 FPS). Bewegungen multiplizierst du immer mit delta — sonst läuft
+      das Spiel auf schnelleren Maschinen schneller als auf langsamen.
+
+Schreib deinen ersten eigenen Code:
+
+  extends Node2D
+
+  func _ready() -> void:
+      print("Hallo Godot!")
+      print("Dieser Node heißt: ", name)
+
+  func _process(delta: float) -> void:
+      pass
+
+Drück F5 (oder den Play-Knopf) — in der Ausgabe-Konsole unten siehst du
+"Hallo Godot!" und den Namen des Nodes.
+
+------------------------------------------------------------------------
+1.3  Wie Godot dein Skript aufruft — der Lebenszyklus
+------------------------------------------------------------------------
+
+Godot ruft bestimmte Funktionen automatisch auf — das nennt man "virtuelle
+Methoden" (du erkennst sie am führenden _). Die wichtigsten:
+
+  _ready()
+    → Node ist im Baum, Kinder sind auch bereit. Einmaliger Start-Code.
+      Vergleich mit JavaScript: DOMContentLoaded-Event.
+
+  _process(delta)
+    → Läuft jeden Frame. Für Spieler-Input, Kamera, GUI-Updates.
+      NICHT für Physik — dafür gibt es _physics_process.
+
+  _physics_process(delta)
+    → Läuft mit fixierter Rate (Standard: 60 Hz, einstellbar in Projekteinstellungen).
+      Hier gehört Physik-Code, Bewegung von PhysicsBodies.
+      Warum separat? Damit Physik framerate-unabhängig bleibt.
+
+  _input(event)
+    → Wird aufgerufen wenn irgendein Input-Event passiert (Taste, Maus, ...).
+      Für präzisen Einzelschuss-Input besser als _process.
+
+  _unhandled_input(event)
+    → Wie _input, aber nur wenn der Input nicht schon von der UI konsumiert wurde.
+      Standard für Spieler-Input: GUI sollte Priorität haben.
+
+  _exit_tree()
+    → Node wird aus dem Baum entfernt. Cleanup-Code gehört hierher.
+
+Typische Reihenfolge beim Starten:
+  1. _ready() auf dem Wurzel-Node
+  2. _ready() auf allen Kind-Nodes (von oben nach unten im Baum)
+  3. Ab jetzt: pro Frame _process() und _physics_process()
+
+HÄUFIGER FEHLER: In _ready() auf ein Kind zugreifen, das noch nicht ready ist.
+  Das passiert nicht — Godot ruft _ready() bottom-up auf. Kinder sind fertig
+  bevor ihre Eltern.
+
+------------------------------------------------------------------------
+1.4  Die Godot-Konsole und print() — dein Debug-Werkzeug
+------------------------------------------------------------------------
+
+print() ist dein bester Freund beim Entwickeln:
+
+  print("Hallo")                    → Hallo
+  print("Position: ", position)     → Position: (100, 200)
+  print("Wert: ", 3 + 4)            → Wert: 7
+  printerr("Das ist ein Fehler!")   → Rote Ausgabe
+  push_warning("Achtung!")          → Gelbe Warnung (auch im Editor sichtbar)
+  push_error("Kritischer Fehler!")  → Roter Fehler mit Stack-Trace
+
+Für komplexere Debug-Ausgaben gibt es auch:
+  print_rich("[color=red]Fehler![/color]")   → Farbige Ausgabe (BBCode)
+  print_debug("Nur im Debug-Build")          → Wird in Export-Builds entfernt
+
+TIPP: In Godot 4 gibt es auch den integrierten Debugger (unten im Editor):
+Breakpoints setzen, Variablen überwachen, Stack-Traces lesen — viel mächtiger
+als nur print(). Klick auf eine Zeilennummer links neben dem Code.
+
+------------------------------------------------------------------------
+1.5  Das Inspector-Panel — Variablen im Editor bearbeiten
+------------------------------------------------------------------------
+
+Eine der mächtigsten Godot-Features: Du kannst Variablen aus deinem Skript
+direkt im Inspektor sichtbar und editierbar machen — ohne Code neu zu starten.
+Dafür gibt es die @export-Annotation:
+
+  extends Node2D
+
+  @export var speed: float = 200.0
+  @export var health: int = 100
+  @export var player_name: String = "Held"
+
+Diese Variablen tauchen jetzt als Felder im Inspector-Panel auf (rechts im
+Godot-Editor). Du kannst sie per Drag & Drop oder Texteingabe verändern —
+der Wert im Skript wird überschrieben, ohne dass du den Code anfassen musst.
+
+Das ist nicht nur Komfort: Es erlaubt dir, verschiedene Schwierigkeitsgrade,
+verschiedene Feind-Typen, verschiedene Level-Parameter — alles als Szenen mit
+unterschiedlichen Inspector-Werten — zu erstellen, OHNE Code-Duplikate.
+
+Beispiel: Feind-Szene. Die Basis-Szene hat einen Feind. Speed im Inspector
+auf 100. Du instanzierst die Szene dreimal — und setzt Speed auf 100, 200, 300.
+Drei verschiedene Feinde, ein einziger Code.
+
+--------------------------------------------------------------------------------
+ÜBUNG 1:
+1. Erstelle ein neues Godot 4 Projekt ("uebung_01").
+2. Füge der Hauptszene einen Node2D hinzu, nenne ihn "SpielWelt".
+3. Hänge ein neues Skript dran. Schreib in _ready(): print() mit deinem Namen
+   und der aktuellen Zeit (Time.get_time_string_from_system()).
+4. Füge @export var botschaft: String = "Hallo Welt" hinzu.
+   Ändere den Wert im Inspector und beobachte die Ausgabe.
+5. Füge einen Label-Node als Kind hinzu. Setze in _ready() per Code:
+   $Label.text = botschaft
+   (Das $-Zeichen ist der Node-Pfad-Zugriff — dazu mehr in Modul 5.)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 2: Variablen, Typen und Operatoren
+================================================================================
+
+GDScript ist dynamisch typisiert — wie Python. Du KANNST Typen angeben
+(und solltest es!), musst es aber nicht. Die Angabe von Typen macht
+deinen Code schneller und fehlerresistenter.
+
+------------------------------------------------------------------------
+2.1  Variablen deklarieren — var, const, @export
+------------------------------------------------------------------------
+
+  var leben: int = 3
+  var geschwindigkeit: float = 200.0
+  var spieler_name: String = "Aria"
+  var ist_am_boden: bool = false
+  var richtung: Vector2 = Vector2.ZERO
+
+Typ-Inferenz (der Typ wird automatisch erkannt):
+  var score := 0           # Godot erkennt: das ist ein int
+  var name := "Klaus"      # String
+  var pos := Vector2(10, 20)  # Vector2
+
+Das := (Walrus-Operator) bedeutet: "deklariere UND erkenne den Typ".
+Benutze es, wenn der Typ aus dem Kontext klar ist.
+
+Konstanten — können nicht geändert werden:
+  const MAX_LEBEN: int = 10
+  const SCHWERKRAFT: float = 980.0
+  const SPIELNAME: String = "Epic Dungeons"
+
+Konstanten sind KONVENTION nach GROSS_MIT_UNTERSTRICH. Sie werden beim
+Start einmal festgelegt und sind dann unveränderlich — der Compiler kann
+sie optimieren.
+
+@export — sichtbar im Inspector (aus Modul 1):
+  @export var schaden: int = 25
+  @export var farbe: Color = Color.RED
+  @export var szene: PackedScene   # ein Szenen-Asset auswählen
+
+@export_range — mit Min/Max/Step für den Inspector:
+  @export_range(0, 100, 1) var health: int = 100
+
+@export_enum — Dropdown im Inspector:
+  @export_enum("Krieger", "Magier", "Schurke") var klasse: int = 0
+
+------------------------------------------------------------------------
+2.2  Die wichtigsten Typen
+------------------------------------------------------------------------
+
+INT — Ganzzahlen:
+  var punkte: int = 0
+  var schaden: int = -15    # negativ ist erlaubt
+  var hex: int = 0xFF       # Hexadezimal
+  var binaer: int = 0b1010  # Binär
+
+FLOAT — Kommazahlen:
+  var speed: float = 3.14
+  var kleine_zahl: float = 1e-4   # Wissenschaftliche Notation: 0.0001
+  var grosse: float = 1.5e6       # 1.500.000
+
+  ACHTUNG: Floats haben Genauigkeitsprobleme — das ist Mathematik, nicht
+  Godot-Bug. 0.1 + 0.2 ergibt nicht exakt 0.3. Für Geld/Punkte: int benutzen.
+  Für Vergleiche mit Floats: is_equal_approx(a, b) statt a == b.
+
+BOOL — Wahrheitswerte:
+  var ist_tot: bool = false
+  var hat_schlussel: bool = true
+  # In Godot 4: true/false (kleingeschrieben), nicht True/False wie Python
+
+STRING — Text:
+  var name: String = "Spieler 1"
+  var pfad: String = "res://assets/sprites/held.png"
+
+  String-Formatierung (f-string-Style):
+    var hp := 75
+    var text := "HP: %d / 100" % hp         # klassisch: HP: 75 / 100
+    var text2 := "HP: %s / %s" % [hp, 100]  # mehrere Werte mit Array
+
+  Nützliche String-Methoden:
+    "hallo".to_upper()           → "HALLO"
+    "HALLO".to_lower()           → "hallo"
+    "hallo welt".split(" ")      → ["hallo", "welt"]
+    " hallo ".strip_edges()      → "hallo"
+    "spieler_1".begins_with("s") → true
+    "hello world".find("world")  → 6  (Index, -1 wenn nicht gefunden)
+    str(42)                      → "42"  (Zahl zu String)
+    int("42")                    → 42   (String zu Zahl)
+
+STRINGNAME — optimierte Strings für interne Namen:
+  var aktion: StringName = &"springen"
+  # StringName ist für häufige String-Vergleiche viel effizienter.
+  # Benutze es für Signal-Namen, Animations-Namen, Gruppen.
+
+------------------------------------------------------------------------
+2.3  Godot-spezifische Typen — das Herzstück
+------------------------------------------------------------------------
+
+Diese Typen existieren nur in Godot und sind das, womit du täglich arbeitest:
+
+VECTOR2 — 2D-Position/Richtung:
+  var pos: Vector2 = Vector2(100, 200)
+  var oben: Vector2 = Vector2.UP       # (0, -1) — in Godot zeigt Y nach unten!
+  var unten: Vector2 = Vector2.DOWN    # (0, 1)
+  var null_v: Vector2 = Vector2.ZERO   # (0, 0)
+
+  Wichtige Vector2-Operationen:
+    pos + Vector2(10, 0)         # Bewegung nach rechts
+    pos.length()                 # Länge des Vektors (Pythagoras)
+    pos.normalized()             # Gleiche Richtung, aber Länge = 1
+    pos.distance_to(ziel)        # Abstand zu einem anderen Punkt
+    pos.angle_to(ziel)           # Winkel zum Ziel (in Radiant)
+    pos.lerp(ziel, 0.1)          # Smooth interpolation (weich überblenden)
+    pos.dot(other)               # Skalarprodukt (für Winkel/Projektion)
+
+  WICHTIG: Godots Y-Achse zeigt NACH UNTEN. (0,0) ist oben links.
+  Vector2.UP = (0,-1). Das ist anders als in der Schulmathematik!
+
+VECTOR3 — 3D-Position/Richtung:
+  var pos3d: Vector3 = Vector3(10, 0, -5)
+  var nach_vorne: Vector3 = Vector3.FORWARD   # (0, 0, -1)
+  # Alle Vector2-Operationen gibt es auch für Vector3:
+  pos3d.length()
+  pos3d.normalized()
+  pos3d.cross(anderer_vector)   # Kreuzprodukt (senkrechter Vektor)
+
+VECTOR2I / VECTOR3I — Ganzzahl-Vektoren:
+  var tile_pos: Vector2I = Vector2I(3, 7)
+  # Für Tile-Maps, Grid-basierte Spiele — kein Float-Rundungsproblem.
+
+RECT2 — Rechteck (2D):
+  var box: Rect2 = Rect2(Vector2(0,0), Vector2(100, 50))
+  # box.position = (0,0), box.size = (100,50)
+  box.has_point(Vector2(50, 25))  # → true (Punkt im Rechteck?)
+  box.intersects(andere_box)      # → true/false (Überschneidung?)
+
+COLOR — Farben:
+  var rot: Color = Color.RED
+  var blau: Color = Color(0.0, 0.0, 1.0)          # RGB 0.0-1.0
+  var gruen: Color = Color(0, 255, 0, 255)  # RGBA 0-255 (mit from_rgba8)
+  var halb_transparent: Color = Color(1, 1, 1, 0.5)  # weißes 50% Alpha
+
+  Color.from_html("#ff6600")       # Aus Hex-String
+  farbe.lerp(andere_farbe, 0.5)    # Farbe mischen
+
+NODE PATH — Pfad zu einem Node:
+  var pfad: NodePath = NodePath("Spieler/Sprite2D")
+  # Dazu mehr in Modul 5.
+
+------------------------------------------------------------------------
+2.4  Arrays und Dictionaries
+------------------------------------------------------------------------
+
+ARRAY — geordnete Liste:
+  var inventar: Array = ["Schwert", "Schild", "Trank"]
+  var zahlen: Array[int] = [1, 2, 3, 4, 5]   # typisiertes Array (Godot 4!)
+
+  inventar.append("Bogen")           # Am Ende hinzufügen
+  inventar.push_front("Dolch")       # Am Anfang hinzufügen
+  inventar.pop_back()                # Letztes Element entfernen und zurückgeben
+  inventar.remove_at(0)              # Element an Index 0 entfernen
+  inventar.size()                    # Anzahl Elemente
+  inventar.has("Schwert")            # → true/false
+  inventar.sort()                    # Alphabetisch/numerisch sortieren
+  inventar.shuffle()                 # Zufällig durchmischen
+  inventar[0]                        # Zugriff per Index (nullbasiert)
+  inventar[-1]                       # Letztes Element (negativer Index!)
+
+  Array iterieren:
+    for gegenstand in inventar:
+        print(gegenstand)
+
+  Array von hinten durchlaufen:
+    for i in range(inventar.size() - 1, -1, -1):
+        print(inventar[i])
+
+DICTIONARY — Schlüssel-Wert-Paare:
+  var stats: Dictionary = {
+      "hp": 100,
+      "mana": 50,
+      "staerke": 15
+  }
+
+  stats["hp"]              # Wert lesen
+  stats["hp"] = 80         # Wert setzen
+  stats.get("gold", 0)     # Lesen mit Fallback-Wert (safe!)
+  stats.has("hp")          # → true
+  stats.keys()             # → ["hp", "mana", "staerke"]
+  stats.values()           # → [100, 50, 15]
+  stats.erase("mana")      # Schlüssel entfernen
+
+  Dictionary iterieren:
+    for schluessel in stats:
+        print(schluessel, ": ", stats[schluessel])
+
+  TIPP: Für Spieler-Stats, Item-Daten, Konfigurationen — Dictionary ist
+  ideal wenn die Struktur variabel ist. Für feste, effiziente Strukturen:
+  besser eine Klasse oder Resource (Modul 12).
+
+------------------------------------------------------------------------
+2.5  Operatoren
+------------------------------------------------------------------------
+
+Arithmetik:
+  +   -   *   /   %   (Modulo)
+  **  (Potenz: 2 ** 10 = 1024)
+
+  Ganzzahl-Division:
+    10 / 3    → 3.333... (float, wenn einer der Operanden float)
+    10 / 3    → 3        (int, wenn BEIDE int — kein Komma!)
+    10 % 3    → 1        (Rest)
+
+Vergleiche:
+  ==   !=   <   >   <=   >=
+  is   (Typ-Prüfung: node is Sprite2D)
+
+Logik:
+  and   or   not   (NICHT &&, ||, ! — das ist Python-Style!)
+  &&    ||    !     (funktioniert auch, aber and/or ist bevorzugt)
+
+Zuweisungs-Operatoren:
+  x += 5     # x = x + 5
+  x -= 3     # x = x - 3
+  x *= 2     # x = x * 2
+  x /= 4     # x = x / 4
+  x %= 3     # x = x % 3
+
+  ACHTUNG: Es gibt kein ++ oder -- in GDScript! Immer x += 1 / x -= 1.
+
+Bit-Operatoren (für Flags, Masken):
+  &    Bitweises AND
+  |    Bitweises OR
+  ^    Bitweises XOR
+  ~    Bitweises NOT
+  <<   Links-Shift
+  >>   Rechts-Shift
+
+  Nützlich z.B. für Kollisions-Layer: layer = 1 << 3  (Layer 4 an)
+
+Ternärer Operator:
+  var text := "lebendig" if leben > 0 else "tot"
+  # Kurzschreibweise für einfache if/else-Zuweisungen
+
+null — kein Wert:
+  var ziel: Node = null
+  if ziel == null:
+      print("Kein Ziel gesetzt")
+  if not is_instance_valid(ziel):
+      print("Node existiert nicht mehr")  # sicherer als == null!
+
+--------------------------------------------------------------------------------
+ÜBUNG 2:
+1. Erstelle ein Skript mit diesen Variablen:
+     - spieler_name (String, @export)
+     - hp und max_hp (int, @export_range 1-200)
+     - inventar (Array[String], mindestens 3 Items)
+     - stats (Dictionary mit "staerke", "geschick", "magie")
+2. In _ready(): Gib alle Stats formatiert aus:
+     "Spieler: Aria | HP: 80/100 | Items: 3"
+3. Füge eine Funktion hinzu: func hp_prozent() -> float:
+     Gibt zurück wie viel Prozent HP noch vorhanden sind (0.0-1.0).
+4. Schreib eine Zeile die prüft: Wenn hp < 25% max_hp → "KRITISCH!" ausgeben.
+5. Bonus: Füge dem inventar per Code ein Item hinzu und entferne es wieder.
+     Gib die Array-Größe vor und nach jeder Operation aus.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 3: Kontrollfluss — if, match, Schleifen
+================================================================================
+
+------------------------------------------------------------------------
+3.1  if / elif / else — Bedingungen
+------------------------------------------------------------------------
+
+  var hp: int = 75
+
+  if hp <= 0:
+      print("Spieler ist tot")
+  elif hp < 25:
+      print("Kritisch verletzt!")
+  elif hp < 50:
+      print("Verletzt")
+  else:
+      print("Gesund")
+
+WICHTIG: GDScript benutzt EINRÜCKUNG um Blöcke zu definieren — genau wie
+Python. Kein {} wie in JavaScript/C#. Die Einrückung MUSS konsistent sein
+(Tab oder Leerzeichen — nie mischen, Godot benutzt standardmäßig Tabs).
+
+  if hp > 0 and mana > 10:    # Mehrere Bedingungen
+      zauber_wirken()
+
+  if not ist_am_boden:         # Negation
+      print("In der Luft")
+
+  if waffe in inventar:        # 'in' für Array/Dictionary
+      print("Waffe vorhanden")
+
+  if typeof(node) == TYPE_INT:  # Typ prüfen (typeof gibt Enum zurück)
+      print("Das ist ein Integer")
+
+  if node is CharacterBody2D:   # Besser: 'is' für Node-Typen
+      print("Das ist ein Charakter")
+
+------------------------------------------------------------------------
+3.2  match — Godots switch-Statement
+------------------------------------------------------------------------
+
+match ist mächtiger als switch in anderen Sprachen:
+
+  var zustand: String = "laufen"
+
+  match zustand:
+      "stehen":
+          print("Stehe still")
+      "laufen":
+          print("Laufe")
+          geschwindigkeit = 200
+      "rennen":
+          print("Renne")
+          geschwindigkeit = 400
+      _:                        # Default (wie 'default' in switch)
+          print("Unbekannter Zustand: ", zustand)
+
+match mit mehreren Werten pro Fall:
+  match eingabe:
+      "w", "up", "ArrowUp":    # Mehrere Werte für den gleichen Fall
+          bewegung.y = -1
+
+match mit Bedingungen (guards):
+  match hp:
+      var x when x <= 0:
+          print("Tot")
+      var x when x < 25:
+          print("Kritisch: ", x)
+      _:
+          print("OK")
+
+match mit Typen:
+  match typeof(wert):
+      TYPE_INT:
+          print("Integer: ", wert)
+      TYPE_STRING:
+          print("String: ", wert)
+      TYPE_ARRAY:
+          print("Array mit ", wert.size(), " Elementen")
+
+TIPP: match ist für Zustands-Maschinen (State Machines) perfekt — mehr dazu
+in Modul 10.
+
+------------------------------------------------------------------------
+3.3  for-Schleifen
+------------------------------------------------------------------------
+
+Über Range (wie range() in Python):
+  for i in range(5):           # 0, 1, 2, 3, 4
+      print(i)
+
+  for i in range(2, 8):        # 2, 3, 4, 5, 6, 7
+      print(i)
+
+  for i in range(0, 10, 2):   # 0, 2, 4, 6, 8 (Schrittweite 2)
+      print(i)
+
+  for i in range(10, 0, -1):  # 10, 9, 8, ... 1 (rückwärts)
+      print(i)
+
+Über ein Array:
+  var feinde: Array[String] = ["Goblin", "Ork", "Troll"]
+
+  for feind in feinde:
+      print("Feind: ", feind)
+
+Über ein Dictionary:
+  var stats: Dictionary = {"hp": 100, "mana": 50}
+
+  for schluessel in stats:
+      print(schluessel, " = ", stats[schluessel])
+
+Über Kinder-Nodes (sehr häufig!):
+  for kind in get_children():
+      kind.visible = false    # Alle Kinder unsichtbar machen
+
+for mit Index (wenn du den Index brauchst):
+  for i in range(feinde.size()):
+      print(i, ": ", feinde[i])
+
+break und continue:
+  for i in range(100):
+      if i == 5:
+          break        # Schleife abbrechen
+      if i % 2 == 0:
+          continue     # Rest überspringen, nächste Iteration
+
+------------------------------------------------------------------------
+3.4  while-Schleifen
+------------------------------------------------------------------------
+
+  var zaehler: int = 0
+  while zaehler < 10:
+      zaehler += 1
+
+  # Endlosschleife (in Coroutines oder mit await — dazu in Modul 11):
+  while true:
+      await get_tree().process_frame
+      print("Jedes Frame")
+
+WARNUNG: Eine while true Schleife ohne await FRIERT DAS SPIEL EIN.
+GDScript ist single-threaded. Endlosschleifen müssen immer mit await
+oder in einem Thread laufen (Modul 20).
+
+------------------------------------------------------------------------
+3.5  Zustands-Enums — State Machines sauber schreiben
+------------------------------------------------------------------------
+
+Enums sind benannte Integer-Konstanten. Unverzichtbar für Zustands-Maschinen:
+
+  enum Zustand {
+      STEHEN,    # = 0
+      LAUFEN,    # = 1
+      SPRINGEN,  # = 2
+      ANGREIFEN, # = 3
+      TOT        # = 4
+  }
+
+  var aktueller_zustand: Zustand = Zustand.STEHEN
+
+  func _process(delta: float) -> void:
+      match aktueller_zustand:
+          Zustand.STEHEN:
+              idle_animation()
+          Zustand.LAUFEN:
+              laufen(delta)
+          Zustand.SPRINGEN:
+              springen(delta)
+          Zustand.ANGREIFEN:
+              angreifen()
+          Zustand.TOT:
+              pass
+
+Enums mit expliziten Werten:
+  enum Layer {
+      SPIELER = 1,
+      FEIND   = 2,
+      UMWELT  = 4,
+      TRIGGER = 8
+  }
+  # Bitmask: Layer.SPIELER | Layer.FEIND = 3
+
+Enum-Namen zu Strings:
+  Zustand.keys()          # → ["STEHEN", "LAUFEN", ...]
+  Zustand.values()        # → [0, 1, 2, ...]
+  Zustand.find_key(1)     # → "LAUFEN"
+
+--------------------------------------------------------------------------------
+ÜBUNG 3:
+1. Schreibe ein Skript das einen Enum "Spielphase" hat:
+     HAUPTMENU, SPIEL, PAUSE, GAME_OVER, CREDITS
+2. Setze die Startphase auf HAUPTMENU.
+3. Schreibe eine Funktion "phase_wechseln(neue_phase: Spielphase)" die:
+     - Die Phase wechselt
+     - Per print() ankündigt: "Wechsle zu: SPIELPHASE_NAME"
+4. Erstelle ein Array von 10 zufälligen Zahlen (1-100).
+     Schreibe eine Schleife die:
+     - Gerade Zahlen überspringt (continue)
+     - Bei der ersten Zahl über 80 abbricht (break)
+     - Alle anderen ausgibt: "Ungerade Zahl: X"
+5. Bonus: Simuliere eine einfache HP-Regeneration:
+     Starte mit 30 HP. Regeneriere 5 HP pro "Runde" bis max 100.
+     Gib jede Runde aus. (for-Schleife)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 4: Funktionen — Verhalten kapseln
+================================================================================
+
+------------------------------------------------------------------------
+4.1  Funktionen definieren und aufrufen
+------------------------------------------------------------------------
+
+  func schaden_nehmen(menge: int) -> void:
+      hp -= menge
+      if hp <= 0:
+          sterben()
+
+  func heilen(menge: int) -> int:
+      hp = min(hp + menge, max_hp)
+      return hp            # Gibt den neuen HP-Wert zurück
+
+  func ist_am_leben() -> bool:
+      return hp > 0
+
+Aufrufen:
+  schaden_nehmen(25)
+  var neue_hp := heilen(50)
+  if ist_am_leben():
+      print("Noch lebt er!")
+
+Parameter mit Standardwerten:
+  func bewegen(richtung: Vector2, faktor: float = 1.0) -> void:
+      position += richtung * speed * faktor
+
+  bewegen(Vector2.RIGHT)           # faktor ist 1.0 (Standard)
+  bewegen(Vector2.RIGHT, 2.0)      # faktor ist 2.0 (überschrieben)
+
+Mehrere Rückgabewerte (via Array oder Dictionary):
+  func get_bounds() -> Array:
+      return [position - groesse / 2, position + groesse / 2]
+
+  var bounds := get_bounds()
+  var min_pos: Vector2 = bounds[0]
+  var max_pos: Vector2 = bounds[1]
+
+------------------------------------------------------------------------
+4.2  Typ-Annotationen — warum und wie
+------------------------------------------------------------------------
+
+Du KANNST Typen weglassen — dann ist alles "Variant" (beliebiger Typ).
+Aber mit Typen:
+
+  func berechne_schaden(basis: int, multiplikator: float) -> int:
+      return int(basis * multiplikator)
+
+  ✓ Godot zeigt Fehler SOFORT im Editor (nicht erst beim Laufen)
+  ✓ Auto-Vervollständigung funktioniert besser
+  ✓ Code ist selbst-dokumentierend
+  ✓ Leichte Performance-Verbesserung
+
+Guter Stil: IMMER Rückgabe-Typ angeben. Parameter-Typen wo möglich.
+Ausnahme: Wenn du absichtlich verschiedene Typen erlauben willst → Variant:
+
+  func zeige_info(wert: Variant) -> String:
+      return str(wert)
+
+------------------------------------------------------------------------
+4.3  Statische Funktionen
+------------------------------------------------------------------------
+
+Static functions gehören zur Klasse, nicht zu einer Instanz. Kein Zugriff
+auf self, position, hp etc. — nur auf übergebene Parameter:
+
+  static func schaden_formel(basis: int, ruestung: int) -> int:
+      return max(0, basis - ruestung / 2)
+
+  # Aufruf ohne Instanz:
+  var echter_schaden := Spieler.schaden_formel(50, 20)
+
+Nützlich für: Berechnungsformeln, Hilfs-Funktionen, Konvertierungen —
+alles was keine Instanz-Daten braucht.
+
+------------------------------------------------------------------------
+4.4  Lambda-Funktionen — Funktionen als Werte
+------------------------------------------------------------------------
+
+In Godot 4 gibt es Lambda-Ausdrücke:
+
+  var verdopple := func(x: int) -> int: return x * 2
+  print(verdopple.call(5))    # → 10
+
+Nützlich für sort_custom(), Callables, Signals:
+  var zahlen := [3, 1, 4, 1, 5, 9]
+  zahlen.sort_custom(func(a, b): return a > b)   # Absteigend sortieren
+  print(zahlen)   # → [9, 5, 4, 3, 1, 1]
+
+  # Signal mit Lambda verbinden (Modul 11):
+  knopf.pressed.connect(func(): print("Gedrückt!"))
+
+------------------------------------------------------------------------
+4.5  Rekursion
+------------------------------------------------------------------------
+
+  func fibonacci(n: int) -> int:
+      if n <= 1:
+          return n
+      return fibonacci(n - 1) + fibonacci(n - 2)
+
+  # WARNUNG: Bei tiefer Rekursion droht Stack Overflow.
+  # Für Spieleentwicklung oft besser: iterative Lösung.
+
+Nützliche Rekursion in Godot: Node-Bäume durchsuchen:
+  func finde_node_mit_name(root: Node, gesucht: String) -> Node:
+      if root.name == gesucht:
+          return root
+      for kind in root.get_children():
+          var ergebnis := finde_node_mit_name(kind, gesucht)
+          if ergebnis:
+              return ergebnis
+      return null
+
+------------------------------------------------------------------------
+4.6  Wichtige eingebaute Funktionen
+------------------------------------------------------------------------
+
+Mathematik:
+  abs(-5)              → 5
+  ceil(4.1)            → 5.0
+  floor(4.9)           → 4.0
+  round(4.5)           → 5.0
+  min(3, 7)            → 3
+  max(3, 7)            → 7
+  clamp(15, 0, 10)     → 10   (zwischen Min und Max begrenzen)
+  pow(2, 10)           → 1024.0
+  sqrt(16)             → 4.0
+  sign(-5)             → -1   (Vorzeichen: -1, 0, oder 1)
+  snapped(3.7, 0.5)    → 3.5  (auf nächsten Step runden)
+
+Interpolation (für weiche Bewegungen!):
+  lerp(0.0, 100.0, 0.3)         → 30.0  (lineare Interpolation)
+  lerp_angle(0.0, PI, 0.5)      → PI/2  (Winkel-Interpolation)
+  smoothstep(0.0, 1.0, 0.3)     → 0.216 (smoothere Kurve)
+  ease(0.3, 2.0)                 → 0.09  (Ease-Kurve)
+
+  # lerp für Kamera-Folgen (Modul 6):
+  kamera_pos = lerp(kamera_pos, spieler_pos, 5.0 * delta)
+
+Zufallszahlen:
+  randf()                  → float zwischen 0.0 und 1.0
+  randi()                  → zufälliger int (sehr groß)
+  randi_range(1, 6)        → 1 bis 6 (wie Würfelwurf)
+  randf_range(-1.0, 1.0)   → float zwischen -1 und 1
+  randomize()              → Seed neu setzen (am Start aufrufen!)
+
+  # Wiederholbarer Zufall (für prozedurale Generierung!):
+  var rng := RandomNumberGenerator.new()
+  rng.seed = 12345
+  rng.randi_range(0, 100)
+
+Typ-Konvertierung:
+  int(3.9)          → 3    (NICHT gerundet — abgeschnitten!)
+  float(5)          → 5.0
+  str(42)           → "42"
+  bool(0)           → false
+  bool(1)           → true
+  bool("")          → false (leerer String)
+
+--------------------------------------------------------------------------------
+ÜBUNG 4:
+1. Schreibe eine Funktion berechne_schaden(angriff: int, verteidigung: int,
+     kritisch: bool = false) -> int die:
+     - Schaden = max(1, Angriff - Verteidigung/2) berechnet
+     - Bei kritisch: Schaden x1.5 (gerundet)
+     - Schaden zurückgibt
+2. Schreibe eine Funktion zufaelliger_schaden(min_wert: int, max_wert: int) -> int
+3. Schreibe eine Funktion level_up(erfahrung: int) -> Dictionary die zurückgibt:
+     {"level": neues_level, "hp_bonus": hp_bonus, "schaden_bonus": schaden_bonus}
+     (Formel frei wählbar, z.B. level = erfahrung / 100, hp_bonus = level * 10)
+4. Benutze eine Lambda-Funktion um ein Array von Gegnern nach HP absteigend zu sortieren.
+5. Bonus: Schreibe eine rekursive Funktion die die Summe eines Integer-Arrays berechnet.
+--------------------------------------------------------------------------------
+
+
+================================================================================
+MODUL 5: Nodes und Szenen — das Herzstück von Godot
+================================================================================
+
+------------------------------------------------------------------------
+5.1  Auf Nodes zugreifen — $, get_node(), @onready
+------------------------------------------------------------------------
+
+Es gibt mehrere Wege um auf andere Nodes zuzugreifen:
+
+Methode 1: Der $-Operator (Kurzform):
+  $Sprite2D           # Kind-Node namens "Sprite2D"
+  $"Waffe/Klinge"     # Pfad mit Schrägstrich für verschachtelte Nodes
+  $"../Gegner"        # ../ geht eine Ebene nach oben
+
+Methode 2: get_node() (explizite Form):
+  get_node("Sprite2D")
+  get_node("Waffe/Klinge")
+  get_node("../Gegner")
+
+Methode 3: @onready (empfohlen!):
+  @onready var sprite: Sprite2D = $Sprite2D
+  @onready var kamera: Camera2D = $Camera2D
+  @onready var animations: AnimationPlayer = $AnimationPlayer
+
+  @onready wertet $ ERST in _ready() aus, nicht beim Erstellen der Variable.
+  Das ist wichtig: zur Zeit der Variablen-Deklaration existiert der Szenen-Baum
+  noch nicht. @onready löst das automatisch.
+
+OHNE @onready (häufiger Anfängerfehler):
+  var sprite: Sprite2D = $Sprite2D   # ← FEHLER: Node noch nicht bereit!
+
+MIT @onready (korrekt):
+  @onready var sprite: Sprite2D = $Sprite2D   # ← korrekt
+
+  func _ready() -> void:
+      sprite.modulate = Color.RED   # ← jetzt ist sprite garantiert gesetzt
+
+------------------------------------------------------------------------
+5.2  Nodes zur Laufzeit erstellen und entfernen
+------------------------------------------------------------------------
+
+Node per Code erstellen (instanzieren aus Szene):
+  # Variante 1: Gespeicherte PackedScene instanzieren
+  @export var gegner_szene: PackedScene
+
+  func gegner_spawnen(ort: Vector2) -> void:
+      var neuer_gegner: Node = gegner_szene.instantiate()
+      add_child(neuer_gegner)
+      neuer_gegner.global_position = ort
+
+  # Variante 2: Szene per Code laden und instanzieren
+  func bullet_spawnen() -> void:
+      var bullet_szene: PackedScene = load("res://scenes/Bullet.tscn")
+      var bullet: Node = bullet_szene.instantiate()
+      get_tree().current_scene.add_child(bullet)
+      bullet.global_position = muzzle.global_position
+      bullet.direction = blickrichtung
+
+  # Variante 3: Node-Typ direkt per Code (ohne Szene)
+  var label := Label.new()
+  label.text = "Hallo!"
+  add_child(label)
+
+Node entfernen:
+  node.queue_free()       # Sicher (wartet auf Frameende) — IMMER benutzen!
+  node.free()             # Sofort — nur wenn du WEISST was du tust
+
+  # Sich selbst entfernen:
+  queue_free()
+
+WARNUNG: Niemals free() auf einen Node aufrufen der noch im _process() läuft.
+queue_free() sammelt Nodes und löscht sie sicher am Ende des Frames.
+
+------------------------------------------------------------------------
+5.3  Nodes suchen — find_child, find_children, get_tree()
+------------------------------------------------------------------------
+
+Kind-Node mit Namen suchen:
+  find_child("Schwert")                  # Sucht rekursiv im gesamten Baum
+  find_child("Schwert", true, false)     # (recursive=true, owned=false)
+
+Alle Nodes einer Gruppe bekommen (Modul 13):
+  get_tree().get_nodes_in_group("feinde")
+
+Parent bekommen:
+  get_parent()                    # Direktes Elternelement
+  var root := get_tree().root     # Die Wurzel der gesamten Szene
+
+Typ-sichere Suche (Godot 4.2+):
+  var spieler := get_tree().get_first_node_in_group("spieler") as CharacterBody2D
+
+Das 'as' Keyword castet den Node auf den erwarteten Typ. Gibt null zurück
+wenn der Cast fehlschlägt — sicherer als eine direkte Zuweisung.
+
+------------------------------------------------------------------------
+5.4  Szenen wechseln
+------------------------------------------------------------------------
+
+  # Ganze Szene ersetzen:
+  get_tree().change_scene_to_file("res://scenes/Level2.tscn")
+
+  # Mit einer PackedScene (schneller, weil bereits geladen):
+  get_tree().change_scene_to_packed(naechste_szene)
+
+  # Szene als Kind laden (z.B. Level in World laden):
+  var level_szene: PackedScene = load("res://scenes/Level1.tscn")
+  var level: Node = level_szene.instantiate()
+  $WeltContainer.add_child(level)
+
+  # Unterszene entladen:
+  $WeltContainer.get_child(0).queue_free()
+
+------------------------------------------------------------------------
+5.5  Wichtige Node-Eigenschaften und Methoden
+------------------------------------------------------------------------
+
+Jeder Node hat diese Properties:
+
+  name                    # String: Name des Nodes im Baum
+  visible                 # bool: Sichtbar (nur CanvasItem/3D-Nodes)
+  process_mode            # Ob der Node in Pause läuft (ProcessMode-Enum)
+
+CanvasItem (Basis für alle 2D-Nodes):
+  modulate                # Color: Farbe/Alpha des Nodes UND seiner Kinder
+  self_modulate           # Color: Nur dieser Node, nicht die Kinder
+  z_index                 # int: Render-Reihenfolge (höher = weiter vorne)
+  visible                 # bool: Sichtbar/unsichtbar
+
+Node2D (Basis für positionierbare 2D-Nodes):
+  position                # Vector2: Lokale Position
+  global_position         # Vector2: Globale Position im Welt-Koordinatensystem
+  rotation                # float: Rotation in Radiant
+  rotation_degrees        # float: Rotation in Grad (praktischer!)
+  scale                   # Vector2: Skalierung (1,1 = normal)
+  global_transform        # Transform2D: Vollständige Transform-Matrix (global)
+
+Node3D (Basis für 3D-Nodes):
+  position                # Vector3
+  global_position         # Vector3
+  rotation                # Vector3 (Euler-Winkel in Radiant)
+  rotation_degrees        # Vector3 (Euler-Winkel in Grad)
+  scale                   # Vector3
+
+Nützliche Methoden:
+  is_inside_tree()        # bool: Node im Szenenbaum?
+  is_visible_in_tree()    # bool: Wirklich sichtbar (alle Eltern sichtbar)?
+  get_tree()              # SceneTree: Zugriff auf das Spiel-Management
+  get_viewport()          # Viewport: Für Kamera-Konvertierungen
+  get_node_or_null("x")   # Wie get_node aber gibt null statt Fehler
+
+------------------------------------------------------------------------
+5.6  Node-Kategorien — welchen Node wofür?
+------------------------------------------------------------------------
+
+2D-Grundnodes:
+  Node2D          → Unsichtbarer Organisations-Node, hat Position/Rotation
+  Sprite2D        → Zeigt ein Bild (Texture)
+  AnimatedSprite2D → Zeigt Animations-Frames
+  Label           → Text anzeigen
+  CanvasLayer     → UI-Layer der unabhängig von der Kamera ist
+
+2D-Physik:
+  CharacterBody2D  → Spieler, NPC — move_and_slide() Physik
+  RigidBody2D      → Physik-Objekte die von der Engine gesteuert werden
+  StaticBody2D     → Unbewegliche Wände, Böden
+  Area2D           → Unsichtbare Zonen (Trigger, Schaden, etc.)
+
+3D-Grundnodes:
+  Node3D           → 3D-Organisations-Node
+  MeshInstance3D   → Zeigt ein 3D-Mesh
+  Camera3D         → Die Spieler-Kamera
+  DirectionalLight3D / OmniLight3D / SpotLight3D → Licht-Quellen
+  WorldEnvironment → Himmel, Fog, globale Beleuchtung
+  CSGBox3D etc.    → Constructive Solid Geometry (zum Prototypen)
+
+3D-Physik:
+  CharacterBody3D  → 3D-Spieler-Körper
+  RigidBody3D      → Physik-Objekte (Kisten, Steine)
+  StaticBody3D     → Unbewegliche 3D-Geometrie
+  Area3D           → 3D-Trigger-Zonen
+
+Kollision:
+  CollisionShape2D / CollisionShape3D → Form für Physik-Nodes
+  CollisionPolygon2D                  → Freie Form (Polygon)
+
+UI:
+  Control         → Basis für alle UI-Elemente
+  Panel, PanelContainer, VBoxContainer, HBoxContainer → Layout
+  Button, LineEdit, TextEdit, ProgressBar, Slider → UI-Controls
+  RichTextLabel   → Text mit BBCode-Formatierung
+
+Audio:
+  AudioStreamPlayer   → 2D-unabhängiger Sound (Musik, UI)
+  AudioStreamPlayer2D → 2D-Positional-Audio
+  AudioStreamPlayer3D → 3D-Positional-Audio
+
+Hilfs-Nodes:
+  Timer           → Zeitgesteuerter Callback (ohne _process-Zähler)
+  Tween           → Werte über Zeit animieren (ohne AnimationPlayer)
+  RayCast2D/3D    → Strahl-Test (Sichtlinie, Boden-Check)
+  ShapeCast2D/3D  → Form-Test (breiter als Raycast)
+  Marker2D/3D     → Unsichtbarer Punkt (Spawn-Punkte, Referenzpunkte)
+  Path2D/3D       → Pfad-Definition (für PatrolAI, Cutscenes)
+  PathFollow2D/3D → Bewegt sich entlang eines Pfades
+
+--------------------------------------------------------------------------------
+ÜBUNG 5:
+1. Baue diese Szene im Godot-Editor:
+     Welt (Node2D)
+     ├── Spieler (Node2D)
+     │   ├── Sprite2D
+     │   └── CollisionShape2D
+     └── UI (CanvasLayer)
+         └── HP_Label (Label)
+2. Hänge ein Skript an "Welt". Nutze @onready für:
+     @onready var hp_label: Label = $UI/HP_Label
+3. Schreibe in _ready(): hp_label.text = "HP: 100 / 100"
+4. Füge per Code einen Timer-Node hinzu ($-Zugriff wäre zu früh!):
+     In _ready(): var timer := Timer.new(); add_child(timer)
+     timer.wait_time = 2.0; timer.start()
+     Verbinde das timeout-Signal: timer.timeout.connect(func(): print("Timer!"))
+5. Bonus: Spawne zur Laufzeit 5 Label-Nodes mit zufälligen Positionen auf dem Bildschirm.
+     Jedes Label soll eine Zufallszahl anzeigen.
+--------------------------------------------------------------------------------
+
+
+################################################################################
+SCHNELLREFERENZ TEIL 1
+################################################################################
+
+GRUNDSTRUKTUR EINES SKRIPTS:
+  extends NodeTyp
+  @export var X: Typ = Standardwert
+  @onready var Y: Typ = $NodeName
+
+  func _ready() -> void: ...        # Einmalig beim Start
+  func _process(delta: float) -> void: ...    # Jedes Frame
+  func _physics_process(delta: float) -> void: ... # Jedes Physik-Frame
+
+TYPEN UND KONVERTIERUNG:
+  int     float    bool    String    StringName
+  Vector2 Vector3  Color   Rect2     Array    Dictionary
+  int(x)  float(x) str(x) bool(x)
+
+KONTROLLFLUSS:
+  if BEDINGUNG: ...  elif ...:  else: ...
+  match WERT: "a": ...  _: ...
+  for x in ARRAY: ...
+  for i in range(N): ...
+  while BEDINGUNG: ...
+  break  continue
+
+NODES:
+  $NodeName                    → Kind-Node zugreifen
+  get_node("Pfad")             → Explizit
+  @onready var x = $NodeName  → Beim Start sicher zuweisen
+  node.queue_free()            → Node sicher löschen
+  szene.instantiate()          → Aus PackedScene erstellen
+  add_child(node)              → Dem Baum hinzufügen
+
+WICHTIGE FUNKTIONEN:
+  print(...)        printerr(...)    push_warning(...)
+  abs() min() max() clamp() round() floor() ceil()
+  lerp() snapped() sign() sqrt() pow()
+  randf() randi() randf_range() randi_range()
+
+================================================================================
+ENDE TEIL 1 — Weiter mit Teil 2: Bewegung, Physik und Input
+================================================================================
