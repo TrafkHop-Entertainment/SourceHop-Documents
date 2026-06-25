@@ -401,7 +401,7 @@ Aus deinem Code (footer.html):
 
 Aus deinem Code (header.html):
   <nav id="header-nav"></nav>
-  ← Leer, wird per JS befüllt (placeholder.js, nav.js). Das ist ein
+  ← Leer, wird per JS befüllt (placeholder.js, Nav.js). Das ist ein
     gültiges Muster für dynamisch generierte Navigation.
 
 --------------------------------------------------------------------------------
@@ -1282,8 +1282,8 @@ Aus deinem Code:
 
 Aus deinem Code:
   <script src="files/placeholder.js"></script>
-  <script src="files/nav.js"></script>
-  <script src="files/volume.js"></script>
+  <script src="files/Nav.js"></script>
+  <script src="files/Volume.js"></script>
   ← Am Ende von body — klassisch und funktioniert. Mit defer im head
     wäre es moderner.
 

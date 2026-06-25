@@ -43,7 +43,7 @@ WAS SICH GEÄNDERT HAT:
    Such-Chatbots wie AskAlfonz.js: Chat-Oberfläche, Verlaufsverwaltung,
    ein kleiner "Suchindex" über lokale Texte, Anfragen an einen Proxy,
    Lade-/Fehlerzustände. Danach gehen wir GEMEINSAM Zeile für Zeile durch
-   dein echtes AskAlfonz.js, nav.js, placeholder.js, volume.js und
+   dein echtes AskAlfonz.js, Nav.js, placeholder.js, Volume.js und
    index.js — du wirst nichts mehr "Magisches" darin finden, weil du
    jedes verwendete Konzept selbst gebaut hast.
 
@@ -84,8 +84,8 @@ STRUKTUR — fünf Teile, 21 Module:
 
   TEIL 5 — DEIN PROJEKT                                (Modul 21)
    21  Abschlussprojekt: Bau deinen eigenen Such-Chatbot
-       + Geführte Code-Tour durch AskAlfonz.js, nav.js, placeholder.js,
-         volume.js und index.js
+       + Geführte Code-Tour durch AskAlfonz.js, Nav.js, placeholder.js,
+         Volume.js und index.js
 
   BONUSTEIL — NOCH WEITER                              (Module 22-23)
    22  TypeScript — JavaScript mit Typsicherheit
@@ -131,11 +131,11 @@ Alles, was sich auf deiner Seite BEWEGT, REAGIERT, NACHLÄDT oder RECHNET,
 ist JavaScript. Konkret in TrafkSite:
 
   - Die Navigation in #header-nav wird zur Laufzeit aus sitemap.xml
-    aufgebaut (nav.js) — ohne JS: ein leeres <nav>-Tag, sonst nichts.
+    aufgebaut (Nav.js) — ohne JS: ein leeres <nav>-Tag, sonst nichts.
   - Die animierten "Bubbles" hinter den Nav-Punkten (placeholder.js) —
     ohne JS: gar nichts da, nicht mal ein Platzhalter.
   - Der Lautstärkeregler merkt sich deine Einstellung über Seiten-
-    aufrufe hinweg (volume.js) — ohne JS: der Regler würde bei jedem
+    aufrufe hinweg (Volume.js) — ohne JS: der Regler würde bei jedem
     Neuladen wieder auf 0.5 zurückspringen.
   - Der Alfonz-Chat (AskAlfonz.js) — ohne JS: keine Eingabe möglich,
     kein einziger Request würde abgeschickt.
@@ -173,8 +173,8 @@ Punkt 4 ist der Grund, warum in deinem index.html die Skripte GANZ AM
 ENDE von <body> stehen, kurz vor </body>:
 
     <script src="files/placeholder.js"></script>
-    <script src="files/nav.js"></script>
-    <script src="files/volume.js"></script>
+    <script src="files/Nav.js"></script>
+    <script src="files/Volume.js"></script>
     </body>
 
 Wenn placeholder.js dort z.B. document.getElementById('header-placeholder')
@@ -202,14 +202,14 @@ HÄUFIGER FEHLER: "Mein Skript findet mein Element nicht!"
   </script>
 
   // Extern — sauberer, vom Browser cachebar, wiederverwendbar:
-  <script src="files/volume.js"></script>
+  <script src="files/Volume.js"></script>
 
   // Mehrere externe Skripte werden in der angegebenen Reihenfolge
   // AUSGEFÜHRT (Standardverhalten, "blockierend", siehe 1.2):
   <script src="files/placeholder.js"></script>
-  <script src="files/nav.js"></script>
-  <script src="files/volume.js"></script>
-  // nav.js ruft makeBubbleVideo() auf, das in placeholder.js definiert
+  <script src="files/Nav.js"></script>
+  <script src="files/Volume.js"></script>
+  // Nav.js ruft makeBubbleVideo() auf, das in placeholder.js definiert
   // ist — die Reihenfolge ist hier also nicht egal!
 
 Drei moderne Attribute, die das Ladeverhalten ändern:
@@ -221,8 +221,8 @@ Drei moderne Attribute, die das Ladeverhalten ändern:
     problemlos im <head> stehen:
 
       <script src="files/placeholder.js" defer></script>
-      <script src="files/nav.js" defer></script>
-      <script src="files/volume.js" defer></script>
+      <script src="files/Nav.js" defer></script>
+      <script src="files/Volume.js" defer></script>
 
     → Für TrafkSite wäre das eine kleine, saubere Verbesserung: alle drei
     Dateien würden BEREITS WÄHREND das restliche HTML noch geparst wird
@@ -233,7 +233,7 @@ Drei moderne Attribute, die das Ladeverhalten ändern:
     Lädt PARALLEL, führt aber aus, SOBALD FERTIG — egal in welcher
     Reihenfolge zu anderen Skripten, egal ob das DOM schon fertig ist.
     Gut für komplett UNABHÄNGIGE Skripte (z.B. Analytics-Tracker).
-    SCHLECHT, wenn Skripte sich gegenseitig brauchen — nav.js würde
+    SCHLECHT, wenn Skripte sich gegenseitig brauchen — Nav.js würde
     crashen, wenn es vor placeholder.js fertig wird und makeBubbleVideo()
     noch nicht existiert.
 
@@ -257,7 +257,7 @@ riesige, vorgefertigte Objekte. Die wichtigsten:
   window
     Das Browserfenster selbst. ALLES Globale ist eigentlich eine
     Eigenschaft von window — auch deine eigenen Top-Level-Funktionen!
-    Die Funktion initNav() aus nav.js ist technisch window.initNav().
+    Die Funktion initNav() aus Nav.js ist technisch window.initNav().
     Praktisch:
       window.innerWidth / window.innerHeight  → aktuelle Fenstergröße
       window.location                          → aktuelle URL (Modul 9)
@@ -300,7 +300,7 @@ DevTools: Rechtsklick → "Untersuchen" (oder F12 / Strg+Shift+I).
 
   Elements-Tab
     Zeigt das LEBENDE DOM. Wenn dein JS ein Element ändert oder neu
-    erzeugt — z.B. wenn nav.js die komplette Navigation in #header-nav
+    erzeugt — z.B. wenn Nav.js die komplette Navigation in #header-nav
     hineinschreibt — siehst du das hier LIVE entstehen. Der beste Ort,
     um "warum ist mein Element nicht da / sieht falsch aus" zu debuggen.
 
@@ -311,7 +311,7 @@ DevTools: Rechtsklick → "Untersuchen" (oder F12 / Strg+Shift+I).
 
   Network-Tab
     Zeigt JEDEN Request, den die Seite macht — auch
-    fetch('sitemap.xml') aus nav.js oder den POST an PROXY_URL aus
+    fetch('sitemap.xml') aus Nav.js oder den POST an PROXY_URL aus
     AskAlfonz.js. Status-Code, Antwortzeit, Response-Body: alles
     sichtbar. Unschätzbar wertvoll, sobald du mit fetch arbeitest
     (Modul 8).
@@ -679,12 +679,12 @@ ein Feld ausgefüllt wurde:
 Nullish Coalescing (??) — Fallback wenn null oder undefined:
 
   const vol = localStorage.getItem('site-volume') ?? '0.5';
-  // Du benutzt das genau so in volume.js! parseFloat(... ?? '0.5')
+  // Du benutzt das genau so in Volume.js! parseFloat(... ?? '0.5')
   // Liefert den linken Wert, AUSSER er ist null oder undefined.
   // Unterschied zu ||: 0 ?? 'fallback' → 0 (weil 0 nicht null ist)
   //                     0 || 'fallback' → 'fallback' (weil 0 falsy ist)
 
-  → Genau DAS ist der Grund, warum volume.js ?? statt || benutzt: Wäre
+  → Genau DAS ist der Grund, warum Volume.js ?? statt || benutzt: Wäre
   die gespeicherte Lautstärke 0 (also stumm), würde || das fälschlich
   als "nichts gespeichert" werten und auf 0.5 zurückspringen. ?? lässt
   0 als gültigen, gespeicherten Wert durch.
@@ -717,7 +717,7 @@ Optional Chaining (?.) — kein Crash, wenn ein Objekt null ist:
    mit EINEM einzigen if prüfst.
 4. Erkläre den Unterschied zwischen `lautstaerke || 0.5` und
    `lautstaerke ?? 0.5`, wenn `lautstaerke = 0` ist. Warum ist das für
-   volume.js wichtig — was würde mit || passieren, wenn jemand die
+   Volume.js wichtig — was würde mit || passieren, wenn jemand die
    Lautstärke ganz auf 0 stellt und die Seite neu lädt?
 5. Erstelle eine const mit deinem Namen und eine let mit deinem Alter.
    Gib beide in einem Template Literal aus. Prüfe mit typeof den Typ der
@@ -731,7 +731,7 @@ MODUL 3: Das DOM — deine Seite aus JS heraus steuern
 
 Das ist DAS Kapitel, das JS vom "rechnet irgendwo im Hintergrund" zum
 "verändert live, was du auf dem Bildschirm siehst" macht. Alles, was
-nav.js, placeholder.js, volume.js und AskAlfonz.js auf der Seite TUN,
+Nav.js, placeholder.js, Volume.js und AskAlfonz.js auf der Seite TUN,
 basiert auf diesem Modul.
 
 ------------------------------------------------------------------------
@@ -842,7 +842,7 @@ sind NICHT dasselbe:
     - innerText: selten nötig, fast immer ist textContent die
       bessere Wahl.
 
-  Aus deinem nav.js:
+  Aus deinem Nav.js:
     link.textContent = n.name;
     link.title = n.name;
     // → reiner Text, sicher, schnell. n.name kommt aus der Sitemap,
@@ -889,7 +889,7 @@ ihren aktuellen Wert, sondern .value:
   el.classList.contains('open')      → true / false
   el.classList.replace('alt', 'neu')
 
-  // Aus deinem nav.js:
+  // Aus deinem Nav.js:
   li.querySelector('.tree-ul').classList.toggle('open');
   arrow.classList.toggle('open');
   // Zwei Klassen gleichzeitig toggeln → CSS macht den Rest, siehe
@@ -955,7 +955,7 @@ WANN el.style.xyz, WANN classList?
        #header-nav .tree-ul.open { display: flex; } */
 
   Genau dieses Prinzip siehst du bei #header-nav .tree-ul.open in
-  standard.css: nav.js toggelt NUR die Klasse "open", ALLE visuellen
+  standard.css: Nav.js toggelt NUR die Klasse "open", ALLE visuellen
   Details (display, Pfeil-Rotation etc.) stehen im CSS.
 
 ------------------------------------------------------------------------
@@ -967,7 +967,7 @@ WANN el.style.xyz, WANN classList?
   li.className = 'tree-li';          // setzt/ÜBERSCHREIBT ALLE Klassen
   li.classList.add('tree-li');       // FÜGT eine Klasse hinzu (sicherer)
 
-  // Aus deinem nav.js — kompletter Aufbau eines Elements:
+  // Aus deinem Nav.js — kompletter Aufbau eines Elements:
   const ul = document.createElement('ul');
   ul.className = 'tree-ul root-ul';
 
@@ -1020,11 +1020,11 @@ WANN el.style.xyz, WANN classList?
   el.querySelectorAll('*')   → ALLE Nachfahren, beliebig tief
 
 ------------------------------------------------------------------------
-3.8  Praxis-Beispiel: nav.js Schritt für Schritt gelesen
+3.8  Praxis-Beispiel: Nav.js Schritt für Schritt gelesen
 ------------------------------------------------------------------------
 
 Jetzt, wo du getElementById, createElement, appendChild, classList und
-textContent kennst, kannst du nav.js fast komplett lesen. Hier der
+textContent kennst, kannst du Nav.js fast komplett lesen. Hier der
 Kernablauf in Worten:
 
   1. initNav() holt sich #header-nav:
@@ -1048,7 +1048,7 @@ Kernablauf in Worten:
      für einen ganzen Baum (rekursive Funktionen lernst du nebenbei in
      Modul 4 kennen — renderTree ruft sich selbst für Unterordner auf!).
 
-Schau dir jetzt selbst nav.js noch einmal an und versuche, JEDE Zeile
+Schau dir jetzt selbst Nav.js noch einmal an und versuche, JEDE Zeile
 einem Konzept aus 3.2–3.6 zuzuordnen. Was dir noch unklar ist: notiere es
 — Funktionen (Modul 4) und Events (Modul 5) greifen die letzten offenen
 Fragen auf.
@@ -1134,7 +1134,7 @@ Es gibt drei Wege, Funktionen zu schreiben:
 
 Wann welche?
   - Function Declaration: für "richtige", benannte Top-Level-Funktionen
-    (so wie initNav, buildTree, renderTree in nav.js).
+    (so wie initNav, buildTree, renderTree in Nav.js).
   - Arrow Function: für KURZE Callbacks (Event-Handler, map/filter/...),
     und überall, wo du "this" vom umgebenden Code übernehmen willst.
 
@@ -1216,11 +1216,11 @@ Die Scope-Kette: Eine innere Funktion sieht alle Variablen ihrer
 WARUM DAS FÜR WEBSEITEN WICHTIG IST:
 
   Lädst du mehrere <script>-Dateien OHNE type="module" — so wie
-  index.html mit placeholder.js, nav.js, volume.js — landen ALLE
+  index.html mit placeholder.js, Nav.js, Volume.js — landen ALLE
   Top-Level-Variablen und -Funktionen im GLOBALEN Scope, also im SELBEN
   "Topf". Das erklärt zwei Dinge:
 
-    - WARUM nav.js die Funktion makeBubbleVideo() aus placeholder.js
+    - WARUM Nav.js die Funktion makeBubbleVideo() aus placeholder.js
       einfach aufrufen kann (typeof makeBubbleVideo === 'function') —
       beide Dateien teilen sich den globalen Scope.
 
@@ -1292,7 +1292,7 @@ NACHDEM die äußere schon zurückgekehrt ist.
   // counter hat die Variable count "eingeschlossen" (closure).
   // count ist PRIVAT — von außen nicht erreichbar, nur über counter().
 
-Aus deinem volume.js — das IIFE (Immediately Invoked Function Expression):
+Aus deinem Volume.js — das IIFE (Immediately Invoked Function Expression):
 
   (function() {
       const getStoredVol = () => parseFloat(localStorage.getItem('...') ?? '0.5');
@@ -1302,7 +1302,7 @@ Aus deinem volume.js — das IIFE (Immediately Invoked Function Expression):
   // Das () am Ende führt die Funktion SOFORT aus.
   // Technik aus der Zeit vor Modulen — verhindert globale Variablen.
   // Genau das Problem aus 4.3 (globaler Scope bei mehreren <script>-
-  // Tags) wird hier gezielt umgangen: alles in volume.js, was NICHT
+  // Tags) wird hier gezielt umgangen: alles in Volume.js, was NICHT
   // global gebraucht wird, bleibt PRIVAT innerhalb dieser einen
   // Funktion. Mit ES-Modulen (Modul 13) löst man das heute eleganter.
 
@@ -1366,7 +1366,7 @@ Funktionen sind in JS "First Class Citizens" — sie können wie Variablen
   verdoppeln(5)    → 10
   verdreifachen(5) → 15
 
-  // Aus deinem nav.js:
+  // Aus deinem Nav.js:
   arrow.onclick = e => {
       e.stopPropagation();
       li.querySelector('.tree-ul').classList.toggle('open');
@@ -1519,7 +1519,7 @@ Jeder Handler bekommt automatisch ein Event-Objekt übergeben (oft "e" oder
       // Komplett geladen
   });
 
-  // Aus deinem volume.js — BEIDE werden bewusst eingesetzt!
+  // Aus deinem Volume.js — BEIDE werden bewusst eingesetzt!
   document.addEventListener('DOMContentLoaded', () => {
       applyVolume(getStoredVol());
   });
@@ -1608,11 +1608,11 @@ entkoppeln (das "Observer Pattern" aus Modul 20 baut genau darauf auf).
       console.log('Neue Lautstärke:', e.detail.wert);
   });
 
-Idee für TrafkSite: volume.js könnte beim Ändern der Lautstärke ein
+Idee für TrafkSite: Volume.js könnte beim Ändern der Lautstärke ein
 'lautstaerke-geaendert'-Event feuern. Dann müsste KEIN anderes Skript
-wissen, WIE volume.js intern funktioniert — es müsste nur auf dieses
+wissen, WIE Volume.js intern funktioniert — es müsste nur auf dieses
 Event lauschen (z.B. um eine Mute-Anzeige im Header zu aktualisieren,
-ohne dass volume.js diese Anzeige überhaupt kennt).
+ohne dass Volume.js diese Anzeige überhaupt kennt).
 
 ------------------------------------------------------------------------
 5.8  Praxis: klassische Website-Interaktionsmuster
@@ -1746,13 +1746,13 @@ JEDEM Element passieren soll — JS übernimmt das "Wie".
 
   forEach — für JEDES Element etwas TUN (kein Rückgabewert):
     projekte.forEach(p => console.log(p));
-    // Aus deinem nav.js, placeholder.js: ÜBERALL forEach.
+    // Aus deinem Nav.js, placeholder.js: ÜBERALL forEach.
 
   map — JEDES Element in etwas NEUES UMWANDELN (gleiche Länge!):
     const grossbuchstaben = projekte.map(p => p.toUpperCase());
     → ["RSA", "TRAFKSITE", "TRAFKTUX"]
 
-    // Aus deinem nav.js — URLs zu lesbaren Texten umwandeln:
+    // Aus deinem Nav.js — URLs zu lesbaren Texten umwandeln:
     const urls = Array.from(xml.querySelectorAll("loc"))
         .map(el => el.textContent.trim())
         .filter(u => u.endsWith('.html'));
@@ -2018,7 +2018,7 @@ GROSSER Teil der "Alles ist ein String"-Fallen aus Modul 2.
   <select>                  → select.value (value des gewählten <option>)
   <textarea>                → textarea.value
 
-  // Aus deinem footer.html + volume.js:
+  // Aus deinem footer.html + Volume.js:
   <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5">
 
   const slider = document.getElementById('volume');
@@ -2041,7 +2041,7 @@ GROSSER Teil der "Alles ist ein String"-Fallen aus Modul 2.
     Feuert bei JEDER ÄNDERUNG, in Echtzeit — bei <input type="text">
     nach JEDEM Tastendruck, bei <input type="range"> bei JEDEM Pixel
     Bewegung des Schiebers. Perfekt für: Live-Vorschau, Live-Suche,
-    Live-Lautstärkeregelung (genau wie in volume.js!).
+    Live-Lautstärkeregelung (genau wie in Volume.js!).
 
   change
     Feuert erst, wenn das Feld den FOKUS VERLIERT (z.B. Tab oder Klick
@@ -2166,7 +2166,7 @@ GESAMTE <form> auf einmal "einsammeln":
 7.5  Praxis-Beispiel: Lautstärkeregler komplett verstanden
 ------------------------------------------------------------------------
 
-Jetzt kannst du volume.js komplett lesen — es kombiniert Module 2, 3, 5,
+Jetzt kannst du Volume.js komplett lesen — es kombiniert Module 2, 3, 5,
 7 und (im nächsten Modul behandelt) localStorage:
 
   1. getStoredVol() liest den gespeicherten Wert (Modul 9), oder '0.5'
@@ -2279,7 +2279,7 @@ Ein Promise ist ein Objekt, das einen von DREI Zuständen hat:
     .catch(fehler => { /* rejected */ })
     .finally(() => { /* IMMER, egal ob Erfolg oder Fehler */ });
 
-  // Aus deinem nav.js — fetch GIBT ein Promise zurück:
+  // Aus deinem Nav.js — fetch GIBT ein Promise zurück:
   fetch('sitemap.xml')
       .then(r => r.text())           // Promise → nächstes .then
       .then(str => { /* str ist jetzt der TEXT-INHALT */ })
@@ -2478,7 +2478,7 @@ MODUL 9: Storage, Cookies, URL & History
 
 Eine Webseite ist von Natur aus "vergesslich" — jeder Seitenaufruf
 startet bei null. Dieses Modul zeigt die Werkzeuge, mit denen Webseiten
-sich trotzdem ETWAS merken — von "letzte Lautstärke" (volume.js!) bis
+sich trotzdem ETWAS merken — von "letzte Lautstärke" (Volume.js!) bis
 "in welchem Tab war ich zuletzt".
 
 ------------------------------------------------------------------------
@@ -2497,7 +2497,7 @@ Speicher, getrennt von z.B. localhost).
   localStorage.setItem('site-volume', 0.7);
   localStorage.getItem('site-volume')   → "0.7"   (STRING, nicht 0.7!)
 
-  // Aus deinem volume.js — genau dieser Ablauf:
+  // Aus deinem Volume.js — genau dieser Ablauf:
   localStorage.setItem('site-volume', vol);              // vol war number
   const getStoredVol = () =>
       parseFloat(localStorage.getItem('site-volume') ?? '0.5');
@@ -2602,7 +2602,7 @@ zu zerlegen:
   new URL('/TrafkSite/projects/TrafkTux/TrafkTux.html', location.origin).href
   → "https://trafkhop-entertainment.github.io/TrafkSite/projects/TrafkTux/TrafkTux.html"
 
-  // Aus deinem nav.js wird new URL bereits genutzt:
+  // Aus deinem Nav.js wird new URL bereits genutzt:
   const u = new URL(url);
   const parts = u.pathname.split('/').filter(Boolean).slice(1);
   // .pathname extrahiert NUR den Pfad-Teil — egal, ob die URL absolut
@@ -2660,7 +2660,7 @@ landet und damit TEILBAR/BOOKMARKBAR wird (z.B. ?tab=projekte).
    localStorage unter dem Key "theme". Lies den Wert beim Laden der
    Seite (DOMContentLoaded) wieder aus und setze damit
    document.body.className entsprechend (z.B. "theme-dunkel").
-2. Erweiterung: Wende JETZT auch das Prinzip aus volume.js an — registriere
+2. Erweiterung: Wende JETZT auch das Prinzip aus Volume.js an — registriere
    den 'input'-Listener (nicht erst beim Laden!) ZUSÄTZLICH so, dass ein
    Wechsel SOFORT auch dann übernommen wird, wenn man die Seite z.B. in
    einem zweiten Tab öffnet (Hinweis: 'storage'-Event auf window —
@@ -2955,11 +2955,11 @@ Klassen lohnen sich, wenn:
 
 Einfache Objekte/Funktionen reichen, wenn:
   - es nur EINE Sache gibt (genau EIN Lautstärkeregler, EIN Header —
-    volume.js, nav.js sind dafür Funktionen, KEINE Klassen, und das ist
+    Volume.js, Nav.js sind dafür Funktionen, KEINE Klassen, und das ist
     völlig richtig so!),
   - "Konfiguration" oder "Daten" beschrieben werden, kein Verhalten.
 
-Faustregel für TrafkSite: Die aktuellen Skripte (nav.js, volume.js,
+Faustregel für TrafkSite: Die aktuellen Skripte (Nav.js, Volume.js,
 placeholder.js) sind als Funktionen/IIFE genau richtig — es gibt jeweils
 nur EINE Navigation, EINEN Lautstärkeregler. Würdest du aber z.B. MEHRERE
 unabhängige "Such-Widgets" auf einer Seite brauchen, die jedes seinen
@@ -2991,7 +2991,7 @@ new SuchWidget(...)-Instanzen erzeugst.
    InfoBox extends Komponente (aus 11.2), die im constructor ZUSÄTZLICH
    einen Text annimmt und ihn beim Anzeigen (überschriebene zeigen()-
    Methode, mit super.zeigen()!) per textContent in das Element schreibt.
-5. Diskussion: Würdest du nav.js (aus den Uploads) in eine Klasse
+5. Diskussion: Würdest du Nav.js (aus den Uploads) in eine Klasse
    "Navigation" umschreiben? Nenne EIN Argument dafür und EIN Argument
    dagegen, bezogen auf die Tatsache, dass es auf der Seite garantiert
    nur EINE #header-nav gibt.
@@ -3084,7 +3084,7 @@ macht aus "funktioniert bei mir" → "funktioniert auch, wenn was schiefgeht".
 12.3  Defensive Programmierung — Annahmen prüfen, BEVOR sie crashen
 ------------------------------------------------------------------------
 
-  // Aus deinem nav.js — der ALLERERSTE Schritt jeder Funktion:
+  // Aus deinem Nav.js — der ALLERERSTE Schritt jeder Funktion:
   function initNav() {
       const navContainer = document.getElementById('header-nav');
       if (!navContainer) return;   // ← KEIN Crash, einfach nichts tun,
@@ -3110,12 +3110,12 @@ macht aus "funktioniert bei mir" → "funktioniert auch, wenn was schiefgeht".
   }
 
   // typeof für FUNKTIONEN prüfen — bevor man sie aufruft (genau wie
-  // in deinem nav.js!):
+  // in deinem Nav.js!):
   if (typeof makeBubbleVideo === 'function') {
       bubble.appendChild(makeBubbleVideo());
   }
   // → falls placeholder.js NICHT geladen wurde (z.B. weil jemand das
-  // <script>-Tag entfernt hat), crasht nav.js NICHT — es lässt die
+  // <script>-Tag entfernt hat), crasht Nav.js NICHT — es lässt die
   // Bubble einfach weg.
 
 ------------------------------------------------------------------------
@@ -3157,7 +3157,7 @@ Entwicklung (oder für ein eigenes Mini-Error-Logging).
   console.assert(bedingung, "Nachricht")  → loggt NUR, wenn bedingung FALSE ist
   console.time("x"); ... console.timeEnd("x")   → Zeitmessung
 
-  // Aus deinem nav.js:
+  // Aus deinem Nav.js:
   console.log("HTML URLs gefunden:", urls.length, urls.slice(0, 5));
   console.log("Tree root keys:", Object.keys(tree));
   console.warn(e);
@@ -3178,7 +3178,7 @@ Entwicklung (oder für ein eigenes Mini-Error-Logging).
    document.getElementById(id) aufruft — gibt es das Element NICHT,
    logge console.warn(`Element #${id} nicht gefunden`) UND gib null
    zurück, statt dass der AUFRUFER später bei .irgendwas auf null
-   crasht. Zeige, wie du diese Funktion in nav.js EINSETZEN würdest,
+   crasht. Zeige, wie du diese Funktion in Nav.js EINSETZEN würdest,
    statt der direkten if (!navContainer) return;-Prüfung — welche
    Variante findest du besser, und warum?
 4. window.addEventListener('error', ...): registriere einen globalen
@@ -3264,9 +3264,9 @@ Unterschiede zu "klassischen" Skripten (type="module" bewirkt automatisch):
 13.3  TrafkSite mit Modulen — wie könnte das aussehen?
 ------------------------------------------------------------------------
 
-So, wie TrafkSite AKTUELL strukturiert ist (placeholder.js, nav.js,
-volume.js als normale <script>-Tags), funktioniert es — weil die Skripte
-SICH GEGENSEITIG KENNEN (nav.js ruft global makeBubbleVideo() auf) und
+So, wie TrafkSite AKTUELL strukturiert ist (placeholder.js, Nav.js,
+Volume.js als normale <script>-Tags), funktioniert es — weil die Skripte
+SICH GEGENSEITIG KENNEN (Nav.js ruft global makeBubbleVideo() auf) und
 absichtlich GLOBAL bleiben sollen.
 
 EIN möglicher modularer Umbau (NUR zur Veranschaulichung — keine
@@ -3280,24 +3280,24 @@ Pflichtänderung für dein Projekt!):
   }
   export function injectNavVideos(root = document) { /* ... */ }
 
-  // datei: nav.js
+  // datei: Nav.js
   import { makeBubbleVideo } from './bubble.js';
   export function initNav() {
       // ... ruft jetzt das IMPORTIERTE makeBubbleVideo direkt auf,
       // statt typeof-Check (Modul 12.3) — der Import würde bei
       // FEHLENDER Datei selbst einen Fehler werfen, also ist
-      // makeBubbleVideo IMMER eine Funktion, wenn nav.js überhaupt lädt.
+      // makeBubbleVideo IMMER eine Funktion, wenn Nav.js überhaupt lädt.
   }
 
   // datei: main.js — der "Einstiegspunkt"
-  import { initNav } from './nav.js';
+  import { initNav } from './Nav.js';
   import { injectNavVideos, injectSectionVideos } from './bubble.js';
   // ... Initialisierung
 
   // index.html — NUR EIN <script>-Tag:
   <script type="module" src="files/main.js"></script>
 
-VORTEILE: explizite Abhängigkeiten (man SIEHT sofort, was nav.js
+VORTEILE: explizite Abhängigkeiten (man SIEHT sofort, was Nav.js
 braucht), kein globaler "Topf" mehr, bessere Testbarkeit (Modul 19),
 Tools wie Bundler (Modul 15) können ungenutzten Code automatisch
 entfernen ("Tree Shaking").
@@ -3809,7 +3809,7 @@ CSS-Regeln aus standard.css könnten dein Custom Element beeinflussen
   // --Kraft GAR NICHT definiert wäre.
 
 ------------------------------------------------------------------------
-16.4  Praxisbeispiel: <trafk-nav-item> für nav.js
+16.4  Praxisbeispiel: <trafk-nav-item> für Nav.js
 ------------------------------------------------------------------------
 
 Eine denkbare (nicht zwingende!) Umsetzung eines Nav-Eintrags als Web
@@ -3832,14 +3832,14 @@ Component — fasst HTML-Struktur + Klick-Logik + Styling an EINEM Ort:
   }
   customElements.define('trafk-nav-item', TrafkNavItem);
 
-  // renderTree() (aus nav.js) könnte STATT createElement('li') + viele
+  // renderTree() (aus Nav.js) könnte STATT createElement('li') + viele
   // einzelne appendChild-Aufrufe NUR EIN <trafk-nav-item> erzeugen:
   const item = document.createElement('trafk-nav-item');
   item.setAttribute('name', n.name);
   item.setAttribute('href', n.path || '#');
   li.appendChild(item);
   // Die GESAMTE innere Struktur (.nav, <a class="do">, ...) ist in der
-  // Web Component DEFINIERT — nav.js muss sie nicht mehr "von Hand" bauen.
+  // Web Component DEFINIERT — Nav.js muss sie nicht mehr "von Hand" bauen.
 
 ------------------------------------------------------------------------
 16.5  Wann Web Components, wann "normale" Funktionen?
@@ -3853,7 +3853,7 @@ Web Components lohnen sich, wenn:
   - GEKAPSELTES Styling (Shadow DOM) Konflikte mit globalem CSS vermeiden
     soll.
 
-"Normale" Funktionen (wie aktuell in nav.js, placeholder.js) reichen,
+"Normale" Funktionen (wie aktuell in Nav.js, placeholder.js) reichen,
 wenn:
   - es um EINMALIGE Initialisierung/Manipulation der bestehenden Seite
     geht (Header/Footer laden, Lautstärke anwenden),
@@ -4398,7 +4398,7 @@ nicht automatisch. Mocking ersetzt sie durch einfache "Attrappen":
   "Maximum call stack size exceeded"
     → Endlose Rekursion — eine Funktion ruft (direkt oder über Umwege)
       sich selbst auf, OHNE eine Abbruchbedingung zu erreichen (siehe
-      collapseSelf/renderTree in nav.js — REKURSIVE Funktionen MÜSSEN
+      collapseSelf/renderTree in Nav.js — REKURSIVE Funktionen MÜSSEN
       IMMER einen Fall haben, der NICHT weiter rekursiert!).
 
   "CORS error" / "blocked by CORS policy"
@@ -4410,7 +4410,7 @@ nicht automatisch. Mocking ersetzt sie durch einfache "Attrappen":
 
 --------------------------------------------------------------------------------
 ÜBUNG 19:
-1. Setze in nav.js (lokale Kopie!) ein debugger;-Statement DIREKT NACH
+1. Setze in Nav.js (lokale Kopie!) ein debugger;-Statement DIREKT NACH
    der Zeile const tree = buildTree(urls);. Öffne die Seite mit offenen
    DevTools, lade neu, und prüfe im Scope-Bereich: was steht in tree?
    Nutze "Step over" mehrmals und beobachte, wie sich der Stack
@@ -4448,7 +4448,7 @@ Abschlussprojekt (Modul 21).
 20.1  Module Pattern / Namespace — strukturierter als IIFE
 ------------------------------------------------------------------------
 
-Erinnerung an das IIFE aus volume.js (4.5) — das "Module Pattern" ist
+Erinnerung an das IIFE aus Volume.js (4.5) — das "Module Pattern" ist
 dieselbe Idee, aber GIBT EXPLIZIT EIN OBJEKT MIT DER ÖFFENTLICHEN API
 zurück, statt alles komplett zu verstecken:
 
@@ -4600,7 +4600,7 @@ Teile aktualisieren ("Virtual DOM" / "Reactivity") — das Grundprinzip
 --------------------------------------------------------------------------------
 ÜBUNG 20:
 1. Schreibe VolumeManager (20.1) komplett selbst und ersetze damit
-   inhaltlich volume.js in einer eigenen Test-HTML — teste, dass
+   inhaltlich Volume.js in einer eigenen Test-HTML — teste, dass
    localStorage weiterhin funktioniert, aber STORAGE_KEY von außen
    NICHT zugreifbar ist.
 2. Baue EventBus (20.2) mit new EventTarget() nach. Erstelle ZWEI
@@ -4641,7 +4641,7 @@ Verlauf, einem lokalen "Suchindex" über mehrere Texte, Lade-/Fehler-
 zuständen und einem (simulierten) Server-Aufruf.
 
 Danach gehen wir GEMEINSAM Zeile für Zeile durch dein ECHTES
-AskAlfonz.js, nav.js, placeholder.js, volume.js und index.js. Das Ziel:
+AskAlfonz.js, Nav.js, placeholder.js, Volume.js und index.js. Das Ziel:
 Am Ende ist NICHTS mehr "Magie" — jede Zeile lässt sich auf ein Konzept
 aus diesem Kurs zurückführen.
 
@@ -4731,7 +4731,7 @@ GENAU die Struktur, die searchIndex in AskAlfonz.js am Ende hat:
           url: "trafksite.html",
           titel: "TrafkSite",
           text: "TrafkSite ist die Homepage von Trafkhop Entertainment. Sie " +
-                "nutzt nav.js für die Navigation, volume.js für die Lautstärke " +
+                "nutzt Nav.js für die Navigation, Volume.js für die Lautstärke " +
                 "und placeholder.js für animierte Bubbles.",
           priority: 0.8
       },
@@ -4993,14 +4993,14 @@ auf der Seite (Modul 1.2) — genau wie der Browser es tut.
   → "echter", STATISCHER Inhalt — der bliebe auch OHNE JS sichtbar.
 
   <script src="files/placeholder.js"></script>
-  <script src="files/nav.js"></script>
-  <script src="files/volume.js"></script>
+  <script src="files/Nav.js"></script>
+  <script src="files/Volume.js"></script>
 
   → Reihenfolge ist BEWUSST (Modul 1.3!): placeholder.js DEFINIERT
     makeBubbleVideo, _drawLoop, injectNavVideos, injectSectionVideos UND
-    startet loadComponent für Header/Footer. nav.js BRAUCHT
+    startet loadComponent für Header/Footer. Nav.js BRAUCHT
     makeBubbleVideo (über den typeof-Check, Modul 12.3) — muss also
-    NACH placeholder.js stehen. volume.js ist davon UNABHÄNGIG, könnte
+    NACH placeholder.js stehen. Volume.js ist davon UNABHÄNGIG, könnte
     theoretisch auch woanders stehen — bleibt hier konsistent am Ende.
 
 ------------------------------------------------------------------------
@@ -5111,7 +5111,7 @@ Module 3 + 8 + 10 + 12):
           let flatText = text;
           if (url.endsWith('.html')) {
               const parser = new DOMParser();   // baut ein DOM AUS EINEM
-                                                   // STRING — wie nav.js
+                                                   // STRING — wie Nav.js
                                                    // es mit der Sitemap-XML
                                                    // tut (Modul 3 + 5!)
               const doc = parser.parseFromString(text, 'text/html');
@@ -5489,18 +5489,18 @@ ABSCHNITT 11 — DOMContentLoaded: alles zusammenführen (Zeilen 563-586):
   });
 
 ------------------------------------------------------------------------
-21.9  nav.js, placeholder.js, volume.js — kurze Zusammenfassung
+21.9  Nav.js, placeholder.js, Volume.js — kurze Zusammenfassung
 ------------------------------------------------------------------------
 
 Diese drei Dateien wurden bereits AUSFÜHRLICH in den jeweiligen Modulen
 behandelt:
 
-  nav.js          → komplett in Modul 3.8 durchgegangen (DOM-Aufbau,
+  Nav.js          → komplett in Modul 3.8 durchgegangen (DOM-Aufbau,
                      Rekursion, fetch der Sitemap)
   placeholder.js  → Module 5.3 (mouseenter/leave), 8.2 + 15.2
                      (requestAnimationFrame, document.hidden), 12.3
                      (typeof-Check), 3.6 (loadComponent → appendChild)
-  volume.js       → Modul 7.5 komplett Schritt für Schritt, plus 2.7
+  Volume.js       → Modul 7.5 komplett Schritt für Schritt, plus 2.7
                      (?? statt ||), 5.4 (DOMContentLoaded + load), 9.1
                      (localStorage)
 
@@ -6211,8 +6211,8 @@ sich zwischen die Seite und das NETZWERK schalten ("Proxy im Browser") —
   const DATEIEN = [
       '/TrafkSite/index.html',
       '/TrafkSite/files/standard.css',
-      '/TrafkSite/files/nav.js',
-      '/TrafkSite/files/volume.js',
+      '/TrafkSite/files/Nav.js',
+      '/TrafkSite/files/Volume.js',
       '/TrafkSite/files/placeholder.js'
   ];
 
