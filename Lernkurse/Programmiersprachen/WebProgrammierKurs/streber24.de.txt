@@ -1,0 +1,7 @@
+Ansich alles gut,
+jedoch wird viel basic stoff ausgelassen
+es wird zu viel auf einmal gemacht ohne richtige gescheite lange erklärungen
+es muss alles besser erklärt werden, es müssen auch eher unwichtige sachen gründlich erklärt werden, alle tags die es gibt (zu seiner zeit hald), und so
+Es ist grad in de version einfach zu viel auf ein Mal und zu wenig erklärt (und einiges bereits ausgelassen)
+
+Außerdem ist es ein bisschen blöd strukturiert, warum ist doctype nach den tags z.B. ?

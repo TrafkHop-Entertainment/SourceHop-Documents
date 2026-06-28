@@ -1,0 +1,12 @@
+1. HTML - Das Grundgerüst der Website
+2. CSS - Wie die Website ausschauen soll
+3. JS - Was die Website machen soll
+4. PHP - Das Server Backend
+5. SQL - Datenbanken
+
+6. JSON & XML - Hilfreiche Formate
+7. pyhton xml sitemap generator - only use of python
+
+WAS NICHT VORKOMMT:
+Typeskript, SASS/SCSS, etc.
+HIER WERDEN NUR ROHE SPRACHEN VERWENDET
