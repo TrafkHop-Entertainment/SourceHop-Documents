@@ -1,7 +1,1 @@
-Ansich alles gut,
-jedoch wird viel basic stoff ausgelassen
-es wird zu viel auf einmal gemacht ohne richtige gescheite lange erklärungen
-es muss alles besser erklärt werden, es müssen auch eher unwichtige sachen gründlich erklärt werden, alle tags die es gibt (zu seiner zeit hald), und so
-Es ist grad in de version einfach zu viel auf ein Mal und zu wenig erklärt (und einiges bereits ausgelassen)
-
-Außerdem ist es ein bisschen blöd strukturiert, warum ist doctype nach den tags z.B. ?
+Ja jetzt checktst dus, aber bitte fang gleich mit der Website für ne Firma an, son Portfolio kannste ja später in nem Members abschnitt einbauen! (und nich vergessen, su wie es jetzt ist ist es super. Wenn dann css kommt, bitte mach es gleich halbwegs gescheit, nicht nur "hier ist ne zeile, mach den hintergrund rot und den test türkis, danach klebst du diesen text in die mitte ABER etwas weiter unten links als das", bring css gleich bei, dass es nach irgendwas ausschaut, auf jeden fall besser als ne Seite die nix mit design zu tun hat)
