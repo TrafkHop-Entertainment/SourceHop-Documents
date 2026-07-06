@@ -143,7 +143,23 @@ declare -x NAME        # synonym für export
 declare -r NAME        # synonym für readonly
         </div>
         <p>
-          Umgebungsvariablen wie <span class="glow">$HOME</span>, <span class="glow">$USER</span> oder <span class="glow">$PATH</span> werden von der Login-Shell gesetzt und sind immer verfügbar. Sie sind mit <span class="glow">export</span> markiert und werden an alle Kind-Prozesse weitergegeben.
+          Umgebungsvariablen wie <span class="glow">$HOME</span>, <span class="glow">$USER</span> oder <span class="glow">$PATH</span> werden von der Login-Shell gesetzt und sind immer verfügbar. Sie sind mit <span class="glow">export</span> markiert und werden an alle Kind-Prozesse weitergegeben. <span class="glow">$HOME</span> ist dabei eine der wichtigsten: sie enthält den absoluten Pfad zum Home-Verzeichnis des aktuellen Nutzers (z.B. <span class="glow">/home/max</span>) und ist der Grund, warum Skripte niemals einen Pfad wie <span class="glow">/home/max/.config</span> fest eintippen sollten — <span class="glow">"$HOME/.config"</span> funktioniert auf jedem System, egal wie der Nutzer heißt. Ein paar weitere Umgebungsvariablen, die ständig in Skripten auftauchen:
+        </p>
+        <div class="codeblock">
+$HOME     # Home-Verzeichnis des Nutzers, z.B. /home/max
+$USER     # aktueller Benutzername
+$PWD      # aktuelles Arbeitsverzeichnis (Print Working Directory)
+$OLDPWD   # vorheriges Arbeitsverzeichnis (gesetzt von cd)
+$PATH     # Liste von Ordnern, in denen nach Befehlen gesucht wird
+$SHELL    # Pfad zur Login-Shell, z.B. /bin/bash
+$HOSTNAME # Rechnername
+$LANG     # aktive Sprach-/Locale-Einstellung
+
+# Beispiel: eigene Config-Datei portabel referenzieren
+CONFIG="$HOME/.config/trafktux/settings.conf"
+        </div>
+        <p>
+          Der Unterschied zwischen einer normalen Variable und einer Umgebungsvariable ist einzig <span class="glow">export</span>: <span class="glow">$HOME</span> ist deshalb auch in jedem von der Shell gestarteten Skript oder Programm sichtbar, während eine selbst gesetzte Variable ohne <span class="glow">export</span> nur in der aktuellen Shell existiert.
         </p>
 
         <h2>2.3 — Quoting: Das Herzstück des Shell-Scriptings</h2>
@@ -196,6 +212,7 @@ $$        # PID (Prozess-ID) des aktuellen Skripts
 $!        # PID des zuletzt gestarteten Hintergrundprozesses
 $-        # aktive Shell-Optionen
 $_        # letztes Argument des vorherigen Befehls
+$RANDOM   # eine zufällige Zahl zwischen 0 und 32767, bei jedem Zugriff neu
         </div>
         <p>
           Ein praktisches Beispiel: Mit <span class="glow">realpath "$0"</span> und <span class="glow">dirname</span> kann ein Skript seinen eigenen absoluten Pfad und seinen Ordner bestimmen — unabhängig davon, wie es aufgerufen wurde:
@@ -204,6 +221,14 @@ $_        # letztes Argument des vorherigen Befehls
 SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 # So findet das Skript seine "Geschwister"-Dateien, egal wo es liegt
+        </div>
+        <p>
+          <span class="glow">$RANDOM</span> ist keine "echte" Variable, sondern ein eingebauter Mechanismus: <span class="glow">jedes Mal, wenn man darauf zugreift, liefert Bash eine neue Pseudozufallszahl</span> zwischen 0 und 32767. Mit dem Modulo-Operator <span class="glow">%</span> aus 2.5 lässt sich daraus leicht ein Zufallsbereich bauen — die Basis für jedes Würfelspiel oder Zahlenratespiel:
+        </p>
+        <div class="codeblock">
+echo "$RANDOM"                  # → irgendeine Zahl, z.B. 14823
+echo $(( RANDOM % 6 + 1 ))      # → Zufallszahl zwischen 1 und 6 (ein Würfel)
+echo $(( RANDOM % 100 + 1 ))    # → Zufallszahl zwischen 1 und 100
         </div>
 
         <h2>2.5 — Arithmetik</h2>
@@ -234,9 +259,51 @@ awk "BEGIN {print 10/3}"            # → 3.33333
 local float_val=$(awk "BEGIN {print $val/100}")
         </div>
 
-        <h2>2.6 — Übung 2.6</h2>
+        <h2>2.6 — Nutzereingaben mit read</h2>
+        <p>
+          Bisher kamen Werte entweder als Argumente (<span class="glow">$1</span>, <span class="glow">$2</span>, ...) oder fest im Skript. Für Skripte, die den Nutzer während der Laufzeit etwas fragen sollen — Menüs, Bestätigungen, kleine Spiele — braucht man <span class="glow">read</span>. <span class="glow">read</span> liest eine Zeile von stdin (normalerweise die Tastatur) und speichert sie in einer Variable:
+        </p>
+        <div class="codeblock">
+read ANTWORT              # wartet auf Eingabe, speichert in $ANTWORT
+echo "Du hast $ANTWORT eingegeben"
+
+# -p zeigt einen Prompt-Text, ohne extra echo davor:
+read -p "Wie heißt du? " NAME
+echo "Hallo, $NAME"
+
+# -r ist auch hier wichtig (siehe Kapitel 10.2) — verhindert, dass
+# Backslashes in der Eingabe von read "verschluckt" werden:
+read -rp "Pfad: " PFAD
+
+# -n LIMITIERT auf N Zeichen und kehrt sofort danach zurück,
+# ohne auf Enter zu warten — praktisch für Ja/Nein-Abfragen oder Spiele:
+read -n1 -p "Weiter mit beliebiger Taste... " TASTE
+echo    # Zeilenumbruch, weil -n1 keinen erzeugt
+
+# -s unterdrückt die Bildschirmausgabe der Eingabe — für Passwörter:
+read -sp "Passwort: " PW
+echo
+
+# -t setzt ein Timeout in Sekunden — read gibt einen Exit-Code ungleich 0
+# zurück wenn die Zeit abläuft, ohne dass etwas eingegeben wurde:
+if read -t 5 -p "Schnell antworten (5s): " EINGABE; then
+    echo "Eingabe: $EINGABE"
+else
+    echo "Zeit abgelaufen!"
+fi
+        </div>
+        <p>
+          Diese Bausteine — <span class="glow">$RANDOM</span> für Zufall und <span class="glow">read</span> für Eingaben — reichen bereits für ein erstes kleines Terminal-Spiel, wie die folgende Übung zeigt.
+        </p>
+
+        <h2>2.7 — Übung 2.7</h2>
         <p>
           Erstelle ein Skript <span class="glow">monitor-info.sh</span> das mit <span class="glow">$0</span> seinen eigenen Namen ausgibt. Es soll zwei Argumente entgegennehmen: eine Breite und eine Höhe (z.B. <span class="glow">./monitor-info.sh 1920 1080</span>). Berechne mit <span class="glow">$(( ))</span> das Ergebnis von <span class="glow">Breite * Höhe</span> (die Gesamtanzahl an Pixeln) und gib es aus. Teste bewusst einen Fehler: lass ein Leerzeichen ums <span class="glow">=</span> stehen und beobachte die Fehlermeldung.
+        </p>
+
+        <h2>2.8 — Übung 2.8: Zahlenraten (erstes Terminal-Spiel)</h2>
+        <p>
+          Schreibe ein Skript <span class="glow">zahlenraten.sh</span>. Zu Beginn wird mit <span class="glow">$RANDOM</span> eine Geheimzahl zwischen 1 und 100 gezogen (Tipp: <span class="glow">$(( RANDOM % 100 + 1 ))</span>). Danach fragt das Skript in einer Schleife mit <span class="glow">read -p</span> nach einem Tipp und vergleicht ihn mit <span class="glow">(( ))</span> gegen die Geheimzahl: ist der Tipp zu hoch oder zu niedrig, gibt das Skript einen entsprechenden Hinweis aus und fragt erneut; stimmt der Tipp, gratuliert das Skript und beendet sich. Die Schleifen-Syntax selbst wird erst in Kapitel 10 im Detail erklärt — nutze für diese Übung einfach <span class="glow">while true; do ... done</span> und <span class="glow">break</span>, wenn die Zahl erraten wurde.
         </p>
       </section>
 
@@ -366,10 +433,47 @@ case "$ACTION" in
     *)      echo "Unbekannte Aktion: $ACTION"; exit 1 ;;
 esac
         </div>
+        <p>
+          Ein extrem häufiges Muster ist <span class="glow">case "$1" in</span>: das erste Kommandozeilenargument (die Spezialvariable <span class="glow">$1</span> aus 2.4) wird direkt als Auswahl für <span class="glow">case</span> benutzt. So entstehen Skripte, die wie eigene kleine Befehle mit Unterbefehlen funktionieren, z.B. <span class="glow">./mein-skript.sh start</span> oder <span class="glow">./mein-skript.sh status</span>. <span class="glow">$1</span> ist dabei nichts Besonderes für <span class="glow">case</span> — es ist einfach die Variable, die das erste Argument enthält, genau wie in jedem anderen Vergleich auch:
+        </p>
+        <div class="codeblock">
+#!/bin/bash
+# Aufruf: ./service.sh start | stop | status
+case "$1" in
+    start)  echo "Starte Dienst..." ;;
+    stop)   echo "Stoppe Dienst..." ;;
+    status) echo "Dienst läuft" ;;
+    *)      echo "Nutzung: $0 {start|stop|status}"; exit 1 ;;
+esac
+
+# Genauso funktioniert case natürlich auch mit selbst eingelesenen
+# Werten, z.B. von read (siehe 2.6) — nützlich für Spiel-Logik:
+read -p "Stein, Schere oder Papier? " SPIELER
+COMPUTER_WAHL=$(( RANDOM % 3 ))   # 0=Stein, 1=Schere, 2=Papier
+
+case "$SPIELER" in
+    stein)
+        (( COMPUTER_WAHL == 1 )) && echo "Du gewinnst! Stein schlägt Schere."
+        (( COMPUTER_WAHL == 2 )) && echo "Du verlierst! Papier schlägt Stein."
+        (( COMPUTER_WAHL == 0 )) && echo "Unentschieden."
+        ;;
+    schere|papier)
+        echo "Logik analog zu oben — als Übung weiterbauen"
+        ;;
+    *)
+        echo "Ungültige Wahl. Erlaubt: stein, schere, papier"
+        ;;
+esac
+        </div>
 
         <h2>3.5 — Übung 3.5</h2>
         <p>
           Schreibe ein Skript <span class="glow">test-env.sh</span> das prüft, ob die Datei <span class="glow">~/.bashrc</span> existiert und ob sie lesbar ist — jeweils mit einer passenden Ausgabe. Das Skript nimmt außerdem ein Argument (<span class="glow">$1</span>) entgegen: <span class="glow">up</span>, <span class="glow">down</span> oder <span class="glow">status</span>. Mit <span class="glow">case</span> sollen drei verschiedene Ausgaben produziert werden. Bei unbekanntem Argument gibt das Skript eine Fehlermeldung aus und beendet sich mit <span class="glow">exit 1</span>.
+        </p>
+
+        <h2>3.6 — Übung 3.6: Schere, Stein, Papier</h2>
+        <p>
+          Baue aus dem obigen Praxisbeispiel ein vollständiges Spiel <span class="glow">ssp.sh</span>. Der Computer wählt mit <span class="glow">$RANDOM</span> zufällig zwischen Stein, Schere und Papier (Tipp: eine Zahl 0-2 lässt sich mit einem Array oder mit <span class="glow">case</span> in einen Namen übersetzen). Der Spieler gibt seine Wahl mit <span class="glow">read -p</span> ein. Mit <span class="glow">case</span> wird für <span class="glow">stein</span>, <span class="glow">schere</span> und <span class="glow">papier</span> jeweils vollständig ausgewertet, wer gewinnt. Ungültige Eingaben (alles außer den drei erlaubten Wörtern) führen zu einer Fehlermeldung, ohne dass eine Runde gezählt wird.
         </p>
       </section>
 
@@ -671,7 +775,7 @@ echo "Fehler" >&2      # → stderr — wichtig für Fehlermeldungen!
 read -r EINGABE        # liest aus stdin
         </div>
         <p>
-          <span class="glow">Fehlermeldungen gehören auf stderr</span>, damit sie von normaler Ausgabe getrennt werden können.</span></span> Das ist eine Unix-Konvention, die man einhalten sollte.
+          <span class="glow">Fehlermeldungen gehören auf stderr</span>, damit sie von normaler Ausgabe getrennt werden können. Das ist eine Unix-Konvention, die man einhalten sollte.
         </p>
 
         <h2>6.2 — Umleitung</h2>
@@ -748,7 +852,38 @@ cat <<- EOF
 EOF
         </div>
 
-        <h2>6.6 — Named Pipes (FIFOs)</h2>
+        <h2>6.6 — Terminal-Steuerung: clear, tput und Farben</h2>
+        <p>
+          stdout muss nicht immer nur Zeile für Zeile nach unten wachsen. Für Menüs, Fortschrittsanzeigen oder Terminal-Spiele will man den Bildschirm leeren, den Cursor gezielt bewegen oder Text einfärben. Auch das ist letztlich nur eine Umleitung von speziellen Steuer-Bytes auf stdout, die das Terminal interpretiert:
+        </p>
+        <div class="codeblock">
+clear              # Bildschirm leeren, Cursor nach oben links
+
+# tput: portabler Zugriff auf Terminal-Fähigkeiten
+tput cup 5 10      # Cursor auf Zeile 5, Spalte 10 setzen (cursor position)
+tput civis         # Cursor unsichtbar machen (cursor invisible)
+tput cnorm         # Cursor wieder sichtbar (cursor normal)
+tput cols          # Terminal-Breite in Zeichen ausgeben
+tput lines         # Terminal-Höhe in Zeichen ausgeben
+
+# ANSI-Escape-Codes: direkter, aber weniger portabel als tput.
+# \033[ (oder \e[) leitet die Sequenz ein:
+echo -e "\033[31mDieser Text ist rot\033[0m"     # 31=rot,   0=zurücksetzen
+echo -e "\033[32mDieser Text ist grün\033[0m"    # 32=grün
+echo -e "\033[1mFett\033[0m"                      # 1=fett
+
+# Praxisbeispiel: einfache Statusanzeige, die sich an Ort und Stelle aktualisiert
+for i in {1..5}; do
+    tput cup 0 0          # immer an dieselbe Stelle zurück...
+    echo "Fortschritt: $i / 5"
+    sleep 0.5
+done
+        </div>
+        <p>
+          <span class="glow">tput</span> ist vorzuziehen, wenn ein Skript auf verschiedenen Terminal-Typen laufen soll, weil es die richtigen Codes für das jeweilige Terminal nachschlägt. Rohe ANSI-Codes wie <span class="glow">\033[31m</span> funktionieren zwar auf praktisch jedem modernen Terminal, sind aber weniger portabel und schwerer zu lesen. Für Terminal-Spiele reicht meist eine simple Kombination aus <span class="glow">clear</span> zu Beginn jeder Runde und ein paar Farbcodes zur Hervorhebung.
+        </p>
+
+        <h2>6.7 — Named Pipes (FIFOs)</h2>
         <p>
           Eine Named Pipe ist eine spezielle Datei, die wie eine Pipe wirkt, aber zwischen nicht verwandten Prozessen genutzt werden kann. Sie wird mit <span class="glow">mkfifo</span> erstellt:
         </p>
@@ -759,7 +894,7 @@ echo "Hallo" > /tmp/meine_pipe  # Schreibt in die Pipe
 rm /tmp/meine_pipe              # Aufräumen
         </div>
 
-        <h2>6.7 — Übung 6.7</h2>
+        <h2>6.8 — Übung 6.8</h2>
         <p>
           Schreibe ein Skript <span class="glow">process-monitor.sh</span> das einen Prozessnamen als Argument entgegennimmt. Mit <span class="glow">ps aux</span> als Quelle und <span class="glow">grep</span> wird nach dem Prozess gefiltert. Mit <span class="glow">awk</span> werden CPU-Nutzung und PID jedes gefundenen Prozesses ausgegeben. Die Ausgabe wird mit <span class="glow">tee</span> gleichzeitig auf der Konsole und in <span class="glow">/tmp/procs.log</span> gespeichert. Fehlermeldungen werden mit <span class="glow">2>/dev/null</span> unterdrückt.
         </p>
@@ -788,7 +923,7 @@ TIEF=$(echo $(date +%Y))
 # Wichtig: <span class="glow">Zeilenumbrüche werden entfernt!</span>
 ZEILEN=$(cat datei.txt)
 # "Zeile1\nZeile2" wird zu "Zeile1 Zeile2" in der Variable.
-# Für Zeilen: mapfile oder IFS-Loop nutzen (Kapitel 8, 9).
+# Für Zeilen: mapfile oder IFS-Loop nutzen (Kapitel 4, 10).
 
 # Praxisbeispiel:
 SCREEN_H=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .height')
@@ -1036,7 +1171,7 @@ ${VAR:+ersatz}    # "ersatz" wenn VAR gesetzt, sonst leer
 ${VAR:?fehlermsg} # Fehler + Meldung wenn VAR leer/ungesetzt
 
 # Praxisbeispiele:
-STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/app-menu-state"
 # XDG_RUNTIME_DIR ist normalerweise /run/user/1000
 # Falls nicht gesetzt: /tmp als Fallback
         </div>
@@ -1044,6 +1179,11 @@ STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
         <h2>8.7 — Übung 8.7</h2>
         <p>
           Schreibe ein Skript <span class="glow">log-parser.sh</span> das einen Log-Dateipfad als <span class="glow">$1</span> entgegennimmt. Mit <span class="glow">grep</span> werden alle ERROR-Zeilen gefunden. Mit <span class="glow">awk</span> werden Datum (erstes Wort) und Fehlermeldung (Rest der Zeile) extrahiert. Mit <span class="glow">sed</span> werden IP-Adressen durch <span class="glow">[ZENSIERT]</span> ersetzt. Mit <span class="glow">=~</span> und <span class="glow">BASH_REMATCH</span> werden Zeilen mit HTTP-Status-Codes (drei Ziffern) gefunden und der Code ausgegeben.
+        </p>
+
+        <h2>8.8 — Übung 8.8: Galgenmännchen</h2>
+        <p>
+          Die String-Operationen aus 8.5 reichen für ein klassisches Galgenmännchen. Schreibe <span class="glow">galgenmaennchen.sh</span>: ein Wort wird fest im Skript hinterlegt (oder zufällig aus einem Array gewählt — siehe Kapitel 4). Mit <span class="glow">${#WORT}</span> wird die Länge bestimmt, mit <span class="glow">${WORT:i:1}</span> (in einer <span class="glow">for</span>-Schleife über die Indizes) jeder einzelne Buchstabe geprüft. Die schon aufgedeckten Buchstaben werden in einem Array gespeichert und bei jeder Runde neu als Wort mit Unterstrichen (<span class="glow">_</span>) für nicht erratene Buchstaben zusammengesetzt. Der Spieler gibt mit <span class="glow">read -n1</span> jeweils einen einzelnen Buchstaben ein. Nach 6 falschen Versuchen verliert der Spieler; sind alle Buchstaben aufgedeckt, gewinnt er. Nutze <span class="glow">clear</span> aus 6.6, um den Bildschirm bei jeder Runde neu aufzubauen.
         </p>
       </section>
 
@@ -1145,7 +1285,7 @@ kill -9 PID       # SIGKILL — sofort beenden, nicht abfangbar
 kill -SIGUSR1 PID # benutzerdefiniertes Signal
 kill -SIGUSR2 PID
 
-pkill -SIGUSR1 waybar   # Signal an Prozess nach Name
+pkill -SIGUSR1 trafk-daemon   # Signal an Prozess nach Name
 pkill -f "$SCRIPT"      # Signal per vollem Kommandozeilen-String
         </div>
 
@@ -1204,8 +1344,8 @@ while (( ZAEHLER < 5 )); do
 done
 
 # until: läuft solange Bedingung false ist (umgekehrtes while)
-until pgrep -x "waybar" > /dev/null; do
-    echo "Warte auf waybar..."
+until pgrep -x "trafk-daemon" > /dev/null; do
+    echo "Warte auf trafk-daemon..."
     sleep 1
 done
 
@@ -1315,6 +1455,11 @@ fi
         <h2>10.5 — Übung 10.5</h2>
         <p>
           Schreibe ein Skript <span class="glow">parallel-fetch.sh</span> das eine Liste von URLs als Argument-Array entgegennimmt. Jede URL wird parallel mit <span class="glow">curl -s URL > /tmp/datei</span> heruntergeladen. Alle PIDs werden in einem Array gespeichert. Das Skript wartet mit <span class="glow">wait</span> auf alle Prozesse und zählt Erfolge und Fehler anhand der Exit-Codes.
+        </p>
+
+        <h2>10.6 — Übung 10.6: Zahlenraten mit begrenzten Versuchen</h2>
+        <p>
+          Erweitere das Zahlenraten-Spiel aus Übung 2.8 zu <span class="glow">zahlenraten-v2.sh</span>. Statt der provisorischen <span class="glow">while true</span>-Schleife wird jetzt eine echte <span class="glow">for</span>-Schleife über eine feste Anzahl von Versuchen (z.B. 7) verwendet. Bei jedem falschen Tipp wird ein Zähler mit <span class="glow">(( VERSUCH++ ))</span> erhöht und die verbleibenden Versuche ausgegeben. Wird die Zahl erraten, verlässt <span class="glow">break</span> die Schleife sofort. Sind alle Versuche aufgebraucht, ohne dass die Zahl erraten wurde, gibt das Skript die Lösung aus. Speichere am Ende jeder Runde die Anzahl der gebrauchten Versuche in einer Datei <span class="glow">~/.zahlenraten_highscore</span> — aber nur, wenn sie kleiner (also besser) ist als der bisherige Bestwert.
         </p>
       </section>
 
@@ -1470,9 +1615,9 @@ setsid bash -c "$value" >/dev/null 2>&1 &
         <h2>12.3 — Prozess-Informationen</h2>
         <div class="codeblock">
 ps aux                  # alle Prozesse mit Details
-pgrep -x "waybar"       # PID von waybar (exakter Name-Match)
+pgrep -x "trafk-daemon" # PID per exaktem Name-Match
 pgrep -f "python.*popup" # PID per vollem Kommandozeilen-String
-pidof "waybar"           # ähnlich wie pgrep
+pidof "trafk-daemon"     # ähnlich wie pgrep
 $!                       # PID des zuletzt gestarteten Hintergrundprozesses
 
 # Toggle-Logik: läuft der Prozess? Beenden. Läuft er nicht? Starten.
@@ -1600,116 +1745,12 @@ done
       
       
       <section id="kapitel-14">
-        <h1>Kapitel 14 — Rofi-Integration und Skript-Architekturen</h1>
-        <p>
-          Rofi ist ein Launcher und Menü-Tool für Linux. Es kann externe Skripte als dynamische Datenquellen nutzen — ein elegantes IPC-System über stdout/stdin und Environment-Variablen. Dieses Kapitel zeigt die Architektur dahinter am konkreten Beispiel.
-        </p>
-
-        <h2>14.1 — Wie Rofi mit Skripten kommuniziert</h2>
-        <p>
-          Rofi ruft das Skript mehrfach auf und kommuniziert über Environment-Variablen:
-        </p>
-        <div class="codeblock">
-rofi -show menu -modi "menu:/pfad/zum/skript.sh"
-
-# Rofi ruft das Skript so auf:
-# 1. Erster Aufruf (ROFI_RETV=0): Skript gibt Einträge aus.
-# 2. Bei Auswahl (ROFI_RETV=1): Skript kriegt die Selektion als $1.
-# 3. Bei Auswahl+Enter (ROFI_RETV=2): alternative Aktion.
-# 4. Bei Hotkey (ROFI_RETV=10, 11, ...): Hotkey-Aktionen.
-
-# $ROFI_RETV   → 0=erster Aufruf, 1=Auswahl, 2=Auswahl+Enter
-# $ROFI_INFO   → Info-String des ausgewählten Eintrags
-        </div>
-
-        <h2>14.2 — Das Rofi-Ausgabeformat</h2>
-        <p>
-          Rofi versteht ein spezielles Format für Einträge mit Metadaten. Das Null-Byte trennt Anzeigetext von Metadaten, ASCII 31 trennt Key und Value:
-        </p>
-        <div class="codeblock">
-# Format:  "Anzeigetext\0icon\x1fICON_NAME\x1finfo\x1fMEIN_INFO\n"
-# \0   = Null-Byte: trennt Anzeigetext von Metadaten
-# \x1f = ASCII 31 (Unit Separator): trennt Key und Value
-# \n   = neue Zeile = neuer Eintrag
-
-# Eintrag mit Icon und Info:
-printf "← Zurück\0icon\x1fgo-previous\x1finfo\x1fback:\n"
-
-# Dynamisch mit printf %s:
-printf "%s\0icon\x1f%s\x1finfo\x1fcmd:%s\n" "$name" "$icon" "$exec_cmd"
-
-# Steueranweisungen an Rofi (kein Eintrag, nur Rofi-Konfiguration):
-printf "\0prompt\x1fNeuer Prompt\n"       # Prompt-Text ändern
-printf "\0no-custom\x1ffalse\n"           # Freie Eingabe erlauben
-printf "\0keep-selection\x1ftrue\n"       # Auswahl behalten
-        </div>
-
-        <h2>14.3 — State-Management zwischen Aufrufen</h2>
-        <p>
-          Da Rofi das Skript neu aufruft für jeden Schritt, muss der Zustand (welcher Ordner bin ich gerade?) irgendwo gespeichert werden. Die Lösung ist eine State-Datei in <span class="glow">XDG_RUNTIME_DIR</span>:
-        </p>
-        <div class="codeblock">
-STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-menu-state"
-
-get_path() { [[ -f "$STATE_FILE" ]] && cat "$STATE_FILE" || echo "."; }
-set_path() { echo "$1" > "$STATE_FILE"; }
-
-# Navigation:
-case "$type" in
-    dir)   set_path "$value" ;;
-    back)  set_path "${path%.*}" ;;     # ein Level hoch
-    cmd)   setsid bash -c "$value" >/dev/null 2>&1 &; exit 0 ;;
-    quit)  rm -f "$STATE_FILE"; exit 0 ;;
-esac
-
-# Entry-Point — unterscheidet ob Rofi oder Nutzer aufgerufen hat:
-if [[ -n "$ROFI_RETV" ]]; then
-    run_mode "$1"   # Rofi hat das Skript aufgerufen
-else
-    rm -f "$STATE_FILE"
-    rofi -show menu -modi "menu:$SCRIPT_PATH" ...
-fi
-        </div>
-
-        <h2>14.4 — Cache-Strategien</h2>
-        <p>
-          Teure Operationen (z.B. hunderte .desktop-Dateien lesen) sollen nicht bei jedem Aufruf wiederholt werden. Eine Cache-Datei mit Ablaufzeit löst das Problem:
-        </p>
-        <div class="codeblock">
-CACHE_FILE="${XDG_RUNTIME_DIR:-/tmp}/rofi-desktop-cache"
-CACHE_MAX_AGE=120    # Sekunden
-
-is_cache_valid() {
-    [[ -f "$CACHE_FILE" ]] || return 1
-    local now mod age
-    now=$(date +%s)                                   # aktuelle Zeit als Unix-Timestamp
-    mod=$(stat -c %Y "$CACHE_FILE" 2>/dev/null) || return 1  # Datei-Änderungszeit
-    age=$(( now - mod ))                              # Alter in Sekunden
-    (( age < CACHE_MAX_AGE ))                         # true wenn jung genug
-}
-
-# Cache im Hintergrund auffrischen wenn nötig — Nutzer wartet nicht:
-if [[ -z "$ROFI_RETV" ]] && ! is_cache_valid; then
-    build_desktop_cache &
-fi
-        </div>
-
-        <h2>14.5 — Übung 14.5</h2>
-        <p>
-          Baue ein Rofi-Skript <span class="glow">rofi-workspaces.sh</span>. Alle Hyprland-Workspaces werden als Einträge angezeigt (<span class="glow">hyprctl workspaces -j | jq</span>). Bei Auswahl wird mit <span class="glow">hyprctl dispatch workspace</span> dorthin gewechselt. Es gibt einen Eintrag "Neuer Workspace". Die Workspace-Liste wird mit einem 30-Sekunden-Cache gepuffert.
-        </p>
-      </section>
-
-      
-      
-      
-      <section id="kapitel-15">
-        <h1>Kapitel 15 — Fortgeschrittene Patterns, Architektur und Professionelles Scripting</h1>
+        <h1>Kapitel 14 — Fortgeschrittene Patterns, Architektur und Professionelles Scripting</h1>
         <p>
           Die letzten Kapitel haben die Werkzeuge gezeigt. Dieses Kapitel zeigt, wie man sie zu guten Skripten zusammenfügt — Skripte, die robust, wartbar und professionell sind.
         </p>
 
-        <h2>15.1 — Das Dispatcher/Handler Pattern</h2>
+        <h2>14.1 — Das Dispatcher/Handler Pattern</h2>
         <p>
           Viele Shell-Skripte folgen einem klaren Muster: Eingabe entgegennehmen, entscheiden was zu tun ist, Aktion ausführen. Dieses Pattern ist die Grundlage für wartbare Skripte:
         </p>
@@ -1737,7 +1778,7 @@ case "$chosen" in
 esac
         </div>
 
-        <h2>15.2 — Idempotenz: Skripte die man beliebig oft aufrufen kann</h2>
+        <h2>14.2 — Idempotenz: Skripte die man beliebig oft aufrufen kann</h2>
         <p>
           <span class="glow">Ein idempotentes Skript hat beim zweiten Aufruf dieselbe Wirkung wie beim ersten</span>. Das ist besonders wichtig für Setup- und Konfigurations-Skripte:
         </p>
@@ -1755,7 +1796,7 @@ mkdir -p neuer_ordner
 ln -sf quelle ziel    # -f macht das idempotent
         </div>
 
-        <h2>15.3 — Lock-Files: Race Conditions vermeiden</h2>
+        <h2>14.3 — Lock-Files: Race Conditions vermeiden</h2>
         <p>
           Wenn ein Skript mehrfach parallel gestartet werden kann (z.B. durch Hotkeys), braucht man manchmal Mutex-Mechanismen. <span class="glow">flock</span> ist die <span class="glow">atomare Lösung</span>:
         </p>
@@ -1775,7 +1816,7 @@ flock -n 9 || { echo "Läuft bereits"; exit 1; }
 # flock öffnet und sperrt die Datei in einem <span class="glow">atomaren Schritt</span>
         </div>
 
-        <h2>15.4 — Config-Dateien lesen und schreiben</h2>
+        <h2>14.4 — Config-Dateien lesen und schreiben</h2>
         <p>
           Konfigurationsdateien im INI-Stil oder JSON sind in Shell-Skripten eine häufige Anforderung:
         </p>
@@ -1797,7 +1838,7 @@ HOST=$(echo "$CONFIG" | jq -r '.host')
 PORT=$(echo "$CONFIG" | jq -r '.port // 8080')  # mit Default-Wert
         </div>
 
-        <h2>15.5 — Testen von Shell-Skripten</h2>
+        <h2>14.5 — Testen von Shell-Skripten</h2>
         <p>
           Kein Standard-Test-Framework existiert für Bash, aber es gibt bewährte Muster für Unit-Tests:
         </p>
@@ -1830,7 +1871,7 @@ assert "mittel" "$result" "get_icon 34-66 gibt mittleres Icon"
 # github.com/bats-core/bats-core — für größere Projekte empfohlen
         </div>
 
-        <h2>15.6 — Performance-Optimierung</h2>
+        <h2>14.6 — Performance-Optimierung</h2>
         <p>
           <span class="glow">Shell-Skripte sind langsam für intensive Berechnungen, aber schnell für Prozess-Orchestrierung</span>. Diese Muster vermeiden die häufigsten Performance-Fallen:
         </p>
@@ -1863,7 +1904,7 @@ for addr in ...; do
 done
         </div>
 
-        <h2>15.7 — Abschlussübung: workspace-daemon.sh</h2>
+        <h2>14.7 — Abschlussübung: workspace-daemon.sh</h2>
         <p>
           Diese Abschlussübung kombiniert alles Gelernte in einem vollständigen Daemon-Skript <span class="glow">workspace-daemon.sh</span>:
         </p>
@@ -1872,6 +1913,94 @@ done
         </p>
         <p>
           Idempotentes Start/Stop ist implementiert: eine Lock-Datei mit <span class="glow">flock</span>, <span class="glow">trap EXIT</span> räumt auf. Eine <span class="glow">is_running()</span>-Funktion prüft per PID-Datei ob der Daemon läuft. Das Skript wird mit <span class="glow">start</span>, <span class="glow">stop</span> oder <span class="glow">status</span> aufgerufen und nutzt <span class="glow">set -euo pipefail</span> sowie eine <span class="glow">debug()</span>-Funktion die über <span class="glow">DEBUG=true</span> aktivierbar ist.
+        </p>
+
+        <h2>14.8 — Fallstudie: Echte Hyprland-Automatisierungsskripte</h2>
+        <p>
+          An zwei realen Skripten aus dem TrafkTux-Alltag lässt sich gut zeigen, <span class="glow">wofür Bash tatsächlich das richtige Werkzeug ist</span>: nicht um eine eigene grafische Oberfläche wie ein Rofi-Menü oder ein Waybar-Modul nachzubauen — dafür bräuchte Bash fremde, tool-spezifische Datenformate und wäre nur ein Umweg —, sondern um <span class="glow">bereits vorhandene Kommandozeilen-Programme zu orchestrieren</span>: <span class="glow">hyprctl</span> fragen, <span class="glow">jq</span> das Ergebnis filtern lassen, eine Config-Datei schreiben, ein weiteres Programm starten. Genau diese Klebearbeit zwischen fertigen Werkzeugen ist die ursprüngliche Stärke der Shell.
+        </p>
+        <p>
+          Das erste Skript, <span class="glow">layout_switcher.sh</span>, wechselt das Tiling-Layout von Hyprland und merkt sich die letzte Wahl über einen Neustart hinweg. Es kombiniert fast alles aus diesem Kurs zu einem kompakten, alltagstauglichen Werkzeug:
+        </p>
+        <div class="codeblock">
+#!/usr/bin/env bash
+ACTION=$(echo "$1" | tr '[:upper:]' '[:lower:]')   # Argument normalisieren
+
+STATE_DIR="$HOME/.cache/hypr"                       # $HOME aus Kapitel 2
+STATE_FILE="$STATE_DIR/layout_switcher_state"
+mkdir -p "$STATE_DIR"                                # idempotent, siehe 14.2
+
+save_layout_state() { echo "$1" > "$STATE_FILE"; }   # Funktion, siehe Kapitel 5
+
+unfloat_current_workspace() {
+    CURRENT_WS=$(hyprctl activeworkspace -j | jq '.id')   # jq, siehe Kapitel 11
+    hyprctl clients -j \
+        | jq -r ".[] | select(.workspace.id == $CURRENT_WS and .floating == true) | .address" \
+        | while read -r addr; do                          # read-Schleife, siehe Kapitel 10
+              hyprctl eval "hl.dispatch(hl.dsp.window.float({ action = 'toggle', window = 'address:$addr' }))"
+          done
+}
+
+case "$ACTION" in                                    # Dispatcher-Pattern, siehe 14.1
+    master|dwindle)
+        unfloat_current_workspace
+        hyprctl eval "hl.config({ general = { layout = '$ACTION' } })"
+        save_layout_state "$ACTION"
+        ;;
+    bigscreen|monocle)
+        hyprctl eval "hl.config({ general = { layout = 'monocle' } })"
+        save_layout_state "monocle"
+        ;;
+esac
+        </div>
+        <p>
+          Bemerkenswert: <span class="glow">ACTION=$(echo "$1" | tr '[:upper:]' '[:lower:]')</span> nutzt einen externen Prozess (<span class="glow">tr</span>), um das Argument klein zu schreiben. Mit dem Wissen aus 8.5 geht das auch ganz ohne externen Prozess, rein bash-intern und etwas schneller: <span class="glow">ACTION="${1,,}"</span>. Solche kleinen Verbesserungen an echten Skripten zu erkennen ist ein gutes Zeichen dafür, dass der Kurs sitzt.
+        </p>
+        <p>
+          Das zweite Skript, <span class="glow">random_wallpaper.sh</span>, wählt beim Start ein zufälliges Hintergrundbild und schreibt daraus die Konfiguration für <span class="glow">hyprpaper</span>:
+        </p>
+        <div class="codeblock">
+#!/usr/bin/env bash
+WALLPAPER_DIR="$HOME/.config/hypr/wallpapers"
+HYPRPAPER_CONF="$HOME/.config/hypr/hyprpaper.conf"
+
+pkill -x hyprpaper 2>/dev/null    # alte Instanz beenden, siehe Kapitel 9/12
+
+# Bilder einsammeln — mapfile + Process Substitution, siehe Kapitel 4 und 7:
+mapfile -t IMAGES < <(find "$WALLPAPER_DIR" -maxdepth 1 -type f \( \
+    -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \
+\) 2>/dev/null)
+
+if [ "${#IMAGES[@]}" -eq 0 ]; then
+    notify-send "Wallpaper" "Kein Bild in $WALLPAPER_DIR gefunden." 2>/dev/null
+    exit 1
+fi
+
+# Zufälliges Element wählen — $RANDOM und Array-Indizierung, siehe Kapitel 2 und 4:
+RANDOM_IMAGE="${IMAGES[RANDOM % ${#IMAGES[@]}]}"
+
+# Config-Datei per Here-Document erzeugen, siehe Kapitel 6:
+cat > "$HYPRPAPER_CONF" <<EOF
+preload = $RANDOM_IMAGE
+wallpaper {
+    monitor = eDP-1
+    path = $RANDOM_IMAGE
+    fit_mode = cover
+}
+EOF
+
+hyprpaper &   # im Hintergrund starten, siehe Kapitel 10/12
+        </div>
+        <p>
+          Beide Skripte machen nichts, was ein Terminal-Befehl nicht auch einzeln könnte — ihr Wert liegt darin, mehrere Schritte zuverlässig, wiederholbar und mit sinnvoller Fehlerbehandlung zu einer Aktion zu verketten. Genau dafür ist Bash gebaut, und genau deshalb ist es das Standardwerkzeug für System- und Desktop-Automatisierung auf Linux.
+        </p>
+        <p>
+          Über TrafkTux und Hyprland hinaus taucht dasselbe Muster überall in der Linux-Welt auf: <span class="glow">Backup-Skripte</span>, die <span class="glow">rsync</span> oder <span class="glow">tar</span> orchestrieren und Logs schreiben; <span class="glow">Dotfiles-Installer</span>, die Konfigurationsdateien idempotent verlinken (<span class="glow">ln -sf</span>, siehe Schnellreferenz); <span class="glow">Git-Hooks</span> (<span class="glow">.git/hooks/pre-commit</span>), die vor jedem Commit Tests oder Linter laufen lassen; <span class="glow">systemd-Service-Wrapper</span>, die ein Programm mit der richtigen Umgebung starten; <span class="glow">CI/CD-Pipelines</span>, in denen fast jeder Build-Schritt letztlich ein Shell-Skript ist; und klassische <span class="glow">Cronjobs</span> für wiederkehrende Wartungsaufgaben. Überall dort, wo bereits fertige Programme nur noch koordiniert, deren Ausgaben gefiltert und Ergebnisse weitergereicht werden müssen, ist Bash die richtige Wahl. Sobald es dagegen um komplexe Datenstrukturen, aufwendige Geschäftslogik oder eigene grafische Oberflächen geht, lohnt sich der Wechsel zu einer Sprache wie Python — Bash bleibt dann bestenfalls der Klebstoff drumherum.
+        </p>
+
+        <h2>14.9 — Bonus-Projekt: Tic-Tac-Toe im Terminal</h2>
+        <p>
+          Als abschließendes Übungsprojekt, das noch einmal fast den gesamten Kurs zusammenführt: Schreibe <span class="glow">tictactoe.sh</span>. Das Spielfeld wird als Array mit 9 Elementen gespeichert (Indizes 0-8, siehe Kapitel 4), initial mit Leerzeichen oder Zahlen als Platzhalter gefüllt. Eine Funktion <span class="glow">zeichne_feld()</span> (Kapitel 5) gibt das aktuelle Feld formatiert aus — <span class="glow">clear</span> aus 6.6 sorgt dafür, dass jede Runde sauber neu gezeichnet wird. Zwei Spieler wechseln sich ab (<span class="glow">X</span> und <span class="glow">O</span>) und wählen mit <span class="glow">read -p</span> ein freies Feld 1-9. Ungültige Eingaben (Feld schon belegt, Zahl außerhalb 1-9) werden mit <span class="glow">case</span> oder <span class="glow">[[ ]]</span>-Prüfungen abgefangen und führen zu einer erneuten Abfrage, ohne den Zug zu zählen. Nach jedem Zug prüft eine Funktion <span class="glow">pruefe_gewinner()</span> alle acht möglichen Gewinnreihen (drei Zeilen, drei Spalten, zwei Diagonalen) auf drei gleiche Zeichen in Folge. Eine <span class="glow">while</span>-Schleife (Kapitel 10) hält das Spiel am Laufen, bis entweder ein Gewinner feststeht oder alle neun Felder belegt sind (Unentschieden). Optional: <span class="glow">trap</span> aus Kapitel 9 fängt Ctrl+C ab und fragt vor dem Beenden nach Bestätigung.
         </p>
       </section>
 
@@ -1908,7 +2037,9 @@ BACKGROUND:    befehl &, PID=$!, wait, setsid für echte Entkopplung
 FEHLER:        set -euo pipefail, || { echo; exit 1; }, if cmd; then...
 DEBUG:         set -x, bash -x skript.sh, bash -n für Syntax, shellcheck
 SOCKET:        socat -U - "UNIX-CONNECT:/pfad/socket.sock"
-ROFI:          $ROFI_RETV, $ROFI_INFO, printf "text\0icon\x1fname\x1fwert\n"
+EINGABE:       read -p "Text: " VAR, read -n1 (1 Zeichen), read -s (verdeckt), read -t N (Timeout)
+ZUFALL:        $RANDOM (0-32767), $(( RANDOM % N )) für Bereich 0..N-1
+TERMINAL:      clear, tput cup Y X, tput civis/cnorm, "\033[31m...\033[0m" für Farbe
 CACHE:         stat -c %Y für Dateialter, date +%s für Unix-Timestamp
 LOCK:          flock -n 9, exec 9>"lockfile"
 IDEMPOTENZ:    mkdir -p, ln -sf, grep || echo >>
