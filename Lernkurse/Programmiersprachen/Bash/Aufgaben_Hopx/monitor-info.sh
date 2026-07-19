@@ -1,13 +1,9 @@
 #!/bin/bash
+FileName="$0"
+FilePath="$(realpath "$FileName")"
+echo "$FileName"
+echo "$FilePath"
 
-SelfPath="$(realpath "$0")"
-SelfDirectory="$(dirname "$(realpath "$0")")"
+DisplayPixels=$(($1*$2))
 
-
-echo "ORDNER = {$SelfDirectory}, PFAD= {$SelfPath}"
-
-Breite="$1"
-Hoehe="$2"
-
-Pixel="$((Breite * Hoehe))"
-echo "$Pixel"
+echo "$DisplayPixels"

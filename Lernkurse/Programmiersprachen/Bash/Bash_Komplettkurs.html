@@ -92,220 +92,238 @@ echo "Das wird ausgegeben"  # Das auch hier ist ein Kommentar
         </p>
       </section>
 
-      
-      
-      
-      <section id="kapitel-2">
-        <h1>Kapitel 2 — Variablen, Quoting und Spezialvariablen</h1>
-        <p>
-          Variablen sind benannte Speicherplätze für Werte. <span class="glow">In Bash sind alle Variablen standardmäßig Strings</span> — es gibt keinen eingebauten Integer- oder Float-Typ, auch wenn man bestimmte Operationen auf Zahlen anwenden kann. Dieses Kapitel ist eines der wichtigsten, weil Quoting — also das richtige Setzen von Anführungszeichen — die <span class="glow">häufigste Fehlerquelle im Shell-Scripting ist</span>.
-        </p>
 
-        <h2>2.1 — Zuweisung und Abruf</h2>
-        <p>
-          Eine Variable wird ohne Leerzeichen um das Gleichheitszeichen zugewiesen. Das ist <span class="glow">einer der häufigsten Fehler für Einsteiger: Bash interpretiert </span><span class="glow">NAME = "TrafkHop"</span> als den Befehl NAME mit zwei Argumenten.
-        </p>
-        <div class="codeblock">
-NAME="TrafkHop"       # richtig
-NAME = "TrafkHop"     # FEHLER: bash denkt NAME ist ein Befehl
 
-echo "$NAME"          # Abruf mit $ → TrafkHop
-        </div>
-        <p>
-          Doppelte Anführungszeichen beim Abruf sind <span class="glow">fast immer Pflicht</span>. Ohne sie passiert Word Splitting — Bash zerhackt den Wert an Leerzeichen und übergibt ihn als mehrere Argumente:
-        </p>
-        <div class="codeblock">
-DATEI="mein dokument.txt"
-cat $DATEI        # FEHLER: cat kriegt "mein" und "dokument.txt" als zwei Argumente
-cat "$DATEI"      # richtig: ein Argument mit Leerzeichen
-        </div>
-        <p>
-          Die geschweiften Klammern <span class="glow">${}</span> sind nötig, wenn direkt nach der Variable weitere Zeichen folgen sollen:
-        </p>
-        <div class="codeblock">
-echo "${NAME}_backup"  # → TrafkHop_backup
-echo "$NAME_backup"    # → leer! Bash sucht Variable namens "NAME_backup"
-        </div>
 
-        <h2>2.2 — Variablen-Typen und declare</h2>
-        <p>
-          Bash kennt verschiedene Variablen-Typen, die mit <span class="glow">declare</span> gesetzt werden. Im Alltag reicht die normale Zuweisung, aber <span class="glow">declare</span> ermöglicht präzisere Kontrolle:
-        </p>
-        <div class="codeblock">
-NAME="wert"            # lokale Variable (nur im aktuellen Prozess)
-export NAME="wert"     # Umgebungsvariable (auch für Kind-Prozesse sichtbar)
-local NAME="wert"      # nur innerhalb einer Funktion gültig
-readonly NAME="wert"   # kann nicht überschrieben werden
-declare -i ZAHL=42     # Integer-Variable (erzwingt Zahlen-Typ)
-declare -a ARRAY=()    # normales Array
-declare -A HASHMAP=()  # assoziatives Array (Key-Value-Map)
-declare -x NAME        # synonym für export
-declare -r NAME        # synonym für readonly
-        </div>
-        <p>
-          Umgebungsvariablen wie <span class="glow">$HOME</span>, <span class="glow">$USER</span> oder <span class="glow">$PATH</span> werden von der Login-Shell gesetzt und sind immer verfügbar. Sie sind mit <span class="glow">export</span> markiert und werden an alle Kind-Prozesse weitergegeben. <span class="glow">$HOME</span> ist dabei eine der wichtigsten: sie enthält den absoluten Pfad zum Home-Verzeichnis des aktuellen Nutzers (z.B. <span class="glow">/home/max</span>) und ist der Grund, warum Skripte niemals einen Pfad wie <span class="glow">/home/max/.config</span> fest eintippen sollten — <span class="glow">"$HOME/.config"</span> funktioniert auf jedem System, egal wie der Nutzer heißt. Ein paar weitere Umgebungsvariablen, die ständig in Skripten auftauchen:
-        </p>
-        <div class="codeblock">
-$HOME     # Home-Verzeichnis des Nutzers, z.B. /home/max
-$USER     # aktueller Benutzername
-$PWD      # aktuelles Arbeitsverzeichnis (Print Working Directory)
-$OLDPWD   # vorheriges Arbeitsverzeichnis (gesetzt von cd)
-$PATH     # Liste von Ordnern, in denen nach Befehlen gesucht wird
-$SHELL    # Pfad zur Login-Shell, z.B. /bin/bash
-$HOSTNAME # Rechnername
-$LANG     # aktive Sprach-/Locale-Einstellung
+        <section id="kapitel-2">
+            <h1>Kapitel 2 — Variablen, Quoting und Spezialvariablen</h1>
+            <p>
+                Variablen sind benannte Speicherplätze für Werte. <span class="glow">In Bash sind alle Variablen standardmäßig Strings</span> — es gibt keinen eingebauten Integer- oder Float-Typ, auch wenn man bestimmte Operationen auf Zahlen anwenden kann. Dieses Kapitel ist eines der wichtigsten, weil Quoting — also das richtige Setzen von Anführungszeichen — die <span class="glow">häufigste Fehlerquelle im Shell-Scripting ist</span>.
+            </p>
 
-# Beispiel: eigene Config-Datei portabel referenzieren
-CONFIG="$HOME/.config/trafktux/settings.conf"
-        </div>
-        <p>
-          Der Unterschied zwischen einer normalen Variable und einer Umgebungsvariable ist einzig <span class="glow">export</span>: <span class="glow">$HOME</span> ist deshalb auch in jedem von der Shell gestarteten Skript oder Programm sichtbar, während eine selbst gesetzte Variable ohne <span class="glow">export</span> nur in der aktuellen Shell existiert.
-        </p>
+            <h2>2.1 — Zuweisung und Abruf</h2>
+            <p>
+                Eine Variable wird ohne Leerzeichen um das Gleichheitszeichen zugewiesen. Das ist <span class="glow">einer der häufigsten Fehler für Einsteiger: Bash interpretiert </span><span class="glow">NAME = "TrafkHop"</span> als den Befehl NAME mit zwei Argumenten.
+            </p>
+            <div class="codeblock">
+                NAME="TrafkHop"       # richtig
+                NAME = "TrafkHop"     # FEHLER: bash denkt NAME ist ein Befehl
 
-        <h2>2.3 — Quoting: Das Herzstück des Shell-Scriptings</h2>
-        <p>
-          <span class="glow">Quoting ist der komplexeste und fehlerträchtigste Teil von Bash</span>. <span class="glow">Es gibt drei Arten von Anführungszeichen, die sich grundlegend unterscheiden</span>:
-        </p>
-        <div class="codeblock">
-'einfache Anführungszeichen'
-# ALLES ist literal. Kein $, kein \, keine Expansion.
-echo '$HOME'    # → gibt wirklich $HOME aus, nicht den Pfad
+                echo "$NAME"          # Abruf mit $ → TrafkHop
+            </div>
+            <p>
+                Doppelte Anführungszeichen beim Abruf sind <span class="glow">fast immer Pflicht</span>. Ohne sie passiert Word Splitting — Bash zerhackt den Wert an Leerzeichen und übergibt ihn als mehrere Argumente:
+            </p>
+            <div class="codeblock">
+                DATEI="mein dokument.txt"
+                cat $DATEI        # FEHLER: cat kriegt "mein" und "dokument.txt" als zwei Argumente
+                cat "$DATEI"      # richtig: ein Argument mit Leerzeichen
+            </div>
+            <p>
+                Die geschweiften Klammern <span class="glow">${}</span> sind nötig, wenn direkt nach der Variable weitere Zeichen folgen sollen:
+            </p>
+            <div class="codeblock">
+                echo "${NAME}_backup"  # → TrafkHop_backup
+                echo "$NAME_backup"    # → leer! Bash sucht Variable namens "NAME_backup"
+            </div>
 
-"doppelte Anführungszeichen"
-# Variablen werden expandiert. Globbing (* ? []) wird verhindert.
-# \n, \t werden NICHT interpretiert (außer in $'...' oder echo -e).
-echo "$HOME"    # → /home/benutzername
+            <h2>2.2 — Variablen-Typen und declare</h2>
+            <p>
+                Bash kennt verschiedene Variablen-Typen, die mit <span class="glow">declare</span> gesetzt werden. Im Alltag reicht die normale Zuweisung, aber <span class="glow">declare</span> ermöglicht präzisere Kontrolle:
+            </p>
+            <div class="codeblock">
+                NAME="wert"            # lokale Variable (nur im aktuellen Prozess)
+                export NAME="wert"     # Umgebungsvariable (auch für Kind-Prozesse sichtbar)
+                local NAME="wert"      # nur innerhalb einer Funktion gültig
+                readonly NAME="wert"   # kann nicht überschrieben werden
+                declare -i ZAHL=42     # Integer-Variable (erzwingt Zahlen-Typ)
+                declare -a ARRAY=()    # normales Array
+                declare -A HASHMAP=()  # assoziatives Array (Key-Value-Map)
+                declare -x NAME        # synonym für export
+                declare -r NAME        # synonym für readonly
+            </div>
+            <p>
+                Umgebungsvariablen wie <span class="glow">$HOME</span>, <span class="glow">$USER</span> oder <span class="glow">$PATH</span> werden von der Login-Shell gesetzt und sind immer verfügbar. Sie sind mit <span class="glow">export</span> markiert und werden an alle Kind-Prozesse weitergegeben. <span class="glow">$HOME</span> ist dabei eine der wichtigsten: sie enthält den absoluten Pfad zum Home-Verzeichnis des aktuellen Nutzers (z.B. <span class="glow">/home/max</span>) und ist der Grund, warum Skripte niemals einen Pfad wie <span class="glow">/home/max/.config</span> fest eintippen sollten — <span class="glow">"$HOME/.config"</span> funktioniert auf jedem System, egal wie der Nutzer heißt. Ein paar weitere Umgebungsvariablen, die ständig in Skripten auftauchen:
+            </p>
+            <div class="codeblock">
+                $HOME     # Home-Verzeichnis des Nutzers, z.B. /home/max
+                $USER     # aktueller Benutzername
+                $PWD      # aktuelles Arbeitsverzeichnis (Print Working Directory)
+                $OLDPWD   # vorheriges Arbeitsverzeichnis (gesetzt von cd)
+                $PATH     # Liste von Ordnern, in denen nach Befehlen gesucht wird
+                $SHELL    # Pfad zur Login-Shell, z.B. /bin/bash
+                $HOSTNAME # Rechnername
+                $LANG     # aktive Sprach-/Locale-Einstellung
 
-$'...' (ANSI-C Quoting)
-# Escape-Sequenzen werden interpretiert: \n (Newline), \t (Tab), \x1f, \0 etc.
-printf $'Zeile1\nZeile2\n'    # → zwei Zeilen
-        </div>
-        <p>
-          Kein Quoting (also nackter Text ohne Anführungszeichen) führt zu Word Splitting und Globbing. Globbing bedeutet, dass Zeichen wie <span class="glow">*</span>, <span class="glow">?</span> und <span class="glow">[]</span> zu Dateinamen expandiert werden. Das ist manchmal erwünscht, aber nie bei Variablen-Abrufen.
-        </p>
-        <div class="codeblock">
-# Globbing gewollt (alle .sh-Dateien):
-for f in *.sh; do echo "$f"; done
+                # Beispiel: eigene Config-Datei portabel referenzieren
+                CONFIG="$HOME/.config/trafktux/settings.conf"
+            </div>
+            <p>
+                Der Unterschied zwischen einer normalen Variable und einer Umgebungsvariable ist einzig <span class="glow">export</span>: <span class="glow">$HOME</span> ist deshalb auch in jedem von der Shell gestarteten Skript oder Programm sichtbar, während eine selbst gesetzte Variable ohne <span class="glow">export</span> nur in der aktuellen Shell existiert.
+            </p>
 
-# Globbing ungewollt — FEHLER:
-MUSTER="*.sh"
-for f in $MUSTER; do echo "$f"; done   # expandiert zu Dateiliste!
-for f in "$MUSTER"; do echo "$f"; done # → gibt literal "*.sh" aus — auch falsch
-# Lösung: Globbing explizit, Variablen immer quoten
-        </div>
-        <p>
-          Faustregel: Immer <span class="glow">"$VARIABLE"</span> in Anführungszeichen schreiben. Die einzige Ausnahme ist, wenn man Word Splitting oder Globbing absichtlich möchte.
-        </p>
+            <h2>2.3 — Quoting: Das Herzstück des Shell-Scriptings</h2>
+            <p>
+                <span class="glow">Quoting ist der komplexeste und fehlerträchtigste Teil von Bash</span>. <span class="glow">Es gibt drei Arten von Anführungszeichen, die sich grundlegend unterscheiden</span>:
+            </p>
+            <div class="codeblock">
+                'einfache Anführungszeichen'
+                # ALLES ist literal. Kein $, kein \, keine Expansion.
+                echo '$HOME'    # → gibt wirklich $HOME aus, nicht den Pfad
 
-        <h2>2.4 — Spezialvariablen</h2>
-        <p>
-          Bash setzt automatisch eine Reihe von Variablen, die Informationen über das laufende Skript und seine Umgebung enthalten:
-        </p>
-        <div class="codeblock">
-$0        # Name des Skripts (so wie es aufgerufen wurde)
-$1, $2... # Argumente 1, 2, ...
-$@        # alle Argumente als separate Strings — immer als "$@" nutzen!
-$*        # alle Argumente als ein String (selten nützlich)
-$#        # Anzahl der Argumente
-$?        # Exit-Code des letzten Befehls (0=Erfolg, alles andere=Fehler)
-$$        # PID (Prozess-ID) des aktuellen Skripts
-$!        # PID des zuletzt gestarteten Hintergrundprozesses
-$-        # aktive Shell-Optionen
-$_        # letztes Argument des vorherigen Befehls
-$RANDOM   # eine zufällige Zahl zwischen 0 und 32767, bei jedem Zugriff neu
-        </div>
-        <p>
-          Ein praktisches Beispiel: Mit <span class="glow">realpath "$0"</span> und <span class="glow">dirname</span> kann ein Skript seinen eigenen absoluten Pfad und seinen Ordner bestimmen — unabhängig davon, wie es aufgerufen wurde:
-        </p>
-        <div class="codeblock">
-SCRIPT_PATH="$(realpath "$0")"
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-# So findet das Skript seine "Geschwister"-Dateien, egal wo es liegt
-        </div>
-        <p>
-          <span class="glow">$RANDOM</span> ist keine "echte" Variable, sondern ein eingebauter Mechanismus: <span class="glow">jedes Mal, wenn man darauf zugreift, liefert Bash eine neue Pseudozufallszahl</span> zwischen 0 und 32767. Mit dem Modulo-Operator <span class="glow">%</span> aus 2.5 lässt sich daraus leicht ein Zufallsbereich bauen — die Basis für jedes Würfelspiel oder Zahlenratespiel:
-        </p>
-        <div class="codeblock">
-echo "$RANDOM"                  # → irgendeine Zahl, z.B. 14823
-echo $(( RANDOM % 6 + 1 ))      # → Zufallszahl zwischen 1 und 6 (ein Würfel)
-echo $(( RANDOM % 100 + 1 ))    # → Zufallszahl zwischen 1 und 100
-        </div>
+                "doppelte Anführungszeichen"
+                # Variablen werden expandiert. Globbing (* ? []) wird verhindert.
+                # \n, \t werden NICHT interpretiert (außer in $'...' oder echo -e).
+                echo "$HOME"    # → /home/benutzername
 
-        <h2>2.5 — Arithmetik</h2>
-        <p>
-          <span class="glow">Bash rechnet nicht automatisch mit Zahlen</span> — <span class="glow">alles ist erstmal Text</span>. Es gibt drei Wege zu rechnen, wobei <span class="glow">$(( ))</span> die moderne und bevorzugte Methode ist:
-        </p>
-        <div class="codeblock">
-# $(( )) — Arithmetik-Expansion (bevorzugt):
-ERGEBNIS=$(( 3 + 4 ))         # → 7
-$(( ZAHL * 2 ))               # Variablen ohne $ innerhalb von (( ))
-$(( ZAHL ** 2 ))              # Potenz
-$(( ZAHL % 3 ))               # Modulo (Rest bei Division)
+                $'...' (ANSI-C Quoting)
+                # Escape-Sequenzen werden interpretiert: \n (Newline), \t (Tab), \x1f, \0 etc.
+                printf $'Zeile1\nZeile2\n'    # → zwei Zeilen
+            </div>
+            <p>
+                Kein Quoting (also nackter Text ohne Anführungszeichen) führt zu Word Splitting und Globbing. Globbing bedeutet, dass Zeichen wie <span class="glow">*</span>, <span class="glow">?</span> und <span class="glow">[]</span> zu Dateinamen expandiert werden. Das ist manchmal erwünscht, aber nie bei Variablen-Abrufen.
+            </p>
+            <div class="codeblock">
+                # Globbing gewollt (alle .sh-Dateien):
+                for f in *.sh; do echo "$f"; done
 
-# let — ältere Syntax:
-let ERGEBNIS=3+4
+                # Globbing ungewollt — FEHLER:
+                MUSTER="*.sh"
+                for f in $MUSTER; do echo "$f"; done   # expandiert zu Dateiliste!
+                for f in "$MUSTER"; do echo "$f"; done # → gibt literal "*.sh" aus — auch falsch
+                # Lösung: Globbing explizit, Variablen immer quoten
+            </div>
+            <p>
+                Faustregel: Immer <span class="glow">"$VARIABLE"</span> in Anführungszeichen schreiben. Die einzige Ausnahme ist, wenn man Word Splitting oder Globbing absichtlich möchte.
+            </p>
 
-# expr — externer Befehl, langsam, vermeiden:
-ERGEBNIS=$(expr 3 + 4)
-        </div>
-        <p>
-          <span class="glow">Fließkomma-Rechnung geht in Bash nicht mit</span> <span class="glow">$(( ))</span>. Dafür braucht man externe Tools wie <span class="glow">bc</span> oder <span class="glow">awk</span>:
-        </p>
-        <div class="codeblock">
-echo "scale=2; 10 / 3" | bc        # → 3.33
-awk "BEGIN {print 10/3}"            # → 3.33333
+            <h2>2.4 — Spezialvariablen</h2>
+            <p>
+                Bash setzt automatisch eine Reihe von Variablen, die Informationen über das laufende Skript und seine Umgebung enthalten:
+            </p>
+            <div class="codeblock">
+                $0        # Name des Skripts (so wie es aufgerufen wurde)
+                $1, $2... # Argumente 1, 2, ...
+                $@        # alle Argumente als separate Strings — immer als "$@" nutzen!
+                $* # alle Argumente als ein String (selten nützlich)
+                $#        # Anzahl der Argumente
+                $?        # Exit-Code des letzten Befehls (0=Erfolg, alles andere=Fehler)
+                $$        # PID (Prozess-ID) des aktuellen Skripts
+                $!        # PID des zuletzt gestarteten Hintergrundprozesses
+                $-        # aktive Shell-Optionen
+                $_        # letztes Argument des vorherigen Befehls
+                $RANDOM   # eine zufällige Zahl zwischen 0 und 32767, bei jedem Zugriff neu
+            </div>
+            <p>
+                Ein praktisches Beispiel: Mit <span class="glow">realpath "$0"</span> und <span class="glow">dirname</span> kann ein Skript seinen eigenen absoluten Pfad und seinen Ordner bestimmen — unabhängig davon, wie es aufgerufen wurde:
+            </p>
+            <div class="codeblock">
+                SCRIPT_PATH="$(realpath "$0")"
+                SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+                # So findet das Skript seine "Geschwister"-Dateien, egal wo es liegt
+            </div>
+            <p>
+                <span class="glow">$RANDOM</span> ist keine "echte" Variable, sondern ein eingebauter Mechanismus: <span class="glow">jedes Mal, wenn man darauf zugreift, liefert Bash eine neue Pseudozufallszahl</span> zwischen 0 und 32767. Mit dem Modulo-Operator <span class="glow">%</span> aus 2.5 lässt sich daraus leicht ein Zufallsbereich bauen — die Basis für jedes Würfelspiel oder Zahlenratespiel:
+            </p>
+            <div class="codeblock">
+                echo "$RANDOM"                  # → irgendeine Zahl, z.B. 14823
+                echo $(( RANDOM % 6 + 1 ))      # → Zufallszahl zwischen 1 und 6 (ein Würfel)
+                echo $(( RANDOM % 100 + 1 ))    # → Zufallszahl zwischen 1 und 100
+            </div>
 
-# Praxisbeispiel: Integer-Prozent in Dezimalzahl umwandeln:
-local float_val=$(awk "BEGIN {print $val/100}")
-        </div>
+            <h2>2.5 — Arithmetik</h2>
+            <p>
+                <span class="glow">Bash rechnet nicht automatisch mit Zahlen</span> — <span class="glow">alles ist erstmal Text</span>. Es gibt drei Wege zu rechnen, wobei <span class="glow">$(( ))</span> die moderne und bevorzugte Methode ist:
+            </p>
+            <div class="codeblock">
+                # $(( )) — Arithmetik-Expansion (bevorzugt):
+                ERGEBNIS=$(( 3 + 4 ))         # → 7
+                $(( ZAHL * 2 ))               # Variablen ohne $ innerhalb von (( ))
+                $(( ZAHL ** 2 ))              # Potenz
+                $(( ZAHL % 3 ))               # Modulo (Rest bei Division)
 
-        <h2>2.6 — Nutzereingaben mit read</h2>
-        <p>
-          Bisher kamen Werte entweder als Argumente (<span class="glow">$1</span>, <span class="glow">$2</span>, ...) oder fest im Skript. Für Skripte, die den Nutzer während der Laufzeit etwas fragen sollen — Menüs, Bestätigungen, kleine Spiele — braucht man <span class="glow">read</span>. <span class="glow">read</span> liest eine Zeile von stdin (normalerweise die Tastatur) und speichert sie in einer Variable:
-        </p>
-        <div class="codeblock">
-read ANTWORT              # wartet auf Eingabe, speichert in $ANTWORT
-echo "Du hast $ANTWORT eingegeben"
+                # let — ältere Syntax:
+                let ERGEBNIS=3+4
 
-# -p zeigt einen Prompt-Text, ohne extra echo davor:
-read -p "Wie heißt du? " NAME
-echo "Hallo, $NAME"
+                # expr — externer Befehl, langsam, vermeiden:
+                ERGEBNIS=$(expr 3 + 4)
+            </div>
+            <p>
+                <span class="glow">Fließkomma-Rechnung geht in Bash nicht mit</span> <span class="glow">$(( ))</span>. Dafür braucht man externe Tools wie <span class="glow">bc</span> oder <span class="glow">awk</span>:
+            </p>
+            <div class="codeblock">
+                echo "scale=2; 10 / 3" | bc        # → 3.33
+                awk "BEGIN {print 10/3}"            # → 3.33333
 
-# -r ist auch hier wichtig (siehe Kapitel 10.2) — verhindert, dass
-# Backslashes in der Eingabe von read "verschluckt" werden:
-read -rp "Pfad: " PFAD
+                # Praxisbeispiel: Integer-Prozent in Dezimalzahl umwandeln:
+                local float_val=$(awk "BEGIN {print $val/100}")
+            </div>
 
-# -n LIMITIERT auf N Zeichen und kehrt sofort danach zurück,
-# ohne auf Enter zu warten — praktisch für Ja/Nein-Abfragen oder Spiele:
-read -n1 -p "Weiter mit beliebiger Taste... " TASTE
-echo    # Zeilenumbruch, weil -n1 keinen erzeugt
+            <h2>2.6 — Nutzereingaben mit read</h2>
+            <p>
+                Bisher kamen Werte entweder als Argumente (<span class="glow">$1</span>, <span class="glow">$2</span>, ...) oder fest im Skript. Für Skripte, die den Nutzer während der Laufzeit etwas fragen sollen — Menüs, Bestätigungen, kleine Spiele — braucht man <span class="glow">read</span>. <span class="glow">read</span> liest eine Zeile von stdin (normalerweise die Tastatur) und speichert sie in einer Variable:
+            </p>
+            <div class="codeblock">
+                read ANTWORT              # wartet auf Eingabe, speichert in $ANTWORT
+                echo "Du hast $ANTWORT eingegeben"
 
-# -s unterdrückt die Bildschirmausgabe der Eingabe — für Passwörter:
-read -sp "Passwort: " PW
-echo
+                # -p zeigt einen Prompt-Text, ohne extra echo davor:
+                read -p "Wie heißt du? " NAME
+                echo "Hallo, $NAME"
 
-# -t setzt ein Timeout in Sekunden — read gibt einen Exit-Code ungleich 0
-# zurück wenn die Zeit abläuft, ohne dass etwas eingegeben wurde:
-if read -t 5 -p "Schnell antworten (5s): " EINGABE; then
-    echo "Eingabe: $EINGABE"
-else
-    echo "Zeit abgelaufen!"
-fi
-        </div>
-        <p>
-          Diese Bausteine — <span class="glow">$RANDOM</span> für Zufall und <span class="glow">read</span> für Eingaben — reichen bereits für ein erstes kleines Terminal-Spiel, wie die folgende Übung zeigt.
-        </p>
+                # -r ist auch hier wichtig (siehe Kapitel 10.2) — verhindert, dass
+                # Backslashes in der Eingabe von read "verschluckt" werden:
+                read -rp "Pfad: " PFAD
 
-        <h2>2.7 — Übung 2.7</h2>
-        <p>
-          Erstelle ein Skript <span class="glow">monitor-info.sh</span> das mit <span class="glow">$0</span> seinen eigenen Namen ausgibt. Es soll zwei Argumente entgegennehmen: eine Breite und eine Höhe (z.B. <span class="glow">./monitor-info.sh 1920 1080</span>). Berechne mit <span class="glow">$(( ))</span> das Ergebnis von <span class="glow">Breite * Höhe</span> (die Gesamtanzahl an Pixeln) und gib es aus. Teste bewusst einen Fehler: lass ein Leerzeichen ums <span class="glow">=</span> stehen und beobachte die Fehlermeldung.
-        </p>
+                # -n LIMITIERT auf N Zeichen und kehrt sofort danach zurück,
+                # ohne auf Enter zu warten — praktisch für Ja/Nein-Abfragen oder Spiele:
+                read -n1 -p "Weiter mit beliebiger Taste... " TASTE
+                echo    # Zeilenumbruch, weil -n1 keinen erzeugt
 
-        <h2>2.8 — Übung 2.8: Zahlenraten (erstes Terminal-Spiel)</h2>
-        <p>
-          Schreibe ein Skript <span class="glow">zahlenraten.sh</span>. Zu Beginn wird mit <span class="glow">$RANDOM</span> eine Geheimzahl zwischen 1 und 100 gezogen (Tipp: <span class="glow">$(( RANDOM % 100 + 1 ))</span>). Danach fragt das Skript in einer Schleife mit <span class="glow">read -p</span> nach einem Tipp und vergleicht ihn mit <span class="glow">(( ))</span> gegen die Geheimzahl: ist der Tipp zu hoch oder zu niedrig, gibt das Skript einen entsprechenden Hinweis aus und fragt erneut; stimmt der Tipp, gratuliert das Skript und beendet sich. Die Schleifen-Syntax selbst wird erst in Kapitel 10 im Detail erklärt — nutze für diese Übung einfach <span class="glow">while true; do ... done</span> und <span class="glow">break</span>, wenn die Zahl erraten wurde.
-        </p>
-      </section>
+                # -s unterdrückt die Bildschirmausgabe der Eingabe — für Passwörter:
+                read -sp "Passwort: " PW
+                echo
+
+                # -t setzt ein Timeout in Sekunden — read gibt einen Exit-Code ungleich 0
+                # zurück wenn die Zeit abläuft, ohne dass etwas eingegeben wurde:
+                if read -t 5 -p "Schnell antworten (5s): " EINGABE; then
+                echo "Eingabe: $EINGABE"
+                else
+                echo "Zeit abgelaufen!"
+                fi
+            </div>
+            <p>
+                Diese Bausteine — <span class="glow">$RANDOM</span> für Zufall und <span class="glow">read</span> für Eingaben — reichen bereits für ein erstes kleines Terminal-Spiel.
+            </p>
+
+            <h2>2.7 — Ein kleiner Vorgriff: Die einfache Endlosschleife</h2>
+            <p>
+                Oft soll ein Skript nach einer Eingabe nicht direkt enden, sondern solange weiterlaufen, bis eine bestimmte Bedingung erfüllt ist (z.B. bei einem Spiel, das läuft, bis man gewinnt). Ausführlich behandeln wir Schleifen erst in Kapitel 10, aber für erste interaktive Skripte wie das Zahlenraten reicht die einfache <span class="glow">while true</span>-Schleife. Sie wiederholt den Code-Block zwischen <span class="glow">do</span> und <span class="glow">done</span> endlos. Mit dem Befehl <span class="glow">break</span> kann man aus der Schleife "ausbrechen" und sie sofort beenden:
+            </p>
+            <div class="codeblock">
+                while true; do
+                read -p "Schreibe 'Stopp' um zu beenden: " EINGABE
+
+                # Prüfe ob der Nutzer Stopp eingegeben hat (Bedingungen kommen in Kapitel 3)
+                if [[ "$EINGABE" == "Stopp" ]]; then
+                echo "Okay, das Programm wird beendet."
+                break    # Verlässt die Schleife sofort
+                fi
+
+                echo "Du hast '$EINGABE' eingegeben. Weiter geht's!"
+                done
+            </div>
+
+            <h2>2.8 — Übung 2.8</h2>
+            <p>
+                Erstelle ein Skript <span class="glow">monitor-info.sh</span> das mit <span class="glow">$0</span> seinen eigenen Namen ausgibt. Es soll zwei Argumente entgegennehmen: eine Breite und eine Höhe (z.B. <span class="glow">./monitor-info.sh 1920 1080</span>). Berechne mit <span class="glow">$(( ))</span> das Ergebnis von <span class="glow">Breite * Höhe</span> (die Gesamtanzahl an Pixeln) und gib es aus. Teste bewusst einen Fehler: lass ein Leerzeichen ums <span class="glow">=</span> stehen und beobachte die Fehlermeldung.
+            </p>
+
+            <h2>2.9 — Übung 2.9: Zahlenraten (erstes Terminal-Spiel)</h2>
+            <p>
+                Schreibe ein Skript <span class="glow">zahlenraten.sh</span>. Zu Beginn wird mit <span class="glow">$RANDOM</span> eine Geheimzahl zwischen 1 und 100 gezogen (Tipp: <span class="glow">$(( RANDOM % 100 + 1 ))</span>). Nutze nun eine <span class="glow">while true</span>-Schleife, um das Spiel am Laufen zu halten: Innerhalb der Schleife fragt das Skript mit <span class="glow">read -p</span> nach einem Tipp und vergleicht ihn mit <span class="glow">(( ))</span> gegen die Geheimzahl (Hinweis: Die Vergleiche <span class="glow">&lt;</span>, <span class="glow">&gt;</span> und <span class="glow">==</span> funktionieren in den doppelten runden Klammern). Ist der Tipp zu hoch oder zu niedrig, gibt das Skript einen Hinweis aus und die Schleife beginnt von vorn. Stimmt der Tipp, gratuliert das Skript, verlässt die Schleife mit <span class="glow">break</span> und beendet sich.
+            </p>
+        </section>
 
       
       
@@ -1457,10 +1475,10 @@ fi
           Schreibe ein Skript <span class="glow">parallel-fetch.sh</span> das eine Liste von URLs als Argument-Array entgegennimmt. Jede URL wird parallel mit <span class="glow">curl -s URL > /tmp/datei</span> heruntergeladen. Alle PIDs werden in einem Array gespeichert. Das Skript wartet mit <span class="glow">wait</span> auf alle Prozesse und zählt Erfolge und Fehler anhand der Exit-Codes.
         </p>
 
-        <h2>10.6 — Übung 10.6: Zahlenraten mit begrenzten Versuchen</h2>
-        <p>
-          Erweitere das Zahlenraten-Spiel aus Übung 2.8 zu <span class="glow">zahlenraten-v2.sh</span>. Statt der provisorischen <span class="glow">while true</span>-Schleife wird jetzt eine echte <span class="glow">for</span>-Schleife über eine feste Anzahl von Versuchen (z.B. 7) verwendet. Bei jedem falschen Tipp wird ein Zähler mit <span class="glow">(( VERSUCH++ ))</span> erhöht und die verbleibenden Versuche ausgegeben. Wird die Zahl erraten, verlässt <span class="glow">break</span> die Schleife sofort. Sind alle Versuche aufgebraucht, ohne dass die Zahl erraten wurde, gibt das Skript die Lösung aus. Speichere am Ende jeder Runde die Anzahl der gebrauchten Versuche in einer Datei <span class="glow">~/.zahlenraten_highscore</span> — aber nur, wenn sie kleiner (also besser) ist als der bisherige Bestwert.
-        </p>
+          <h2>10.6 — Übung 10.6: Zahlenraten mit begrenzten Versuchen</h2>
+          <p>
+              Erweitere das Zahlenraten-Spiel aus Übung 2.9 zu <span class="glow">zahlenraten-v2.sh</span>. Statt der provisorischen <span class="glow">while true</span>-Schleife wird jetzt eine echte <span class="glow">for</span>-Schleife über eine feste Anzahl von Versuchen (z.B. 7) verwendet. Bei jedem falschen Tipp wird ein Zähler mit <span class="glow">(( VERSUCH++ ))</span> erhöht und die verbleibenden Versuche ausgegeben. Wird die Zahl erraten, verlässt <span class="glow">break</span> die Schleife sofort. Sind alle Versuche aufgebraucht, ohne dass die Zahl erraten wurde, gibt das Skript die Lösung aus. Speichere am Ende jeder Runde die Anzahl der gebrauchten Versuche in einer Datei <span class="glow">~/.zahlenraten_highscore</span> — aber nur, wenn sie kleiner (also besser) ist als der bisherige Bestwert.
+          </p>
       </section>
 
       
