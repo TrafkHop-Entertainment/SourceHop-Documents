@@ -1,0 +1,36 @@
+Also ich benutze Blender in der aktuellsten Version
+
+Ziel sind Midpoly Modelle wie auf der Wii/3DS im gamecube look.
+Kurs soll abdecken:
+Alle keybinds + shortcuts (werden immer wieder erwähnt, damit man sie verinnerlicht)
+Modelling per hand im edit mode, nicht per sculpting
+sculpting + retopologising
+UV editing + unwrapping
+texture paintung
+normal maps + das andere zeug
+rigging  weightpainting
+animating + der ganze animation tab
+shaders (blender shader hald)
+
+Für Godot noch
+making animations and in game cutscenes die auch zur welt in godot passen, hab da hald ka wie man das wirklich macht. Ja klar einzelne animationen gehen ja, aber ingame cutscenes hab ich keinen plan.
+
+
+
+So Aufgaben die sich durch den Kurs ziehen können:
+
+Mehrere Menschenmodelle zu machen + animieren
+Fantasiewesen
+Tiere
+Möbel
+Häuser
+Gegenstände
+
+Natürlich alles Godot freundlich (auch für optimierung)
+
+Hald einen Blender komplettkurs (eben nur nichts zu grafisch intensieves, also hald kein hyperrealismuss, alles andere ist eh gut wenn mans kann)
+
+
+Noch ein sehr wichtiger Punkt: Die Midpoly modelle, ich will denen so nen anime hauch verleihen, was heißt sie sollen so 2D mäßig ausschauen, also mit shadern so effekte erzeugen. Wäre noch gut.
+
+Denk dir einfach alles noch dazu was noch wichtig ist.
