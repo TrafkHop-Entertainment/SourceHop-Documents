@@ -1,4 +1,4 @@
-Ich habe hier einen Komplettkurs, der jedoch nicht vollkommen ist:
+Allgemeine Probleme alter Kurse und was man vermeiden/machen soll:
 
 Allgemeine Probleme der Kurse:
 ------------------------------
@@ -47,5 +47,4 @@ Es muss ALLES beigebracht werden, es sind KOMPLETTKURSE.
 SPEZIFISCHE PROBLEME DIESES KURSES:
 -----------------------------------
 
-Der Kurs ist ansich ganz ok, die obrigen Punkte sind die Mangel dieses Kurses.
-Schreiben sie diesen Kurs mit besagten Verbesserungen komplett neu.
+Der Musikkurs ist kein Programmierkurs, behalten sie sich das im Hinterkopf, deswegen sind manche Regeln der Programmierkurse hinfällig. Der Kurs darf ruhig eine andere Struktur haben als die anderen! Er soll auf seine Niece zugeschnitten sein!

@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="de">
+
+  <head>
+    <base href="/TrafkSite/">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../../../../../../Files/Standard.css">
+    <link rel="stylesheet" href="Musik_Komplettkurs.css">
+
+    <meta name="description" content="Musik Komplettkurs">
+    <meta name="author" content="TrafkHop Entertainment">
+    <title>Musik Komplettkurs</title>
+  </head>
+
+  <body>
+    <div id="header-placeholder"></div><div id="nav-placeholder"></div><div id="footer-placeholder"></div>
+
+    <main>
+
+
+
+
+      <section id="einleitung">
+        <h1>Musik Komplettkurs</h1>
+        <p>
+          Musik ist die emotionale Sprache hinter jedem großen Spiel. Sie bestimmt, ob ein Kampf packend wirkt, ob eine ruhige Szene wirklich zur Ruhe kommt, ob eine Welt lebt oder leer klingt. TrafkHop Entertainment entwickelt Spiele quer durch alle Genres — und jedes einzelne davon stellt andere Anforderungen an seine Musik. Dieser Kurs vermittelt das Fundament, das nötig ist, um genau diese Anforderungen zu erfüllen.
+        </p>
+        <p>
+          Der Kurs gliedert sich in zwei große Bereiche: Musiktheorie und LMMS. Musiktheorie erklärt, warum Musik so klingt wie sie klingt — Noten, Akkorde, Rhythmus, Kompositionsstrategien, Leitmotive und die Frage, welche Länge und Struktur ein Musikstück je nach Kontext braucht. LMMS ist die Digital Audio Workstation, die hier eingesetzt wird — und zwar in der Version 1.2.0. Dieser Teil erklärt die gesamte Oberfläche, alle Werkzeuge, alle Shortcuts und alle Techniken, die nötig sind, um professionell klingende Musik zu produzieren.
+        </p>
+        <p>
+          Gearbeitet wird ausschließlich mit MIDI und dem Soundfont-Paket <span class="glow">500_Soundfonts_Full_GM_Sets</span> von Archive.org. Dieses Paket deckt nahezu alle Instrumente ab, die man für Spielemusik braucht. Externe Ressourcen werden nicht benötigt — alles, was man wissen muss, steht in diesem Kurs.
+        </p>
+        <p>
+          Inspiration für gute Spielemusik findet man bei Komponisten wie Toby Fox (<i>Undertale</i>), Kōji Kondō (<i>Super Mario</i>, <i>The Legend of Zelda</i>), C418 (<i>Minecraft</i>) oder in der Anime-Musik. Auch klassische Komponisten wie Mozart sind lehrreich — nicht weil man klassische Musik schreiben soll, sondern weil sie zeigen, wie man mit wenigen Mitteln viel ausdrückt. Im Laufe des Kurses wird immer wieder auf solche Beispiele verwiesen.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-1">
+        <h1>Kapitel 1 — Noten, Tonhöhen und das Notensystem</h1>
+        <p>
+          Bevor man Musik machen kann, muss man verstehen, aus was Musik besteht. Der grundlegendste Baustein ist die <span class="glow">Note</span> — ein Ton mit einer bestimmten Tonhöhe und einer bestimmten Dauer. Tonhöhen werden in westlicher Musik mit Buchstaben benannt: <span class="glow">C, D, E, F, G, A, H</span> (im Deutschen) oder <span class="glow">C, D, E, F, G, A, B</span> (im Englischen, was LMMS verwendet). In diesem Kurs wird die englische Bezeichnung verwendet, da LMMS und alle gängigen DAWs englische Buchstaben nutzen.
+        </p>
+
+        <h2>1.1 — Die chromatische Tonleiter und Halbtöne</h2>
+        <p>
+          Zwischen manchen Noten gibt es einen Halbton-Schritt, den man mit einem Kreuz (<span class="glow">#</span>, "Sharp") oder einem Be (<span class="glow">b</span>, "Flat") kennzeichnet. C# ist also ein Halbton höher als C, und Db ist ein Halbton tiefer als D — C# und Db sind dasselbe, man nennt das <span class="glow">enharmonische Verwechslung</span>. Alle zwölf Halbtöne zusammen bilden die <span class="glow">chromatische Tonleiter</span>:
+        </p>
+        <div class="codeblock">
+C  —  C#/Db  —  D  —  D#/Eb  —  E  —  F  —  F#/Gb  —  G  —  G#/Ab  —  A  —  A#/Bb  —  B  —  (C)
+</div>
+        <p>
+          Nach dem B kommt wieder ein C — nur eine <span class="glow">Oktave</span> höher. Eine Oktave ist der Abstand zwischen zwei Tönen mit demselben Namen, wobei der höhere genau doppelt so viele Schwingungen pro Sekunde hat. Das menschliche Ohr empfindet Töne im Oktavabstand als sehr ähnlich, fast identisch in ihrer Qualität — nur eben höher oder tiefer. In LMMS sieht man Noten wie <span class="glow">C5</span> oder <span class="glow">A4</span> — die Zahl ist die Oktavnummer. <span class="glow">A4</span> ist der Kammerton mit 440 Hz, an dem Instrumente gestimmt werden.
+        </p>
+
+        <h2>1.2 — Notendauer und Takt</h2>
+        <p>
+          Eine Note hat nicht nur eine Tonhöhe, sondern auch eine Dauer. Die wichtigsten Notenwerte sind:
+        </p>
+        <div class="codeblock">
+Ganze Note        — 4 Schläge
+Halbe Note        — 2 Schläge
+Viertel Note      — 1 Schlag  (der häufigste Grundwert)
+Achtel Note       — 1/2 Schlag
+Sechzehntel Note  — 1/4 Schlag
+Zweiunddreißigstel— 1/8 Schlag
+</div>
+        <p>
+          Noten lassen sich auch punktieren: Ein Punkt nach einer Note verlängert sie um die Hälfte ihres Wertes. Eine punktierte Viertelnote dauert also 1,5 Schläge. <span class="glow">Triolen</span> teilen einen Schlag in drei gleiche Teile statt in zwei — das erzeugt einen charakteristischen "rollenden" Rhythmus.
+        </p>
+        <p>
+          Der <span class="glow">Takt</span> organisiert Noten in gleichmäßige Gruppen. Die häufigste Taktart ist der <span class="glow">4/4-Takt</span> — vier Viertelschläge pro Takt. Der erste Schlag jedes Takts ist üblicherweise der betonte. Im <span class="glow">3/4-Takt</span> (Walzer) gibt es drei Schläge, was dem Stück eine ganz andere Qualität gibt. Im <span class="glow">6/8-Takt</span> zählt man sechs Achtel, was sich weicher und fließender anfühlt als 4/4. Das Tempo wird in <span class="glow">BPM</span> (Beats Per Minute) angegeben — 120 BPM bedeutet 120 Viertelschläge pro Minute.
+        </p>
+
+        <h2>1.3 — Noten lesen: Das Liniensystem</h2>
+        <p>
+          Traditionell werden Noten auf einem System aus fünf Linien geschrieben. Eine Note sitzt entweder auf einer Linie oder im Zwischenraum. Je höher die Note im System, desto höher der Ton. Der <span class="glow">Violinschlüssel</span> (für hohe Noten) und der <span class="glow">Bassschlüssel</span> (für tiefe Noten) bestimmen, welcher Ton welcher Position entspricht. In LMMS muss man das Notensystem nicht zwingend lesen können — der Piano Roll zeigt Noten als Blöcke auf einem vertikalen Tastatur-Raster — aber das Verständnis hilft beim Übertragen von Noten aus Büchern oder beim Kommunizieren mit anderen Musikern.
+        </p>
+        <p>
+          Im Violinschlüssel gilt für die Linien von unten nach oben: E4, G4, H4, D5, F5 — die Eselsbrücke lautet "Esel Gehen Beide Der Fehlenden". Die Zwischenräume von unten: F4, A4, C5, E5 — "FACE". Das reicht, um das System zu verstehen und einfache Noten zu lesen.
+        </p>
+
+        <h2>1.4 — Notation in LMMS</h2>
+        <p>
+          In LMMS schreibt man keine klassischen Noten, sondern arbeitet im <span class="glow">Piano Roll</span>. Der Piano Roll zeigt links eine virtuelle Klaviertastatur und rechts ein Raster, in das man Noten als Blöcke einzeichnet. Die horizontale Achse ist die Zeit, die vertikale Achse die Tonhöhe. Das Prinzip ist dasselbe wie bei klassischen Noten — nur visuell zugänglicher. Der Umgang mit dem Piano Roll wird ausführlich in Kapitel 8 behandelt.
+        </p>
+
+        <h2>1.5 — Übung 1.5</h2>
+        <p>
+          Öffnen sie LMMS und erstellen sie ein neues Projekt. Fügen sie ein SF2-Player-Instrument hinzu und laden sie einen Piano-Soundfont aus dem Paket. Öffnen sie den Piano Roll für diese Spur und platzieren sie die Noten C4, E4, G4 und C5 nacheinander, jeweils als Viertelnote. Spielen sie die Sequenz ab. Das ist ein C-Dur Akkord in aufsteigender Form — ein <span class="glow">Arpeggio</span>. Experimentieren sie anschließend mit verschiedenen Oktaven: Was klingt tiefer, was höher?
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-2">
+        <h1>Kapitel 2 — Tonleitern und Tonarten</h1>
+        <p>
+          Eine <span class="glow">Tonleiter</span> ist eine geordnete Folge von Tönen nach einem festen Muster von Ganz- und Halbtonschritten. Tonleitern sind das Gerüst, auf dem Melodien und Akkorde aufgebaut werden. Sie bestimmen den <span class="glow">Charakter</span> eines Musikstücks: hell, dunkel, mysteriös, fröhlich, traurig. Das ist kein Zufall oder Geschmackssache — es liegt in der Struktur der Intervalle.
+        </p>
+
+        <h2>2.1 — Die Dur-Tonleiter</h2>
+        <p>
+          Die <span class="glow">Dur-Tonleiter</span> (englisch: Major Scale) hat das Muster: Ganz, Ganz, Halb, Ganz, Ganz, Ganz, Halb. Abgekürzt: <span class="glow">G G H G G G H</span>. Wendet man dieses Muster auf C an, erhält man:
+        </p>
+        <div class="codeblock">
+C  →(G)→  D  →(G)→  E  →(H)→  F  →(G)→  G  →(G)→  A  →(G)→  B  →(H)→  C
+→  C-Dur:  C  D  E  F  G  A  B  (C)
+</div>
+        <p>
+          C-Dur hat keine Vorzeichen — alle weißen Tasten des Klaviers, von C bis C. Das macht sie zum idealen Startpunkt. Jede andere Dur-Tonleiter hat dasselbe Muster, beginnt aber auf einem anderen Ton und braucht daher Sharps oder Flats. G-Dur zum Beispiel hat ein F# — weil zwischen A und H ein Halbton liegt, und zwischen H und C auch, was ohne F# das Muster brechen würde. Dur klingt <span class="glow">hell, offen und tendenziell fröhlich</span>.
+        </p>
+
+        <h2>2.2 — Die Moll-Tonleiter</h2>
+        <p>
+          Die <span class="glow">natürliche Moll-Tonleiter</span> (englisch: Natural Minor Scale) hat das Muster: <span class="glow">G H G G H G G</span>. A-Moll ist die einfachste Moll-Tonleiter — ebenfalls ohne Vorzeichen:
+        </p>
+        <div class="codeblock">
+A-Moll:  A  B  C  D  E  F  G  (A)
+</div>
+        <p>
+          Moll klingt <span class="glow">dunkler, ernster, melancholischer</span> als Dur — das liegt vor allem am kleinen Terz-Intervall zwischen Grundton und dem dritten Ton der Tonleiter (A–C statt A–C# wie in A-Dur). Neben der natürlichen Moll-Tonleiter gibt es noch die <span class="glow">harmonische Moll</span> (siebter Ton erhöht) und die <span class="glow">melodische Moll</span> (sechster und siebter Ton beim Aufsteigen erhöht). Die harmonische Moll wird oft in Klassik und Dramatik eingesetzt, weil sie einen charakteristischen orientalischen oder spannungsgeladenen Klang hat.
+        </p>
+
+        <h2>2.3 — Weitere wichtige Tonleitern</h2>
+        <p>
+          Dur und Moll sind die Basis, aber es gibt viele weitere Tonleitern, die in Spielemusik sehr häufig auftauchen. Die <span class="glow">Pentatonik</span> besteht aus fünf Tönen statt sieben und klingt von Natur aus angenehm und harmonisch — man kann kaum falsch spielen. Dur-Pentatonik in C: C, D, E, G, A. Sie wird in Abenteuerspiel-Musik, asiatisch angehauchter Musik und überall dort eingesetzt, wo eine einfache, eingängige Melodie gefragt ist. C418's Minecraft-Musik nutzt oft pentatonische Elemente für den ruhigen, offenen Charakter.
+        </p>
+        <p>
+          Die <span class="glow">Dorische Tonleiter</span> ist eine Moll-Tonleiter mit erhöhtem sechsten Ton. D-Dorisch: D, E, F, G, A, B, C. Sie klingt düster aber nicht hoffnungslos — perfekt für mittelalterliche Atmosphären, Dungeons oder ernste aber nicht tragische Szenen. Die <span class="glow">Phrygische Tonleiter</span> hat einen erniedrigten zweiten Ton, was ihr einen spanischen oder arabischen Klang gibt. Die <span class="glow">Lydische Tonleiter</span> hat einen erhöhten vierten Ton, was sie seltsam-magisch und schwebend klingen lässt — John Williams nutzt sie in Filmmusik für Traumsequenzen und Fantasiewelten. Die <span class="glow">Mixolydische Tonleiter</span> klingt wie Dur mit einem abgesenkten siebten Ton — rockig und weniger aufgelöst als reines Dur.
+        </p>
+        <div class="codeblock">
+Dorisch:     G H G G G H G   — dunkel, aber mit Hoffnungsschimmer
+Phrygisch:   H G G G H G G   — dramatisch, spanisch, bedrohlich
+Lydisch:     G G G H G G H   — magisch, schwebend, verträumt
+Mixolydisch: G G H G G H G   — rockig, bluesy, unaufgelöst
+Lokrisch:    H G G H G G G   — sehr dunkel, fast nie vollständig genutzt
+</div>
+        <p>
+          Diese Tonleitern heißen <span class="glow">Kirchentonarten</span> oder <span class="glow">Modi</span>. Sie klingen alle unterschiedlich, weil die Halbtonschritte an anderen Positionen liegen. Wer Spielemusik für verschiedene Settings schreiben will, muss Modi kennen.
+        </p>
+
+        <h2>2.4 — Vorzeichen und Tonarten</h2>
+        <p>
+          Eine <span class="glow">Tonart</span> ist die Kombination aus Grundton und Tonleiter. "C-Dur" ist eine Tonart, "A-Moll" ist eine andere. Jede Tonart hat eine bestimmte Anzahl von Vorzeichen (Sharps oder Flats), die am Anfang jedes Notensystems stehen. C-Dur und A-Moll haben keine Vorzeichen — sie sind <span class="glow">Paralleltonarten</span>, weil sie dieselben Töne nutzen (C D E F G A B). G-Dur und E-Moll sind ebenfalls Paralleltonarten, beide mit einem F#.
+        </p>
+        <p>
+          In LMMS spielt die Tonart für die Notation keine direkte Rolle, weil man keine klassischen Noten schreibt. Es ist aber trotzdem wichtig zu wissen, in welcher Tonart man arbeitet — sonst weiß man nicht, welche Töne "erlaubt" sind und warum manche Kombinationen komisch klingen. Am Anfang empfiehlt es sich, konsequent in einer Tonart zu bleiben und nur Töne aus der entsprechenden Tonleiter zu verwenden.
+        </p>
+
+        <h2>2.5 — Übung 2.5</h2>
+        <p>
+          Schreiben sie im Piano Roll drei kurze Melodien von je acht Noten. Die erste verwendet nur Töne aus C-Dur (C D E F G A B), die zweite nur Töne aus A-Moll (A B C D E F G), und die dritte nur Töne aus der C-Dur-Pentatonik (C D E G A). Spielen sie alle drei ab und vergleichen sie die emotionale Wirkung. Was klingt wärmer, was kühler, was offener?
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-3">
+        <h1>Kapitel 3 — Intervalle und Akkorde</h1>
+        <p>
+          Ein <span class="glow">Intervall</span> ist der Abstand zwischen zwei Tönen. Intervalle sind das Herzstück der Harmonielehre — sie bestimmen, warum zwei Töne zusammen harmonisch oder dissonant klingen. Akkorde entstehen, wenn mehrere Töne gleichzeitig gespielt werden, und auch ihr Charakter ergibt sich aus den Intervallen zwischen den beteiligten Tönen.
+        </p>
+
+        <h2>3.1 — Intervalle und ihre Wirkung</h2>
+        <p>
+          Intervalle werden nach der Anzahl der Schritte innerhalb einer Tonleiter benannt. Eine <span class="glow">Terz</span> umfasst drei Tonnamen (z.B. C bis E), eine <span class="glow">Quinte</span> fünf (C bis G). Entscheidend ist dabei, ob das Intervall groß oder klein ist — also wie viele Halbtöne es enthält:
+        </p>
+        <div class="codeblock">
+Prime      (0 Halbtöne)   — derselbe Ton: neutral
+kl. Sekunde (1 Halbton)   — sehr dissonant, spannungsgeladen
+gr. Sekunde (2 Halbtöne)  — etwas milder dissonant (Melodieschritt)
+kl. Terz   (3 Halbtöne)   — traurig, dunkel (Grundlage von Moll)
+gr. Terz   (4 Halbtöne)   — hell, fröhlich (Grundlage von Dur)
+Quarte     (5 Halbtöne)   — stabil, offen, stark
+Tritonus   (6 Halbtöne)   — extrem dissonant, "Teufelston"
+Quinte     (7 Halbtöne)   — sehr stabil, leer, kraftvoll
+kl. Sexte  (8 Halbtöne)   — leicht melancholisch
+gr. Sexte  (9 Halbtöne)   — warm, offen
+kl. Septime(10 Halbtöne)  — spannungsgeladen, jazzig
+gr. Septime(11 Halbtöne)  — sehr dissonant, sehnsüchtig
+Oktave     (12 Halbtöne)  — vollständige Harmonie, perfekte Stabilität
+</div>
+        <p>
+          Der <span class="glow">Tritonus</span> (sechs Halbtöne) war im Mittelalter verboten und wurde "Diabolus in Musica" genannt. In moderner Musik — besonders in Heavy Metal, Horror-Soundtracks und Endgegner-Themen — wird er bewusst eingesetzt, um Bedrohung zu erzeugen. Der finale Kampf gegen einen Schurken in einem TrafkHop-Rollenspiel? Tritonus.
+        </p>
+
+        <h2>3.2 — Dreiklänge: Dur und Moll</h2>
+        <p>
+          Der häufigste Akkord ist der <span class="glow">Dreiklang</span> — drei Töne gleichzeitig. Ein <span class="glow">Dur-Dreiklang</span> besteht aus Grundton, großer Terz und Quinte. Ein <span class="glow">Moll-Dreiklang</span> besteht aus Grundton, kleiner Terz und Quinte. Der einzige Unterschied ist die mittlere Note:
+        </p>
+        <div class="codeblock">
+C-Dur:   C  —  E  —  G   (große Terz C–E: 4 Halbtöne)
+C-Moll:  C  —  Eb —  G   (kleine Terz C–Eb: 3 Halbtöne)
+</div>
+        <p>
+          Es gibt außerdem den <span class="glow">verminderten Dreiklang</span> (kl. Terz + kl. Terz — klingt sehr dunkel und instabil) und den <span class="glow">übermäßigen Dreiklang</span> (gr. Terz + gr. Terz — klingt schwebend und unwirklich). Beide tauchen in Spielemusik auf, aber seltener als Dur und Moll.
+        </p>
+
+        <h2>3.3 — Septakkorde und erweiterte Akkorde</h2>
+        <p>
+          <span class="glow">Septakkorde</span> fügen dem Dreiklang eine vierte Note hinzu — die Septime. Sie klingen reicher und komplexer. Der wichtigste ist der <span class="glow">Dominant-Septakkord</span> (auch V7 genannt): ein Dur-Dreiklang mit kleiner Septime. Er erzeugt starke Spannung, die nach Auflösung verlangt. In Midi-Musik und besonders in orchestralen Arrangements sind Septakkorde allgegenwärtig.
+        </p>
+        <div class="codeblock">
+C-Dur 7 (Cmaj7):  C  E  G  B    — warm, jazzig, ruhig
+C-Dominant 7 (C7): C  E  G  Bb  — spannungsgeladen, verlangt Auflösung
+C-Moll 7 (Cm7):   C  Eb G  Bb  — dunkel, jazzig, ruhig
+</div>
+        <p>
+          Noch weiter gehen Nonen-Akkorde (9), Undezim-Akkorde (11) und Tredezim-Akkorde (13). Diese werden hauptsächlich in Jazz, R&B und modernen Filmscores eingesetzt. Für Spielemusik sind Dur-, Moll- und Septakkorde der Ausgangspunkt — die erweiterten Akkorde kommen dann je nach Stil hinzu.
+        </p>
+
+        <h2>3.4 — Akkordumkehrungen</h2>
+        <p>
+          Ein Akkord klingt anders, je nachdem welcher seiner Töne der tiefste ist. In der <span class="glow">Grundstellung</span> liegt der Grundton unten. In der <span class="glow">ersten Umkehrung</span> liegt die Terz unten, in der <span class="glow">zweiten Umkehrung</span> die Quinte. Das klingt "weicher" und ermöglicht einen fließenderen Übergang zwischen Akkorden, weil sich weniger Töne bewegen müssen:
+        </p>
+        <div class="codeblock">
+C-Dur Grundstellung:     C  E  G   (C unten)
+C-Dur erste Umkehrung:   E  G  C   (E unten)
+C-Dur zweite Umkehrung:  G  C  E   (G unten)
+</div>
+        <p>
+          Umkehrungen sind besonders wichtig für die <span class="glow">Stimmführung</span> — das Prinzip, dass jede Stimme (jede Melodielinie) so sparsam wie möglich bewegt werden soll. Wenn ein Akkord zum nächsten wechselt, klingt es smoother, wenn die einzelnen Töne möglichst nahe beieinanderbleiben, statt zu springen.
+        </p>
+
+        <h2>3.5 — Übung 3.5</h2>
+        <p>
+          Schreiben sie im Piano Roll die vier Akkorde C-Dur, A-Moll, F-Dur und G-Dur, jeweils als ganzen Block (alle drei Noten gleichzeitig), in C-Dur Grundstellung. Das ist die bekannteste Akkordfolge der westlichen Popularmusik. Spielen sie sie ab. Ergänzen sie danach eine einfache Melodie (nur einzelne Töne) aus der C-Dur Tonleiter darüber. Versuchen sie anschließend, die Akkorde in Umkehrungen umzuschreiben, sodass die Basslinie möglichst wenig springt.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-4">
+        <h1>Kapitel 4 — Harmonielehre: Akkordfolgen und Funktionen</h1>
+        <p>
+          Einzelne Akkorde klingen gut — aber Musik entsteht aus der Bewegung zwischen Akkorden. Die <span class="glow">Harmonielehre</span> beschreibt, wie Akkorde miteinander in Beziehung stehen, warum manche Übergänge sich "richtig" anfühlen und andere überraschend oder falsch. Das Verstehen von Akkordfolgen ist eine der wichtigsten Fähigkeiten beim Komponieren von Spielemusik.
+        </p>
+
+        <h2>4.1 — Stufen und ihre Funktionen</h2>
+        <p>
+          Jeder Ton einer Tonleiter ist eine <span class="glow">Stufe</span>, und jede Stufe kann als Grundton eines Akkords dienen. In C-Dur ergeben sich sieben Stufenakkorde, die mit römischen Zahlen bezeichnet werden:
+        </p>
+        <div class="codeblock">
+I   — C-Dur    — Tonika     (das Zuhause, ruhig und stabil)
+II  — D-Moll   — Subdominante (Spannung aufbauend)
+III — E-Moll   — Tonika-Parallele (ruhig, leicht dunkel)
+IV  — F-Dur    — Subdominante (Spannung, Sehnsucht)
+V   — G-Dur    — Dominante  (maximale Spannung, verlangt Auflösung zu I)
+VI  — A-Moll   — Tonikparallele (dunkel, melancholisch)
+VII — H-verm.  — Leittonakkord (sehr dissonant, selten als Ziel)
+</div>
+        <p>
+          Die drei Hauptfunktionen sind <span class="glow">Tonika (T)</span>, <span class="glow">Subdominante (S)</span> und <span class="glow">Dominante (D)</span>. Das klassische Muster T–S–D–T ist das Fundament westlicher Harmonik: man verlässt die Ruhe, baut Spannung auf, steigert sie und kehrt dann zur Ruhe zurück. Ein Musikstück ist in vielen Fällen eine Variation dieses Prinzips.
+        </p>
+
+        <h2>4.2 — Die wichtigsten Akkordfolgen</h2>
+        <p>
+          Bestimmte Akkordfolgen sind so verbreitet, dass sie ihren eigenen Namen haben. Die <span class="glow">I–V–VI–IV-Folge</span> (in C-Dur: C–G–Am–F) ist die populärste überhaupt — sie steckt in tausenden Pop-Songs, aber auch in vielen Spielethemen. Toby Fox nutzt sie in abgewandelter Form immer wieder in Undertale. Die <span class="glow">I–IV–V-Folge</span> ist das Grundmuster des Blues — einfach, kraftvoll, unverzichtbar.
+        </p>
+        <div class="codeblock">
+I–V–VI–IV  (C–G–Am–F)    — die "vier Akkorde des Pop"
+I–IV–V     (C–F–G)       — Blues-Progression
+I–VI–IV–V  (C–Am–F–G)    — "50s-Progression", nostalgisch
+II–V–I     (Dm–G–C)      — klassisches Jazz-Pattern
+I–VII–VI–VII (C–B–Am–B)  — modale Kadenz, folkig, mittelalterlich
+</div>
+        <p>
+          Die <span class="glow">II–V–I-Kadenz</span> ist das Herzstück des Jazz und findet sich auch in vielen Anime-Soundtracks. Die modale Kadenz mit dem siebten Stufenakkord als Umrahmung erzeugt einen folkigen, archaischen Klang — ideal für mittelalterliche RPGs oder Zelda-artige Abenteuerwelten.
+        </p>
+
+        <h2>4.3 — Ausweichung und Modulationen</h2>
+        <p>
+          Musik muss nicht immer in derselben Tonart bleiben. Eine <span class="glow">Ausweichung</span> ist ein kurzer Besuch in einer Nachbartonart, während eine <span class="glow">Modulation</span> dauerhaft die Tonart wechselt. Tonartwechsel können Energie einbringen, emotionale Verschiebungen markieren oder eine Klimax vorbereiten. Ein Stück, das vor dem großen Finale einen Halbton oder eine Quarte nach oben moduliert, klingt plötzlich heller und aufgeregter — das ist ein klassischer Filmmusik-Trick.
+        </p>
+        <p>
+          Einfache Modulationen für Spielemusik: von Moll nach Parallel-Dur (Am nach C) für ein Aufhellen; von Dur nach Tonika-Moll (C nach Cm) für ein plötzliches Verdunkeln; von Dur nach Dur eine große Sekunde höher (C nach D) für Energie.
+        </p>
+
+        <h2>4.4 — Übung 4.4</h2>
+        <p>
+          Schreiben sie ein 16-taktiges Stück in A-Moll, das eine emotionale Kurve beschreibt: Die ersten vier Takte bleiben auf der Tonika (Am), die nächsten vier bewegen sich zur Subdominante und Dominante (Dm–Em), die dritten vier kehren zur Tonika zurück, aber mit einer überraschenden kurzen Ausweichung nach C-Dur (der Parallele), und die letzten vier enden klar in A-Moll. Schreiben sie dazu eine einfache Melodie im Piano Roll.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-5">
+        <h1>Kapitel 5 — Rhythmus, Metrum und Groove</h1>
+        <p>
+          Melodie und Harmonie beschreiben <i>welche</i> Töne gespielt werden. Rhythmus beschreibt <i>wann</i>. Er ist in vieler Hinsicht das mächtigste Element der Musik — schlechter Rhythmus macht selbst gute Melodien langweilig, während guter Rhythmus auch einfache Melodien lebendig macht. Kōji Kondō's Super-Mario-Thema lebt zum großen Teil von seinem rhythmischen Schwung.
+        </p>
+
+        <h2>5.1 — Grundrhythmen und Synkope</h2>
+        <p>
+          Im <span class="glow">4/4-Takt</span> sind die Schläge 1 und 3 stark betont, die Schläge 2 und 4 schwächer. Die meiste Popmusik hat Snare oder Clap auf 2 und 4 — das erzeugt das Gefühl von "Groove". Eine <span class="glow">Synkope</span> entsteht, wenn ein betonter Ton auf eine eigentlich unbetonte Stelle fällt — oder wenn ein Ton auf einem betonten Schlag beginnt, aber über ihn hinaus andauert. Das erzeugt rhythmische Spannung und Lebendigkeit. Viel Anime-Musik und Toby Fox' Kampfthemen nutzen Synkopen intensiv.
+        </p>
+        <div class="codeblock">
+Normaler Rhythmus (4/4):   1  2  3  4  |  1  2  3  4
+Synkopiert:                1  .  +  .  3  .  +  .
+                                  ↑ Betonung auf "und" (zwischen den Schlägen)
+</div>
+
+        <h2>5.2 — Polyrhythmus und Groove-Patterns</h2>
+        <p>
+          <span class="glow">Polyrhythmus</span> bedeutet, dass zwei verschiedene Rhythmen gleichzeitig gespielt werden, die sich in unterschiedlichen Zyklen wiederholen. Ein 3-gegen-2-Polyrhythmus (drei gleichmäßige Schläge in derselben Zeit wie zwei) ist schon in klassischer Musik verbreitet und erzeugt eine charakteristische Schwingung. In Spielemusik für Kämpfe oder intensive Szenen kann Polyrhythmus enormen Drive erzeugen.
+        </p>
+        <p>
+          Ein <span class="glow">Groove</span> entsteht, wenn einzelne Noten minimal vor oder hinter den mathematisch exakten Schlag geschoben werden — ein Konzept namens <span class="glow">Timing Swing</span>. Jazz und Funk leben davon. In LMMS kann man diesen Effekt mit dem Quantisierungsraster steuern: statt auf exakte Rasterlinien zu quantisieren, kann man Noten leicht verschieben. Ein perfekt quantisiertes Stück klingt oft steril — etwas "Unschärfe" macht es lebendiger.
+        </p>
+
+        <h2>5.3 — Taktarten und ihre Charaktere</h2>
+        <p>
+          Verschiedene Taktarten erzeugen verschiedene Charakter-Qualitäten. Der <span class="glow">4/4-Takt</span> ist universell einsetzbar, stabil und direkt. Der <span class="glow">3/4-Takt</span> wirkt wiegend und tänzerisch — typisch für Walzer, aber auch für viele Zelda-Stücke und folkige Musik. Der <span class="glow">6/8-Takt</span> teilt sich in zwei Gruppen zu je drei Achteln und klingt dabei fließend, oft irisch oder nautisch. Der <span class="glow">5/4-Takt</span> und <span class="glow">7/8-Takt</span> klingen ungerade und leicht "stolpernd" — gut für Alienszenen, experimentelle Passagen oder um ein Gefühl der Unruhe zu erzeugen. Dave Brubeck's "Take Five" im 5/4-Takt ist ein bekanntes Beispiel.
+        </p>
+
+        <h2>5.4 — Rhythmus in der Spielemusik</h2>
+        <p>
+          Schnelle Rhythmen und viele kurze Noten erzeugen Energie und Hektik — ideal für Kampfthemen, Rennspiele und Action-Sequenzen. Langsame, weit auseinanderliegende Noten erzeugen Weite und Stille — gut für Open-World-Panoramen oder ruhige Dorfthemen wie in C418's Minecraft. Regelmäßige, gleichförmige Rhythmen geben Sicherheit — unregelmäßige erzeugen Unsicherheit. Diese Prinzipien lassen sich bewusst einsetzen, um die emotionale Wirkung eines Stücks zu kontrollieren.
+        </p>
+
+        <h2>5.5 — Übung 5.5</h2>
+        <p>
+          Erstellen sie in LMMS eine einfache Schlagzeug-Sequenz im Beat+Bassline-Editor. Setzen sie Kick (Bass Drum) auf Schlag 1 und 3, Snare auf 2 und 4 und Hi-Hat auf jede Achtel. Das ist das Standard-Rock-Beat-Pattern. Versuchen sie anschließend, einen Kick oder eine Snare auf einen "Und"-Schlag zu verschieben (Synkope). Hören sie den Unterschied? Erstellen sie in einem zweiten Projekt denselben Beat im 3/4-Takt und vergleichen sie den Charakter.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-6">
+        <h1>Kapitel 6 — Melodie: Schreiben, Formen und Technik</h1>
+        <p>
+          Eine gute Melodie ist das Einprägsamste in einem Stück Musik. Man pfeift sie auf der Straße, man summt sie beim Kochen, man erinnert sich Jahre später noch daran. Aber was macht eine Melodie gut? Das ist keine Magie — es gibt klare Prinzipien, die erfolgreiche Komponisten anwenden, von Mozart bis Toby Fox.
+        </p>
+
+        <h2>6.1 — Melodiebögen und Spannungsaufbau</h2>
+        <p>
+          Eine gute Melodie beschreibt einen <span class="glow">Bogen</span>: sie beginnt auf einem stabilen Ton, bewegt sich weg, erreicht einen Höhepunkt und kehrt zurück. Dieser Bogen muss nicht symmetrisch sein, aber er braucht eine Richtung und ein Ziel. Melodien, die ziellos auf und ab springen, ohne eine Richtung zu haben, klingen unruhig und einprägsam sind sie nicht.
+        </p>
+        <p>
+          Große Sprünge (Intervalle größer als eine Quarte) erzeugen Energie und emotionale Intensität, aber auch Spannung — nach einem großen Sprung erwartet das Ohr eine Bewegung in die entgegengesetzte Richtung. Stufenweise Bewegungen (Sekunden) klingen fließend und vocal — leicht zu singen, leicht zu merken. Die meisten bekannten Melodien kombinieren beides: stufenweise Bewegungen mit gelegentlichen Sprüngen, die Energie hinzufügen.
+        </p>
+
+        <h2>6.2 — Phrase und Motiv</h2>
+        <p>
+          Eine <span class="glow">Phrase</span> ist eine musikalische Sinneinheit, ähnlich einem Satz in der Sprache — meist vier oder acht Takte lang. Zwei Phrasen bilden oft eine <span class="glow">Periode</span>: eine Vordersatz-Phrase, die in der Luft endet (wie eine Frage), und eine Nachsatz-Phrase, die auflöst (wie eine Antwort). Das Prinzip "Frage und Antwort" ist fundamental für das Schreiben einprägsamer Musik.
+        </p>
+        <p>
+          Ein <span class="glow">Motiv</span> ist eine sehr kurze, charakteristische melodische Idee — oft nur drei bis fünf Noten. Motive sind die kleinsten musikalischen Bausteine. Das Schicksalsmotiv aus Beethovens Fünfter (ta-ta-ta-taaa) ist ein berühmtes Beispiel. In Spielemusik taucht das Hauptthema oft als Motiv auf, das sich durch das gesamte Spiel zieht — variiert, in verschiedenen Instrumentierungen und Stimmungen. Toby Fox macht das in Undertale meisterhaft.
+        </p>
+
+        <h2>6.3 — Wiederholung, Variation und Kontrast</h2>
+        <p>
+          Gute Melodien balancieren <span class="glow">Wiederholung</span> und <span class="glow">Variation</span>. Zu viel Wiederholung ist langweilig, zu viel Variation ist verwirrend. Ein bewährtes Muster ist <span class="glow">A–A–B–A</span>: eine Phrase wird zweimal gespielt (damit man sie kennt), dann kommt eine kontrastierende Phrase (B), und dann kehrt A zurück (mit dem Wiedererkennungseffekt). Dieses Muster findet sich in Jazz-Standards, klassischen Melodien und unzähligen Spielethemen.
+        </p>
+        <p>
+          Variation bedeutet, eine bekannte Melodie zu verändern, ohne sie unkenntlich zu machen: Tonhöhen transponieren, Rhythmus leicht verändern, Ornamentation hinzufügen, Noten weglassen oder hinzufügen. Das hält die Melodie interessant, ohne dass man neue Ideen erfinden muss.
+        </p>
+
+        <h2>6.4 — Melodie über einem Akkordgerüst</h2>
+        <p>
+          Eine Melodie muss nicht jeden Akkordton anspielen, aber sie klingt am besten, wenn sie mit der Harmonie "einverstanden" ist. <span class="glow">Akkordtöne</span> (die Töne, aus denen der aktuelle Akkord besteht) klingen stabil und aufgelöst. <span class="glow">Durchgangstöne</span> (fremde Töne, die zwischen Akkordtönen überleiten) klingen kurz spannend und müssen sich auflösen. Landet man auf einem Nicht-Akkordton und hält ihn, klingt das dissonant — manchmal gewollt, manchmal ein Fehler.
+        </p>
+
+        <h2>6.5 — Übung 6.5</h2>
+        <p>
+          Schreiben sie eine 8-taktige Melodie in G-Dur (G A B C D E F# G) über folgende Akkorde: G–G–Em–Em–C–C–D–G. Die Melodie soll den A–A–B–A-Form befolgen: die ersten beiden Takte, wiederholt in Takt 3 und 4, eine andere Idee in Takt 5 und 6, und Rückkehr zur ursprünglichen Idee in Takt 7 und 8 (mit kleiner Abwandlung am Ende). Achten sie darauf, dass die Melodie auf Akkordtönen landet.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-7">
+        <h1>Kapitel 7 — Kompositionstechniken und Struktur</h1>
+        <p>
+          Wenn man die einzelnen Bausteine kennt — Töne, Akkorde, Rhythmus, Melodie — stellt sich die Frage: Wie baut man daraus ein vollständiges Stück? Kompositionstechnik ist das Handwerk des Strukturierens. Gute Komponisten wissen, wie man Spannung aufbaut, wann man loslässt, wie man Energie steuert und wie lang ein Stück für seinen Zweck sein sollte.
+        </p>
+
+        <h2>7.1 — Formmodelle</h2>
+        <p>
+          Die häufigsten musikalischen Formen sind:
+        </p>
+        <div class="codeblock">
+Strophenlied:   A – A – A – A           (gleiche Struktur, verschiedene Texte)
+Refrainlied:    A – B – A – B – A       (Strophe und Refrain wechseln)
+Dreiteilige F.: A – B – A              (Exposition, Kontrast, Reprise)
+Rondo:          A – B – A – C – A – D  (Refrain kehrt immer zurück)
+Durchkomponiert: keine Wiederholung    (z.B. viele Filmscores)
+</div>
+        <p>
+          Für Spielemusik ist die dreiteilige Form besonders nützlich: Hauptthema, kontrastierender Mittelteil, Rückkehr. Sie ist kurz genug, um in einem Loop zu funktionieren, und vielfältig genug, um nicht zu monoton zu werden. C418's Minecraft-Musik nutzt oft sehr einfache A–B-Strukturen, die als Loop gut funktionieren.
+        </p>
+
+        <h2>7.2 — Spannung und Auflösung</h2>
+        <p>
+          Musik, die immer gleich intensiv ist, wird schnell anstrengend. Gute Komposition baut Spannung auf und löst sie auf — die <span class="glow">dynamische Kurve</span>. Das gilt sowohl im Kleinen (innerhalb einer Phrase) als auch im Großen (über ein ganzes Stück). Technisch erzeugt man Spannung durch: Lautstärkezunahme (<span class="glow">Crescendo</span>), Hinzufügen von Instrumenten, Anstieg in der Melodie, stärkere Dissonanz, schnelleren Rhythmus. Auflösung durch das Gegenteil.
+        </p>
+        <p>
+          Die <span class="glow">Kadenz</span> ist die harmonische Auflösung am Ende einer Phrase oder eines Stücks. Die authentische Kadenz (V–I) ist die stärkste Schlusskadenz. Die Halbkadenz (endet auf V) klingt offen und weiterführend — wie eine Frage. Die Trugkadenz (V–VI statt V–I) täuscht die Erwartung und klingt überraschend.
+        </p>
+
+        <h2>7.3 — Orchestrierung und Textur</h2>
+        <p>
+          <span class="glow">Textur</span> beschreibt, wie viele Stimmen gespielt werden und wie sie sich zueinander verhalten. <span class="glow">Homophonie</span> bedeutet, eine Hauptmelodie mit Begleitung (das häufigste Prinzip). <span class="glow">Polyphonie</span> bedeutet mehrere gleichwertige Stimmen, die sich gegenseitig ergänzen — wie in Bachs Fugen. <span class="glow">Monophonie</span> ist eine einzelne Stimme ohne Begleitung.
+        </p>
+        <p>
+          Eine einfache Technik, die immer funktioniert: Beginnen sie dünn (ein oder zwei Instrumente), fügen sie nach und nach mehr hinzu und nehmen sie vor einem Ruhepunkt wieder welche weg. Das gibt dem Stück Atem und Energie. Bei Kämpfern und Arcade-Spielen kann man diese Technik nutzen, um den Höhepunkt einer Kampf-Phase musikalisch zu signalisieren.
+        </p>
+
+        <h2>7.4 — Ideale Länge für verschiedene Medien</h2>
+        <p>
+          In Spielemusik gibt es eine wichtige Besonderheit: viele Stücke sollen als <span class="glow">Loop</span> funktionieren — sie werden endlos wiederholt, solange der Spieler in einem bestimmten Bereich ist. Das stellt andere Anforderungen als ein Konzert-Stück oder ein Filmscore.
+        </p>
+        <div class="codeblock">
+Hauptmenü-Musik:  60–120 Sekunden    — einladend, nicht zu einprägsam
+Gameplay-Loop:    90–180 Sekunden    — vielfältig genug, um nicht zu nerven
+Kampfmusik:       60–120 Sekunden    — intensiv, energiegeladen
+Cutscene/Event:   30–90 Sekunden     — kann spezifischer und dramatischer sein
+Jingle/Sting:     1–5 Sekunden       — Game Over, Level Up, Powerup
+Boss-Kampf:       120–240 Sekunden   — oft mehrphasig, wechselnde Intensität
+Ambient/Erkundung: 120–300 Sekunden  — ruhig, repetitiv, nicht aufdringlich
+</div>
+        <p>
+          Ein Loop-Ende muss nahtlos zum Anfang zurückführen. Das bedeutet: Das letzte Akkord oder die letzte Note muss harmonisch verträglich mit dem Anfangstakt sein. Man plant den Loop-Punkt von Anfang an mit ein — im letzten Takt befindet man sich idealerweise wieder auf der Tonika.
+        </p>
+
+        <h2>7.5 — Übung 7.5</h2>
+        <p>
+          Schreiben sie ein 32-taktiges Stück in D-Moll, das als Loop funktioniert. Es soll die dreiteilige Form A–B–A verwenden: 8 Takte Hauptthema (A), 8 Takte Kontrast (B, eventuell in der Durparallele F-Dur), 8 Takte Rückkehr (A, leicht variiert), 8 Takte Ausklang, der nahtlos zum Anfang führt. Achten sie darauf, dass Takt 32 und Takt 1 harmonisch funktionieren, wenn man sie hintereinander spielt.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-8">
+        <h1>Kapitel 8 — Leitmotive in der Spielemusik</h1>
+        <p>
+          Ein <span class="glow">Leitmotiv</span> ist eine kurze, charakteristische musikalische Idee, die einer bestimmten Figur, einem Ort, einem Gefühl oder einem Konzept zugeordnet ist. Wann immer dieses Element in der Geschichte auftaucht, erklingt das Leitmotiv — oder eine Variation davon. Diese Technik stammt aus der Oper (Richard Wagner hat sie systematisiert), findet sich aber auch in Filmmusik und in modernen Spielen intensiv.
+        </p>
+
+        <h2>8.1 — Leitmotiv-Technik</h2>
+        <p>
+          Ein Leitmotiv kann melodisch sein (eine einprägsame Tonfolge), rhythmisch (ein charakteristisches Schlagmuster), harmonisch (ein ungewöhnlicher Akkord oder eine Akkordfolge) oder instrumental (ein bestimmtes Instrument steht immer für eine Figur). Oft ist es eine Kombination daraus. Das Ziel ist Wiedererkennbarkeit: Wenn das Motiv erklingt, weiß der Spieler sofort, mit was oder wem er es zu tun hat — noch bevor er es sieht.
+        </p>
+        <p>
+          Toby Fox setzt Leitmotive in Undertale mit großer Präzision ein: Das "Megalovania"-Motiv taucht bereits in früheren Teilen der Musik auf, bevor das finale Thema gespielt wird. Der Spieler bemerkt die Verbindung oft unbewusst — aber die emotionale Wirkung ist enorm. Kōji Kondō's "Zelda-Lullaby" ist eines der bekanntesten Spieleleitmotive — es taucht in fast jedem Zelda-Spiel in einer neuen Variation auf.
+        </p>
+
+        <h2>8.2 — Leitmotive entwickeln und variieren</h2>
+        <p>
+          Ein Leitmotiv soll erkennbar bleiben, aber nicht langweilig werden. Es gibt verschiedene Techniken, ein Motiv zu transformieren, ohne seine Identität zu verlieren. <span class="glow">Transposition</span> bedeutet, es in eine andere Tonart zu versetzen — dasselbe Motiv in Moll klingt dunkler als in Dur. <span class="glow">Augmentation</span> streckt alle Notenwerte (alles wird doppelt so lang) — das klingt feierlicher und schwerer. <span class="glow">Diminution</span> verkürzt alle Notenwerte — das klingt hektischer und aufgeregter. <span class="glow">Umkehrung</span> dreht die Melodie auf den Kopf (was aufging, geht jetzt runter). <span class="glow">Krebsgang</span> spielt das Motiv rückwärts.
+        </p>
+        <div class="codeblock">
+Original:         C – E – G  (aufsteigend, Dur, kurze Noten)
+Transponiert:     A – C – E  (A-Moll, dasselbe Muster, dunkler)
+Augmentiert:      C –– E –– G ––  (doppelt so lang, feierlicher)
+Diminuiert:       C E G (halb so lang, gehetzt)
+Umgekehrt:        G – E – C  (absteigend, fühlt sich auflösend an)
+</div>
+
+        <h2>8.3 — Leitmotiv-System für ein Spiel planen</h2>
+        <p>
+          Für ein größeres Spiel empfiehlt sich, das Leitmotiv-System im Voraus zu planen. Man legt fest: Welche Figuren, Orte und Konzepte bekommen ein eigenes Motiv? Wie verhält sich das Motiv des Protagonisten zu dem des Antagonisten (oft sind sie Variationen voneinander)? Welches Motiv steht für die Hauptwelt, welches für gefährliche Zonen?
+        </p>
+        <p>
+          Ein praktisches Beispiel für ein Platformer-Spiel: Das Hauptthema des Helden ist ein helles Dur-Motiv mit federndem Rhythmus. Der Oberschurke hat dasselbe melodische Material, aber in harmonischer Moll-Tonleiter, langsamer und mit Blechbläsern statt Streichern. Wenn der Held in einem Dungeon des Schurken läuft, klingt das Dungeon-Thema wie eine dunkle Variation des Helden-Motivs — der Spieler spürt die thematische Verbindung.
+        </p>
+
+        <h2>8.4 — Übung 8.4</h2>
+        <p>
+          Erfinden sie für ein fiktives TrafkHop-Spiel ihrer Wahl drei Leitmotive: eines für den Hauptcharakter (hell, einprägsam, 4–6 Noten), eines für den Hauptgegner (dunkel, bedrohlich, kann das erste Motiv als Basis haben) und eines für einen sicheren Ort wie ein Dorf oder ein Hauptquartier (ruhig, warm, angenehm). Schreiben sie alle drei in LMMS und experimentieren sie mit einer Transposition: Wie klingt das Helden-Motiv in Moll?
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-9">
+        <h1>Kapitel 9 — LMMS: Die Oberfläche</h1>
+        <p>
+          Jetzt wechseln wir in die Praxis. LMMS (Linux MultiMedia Studio) ist eine freie, open-source Digital Audio Workstation, die auf Linux, Windows und macOS läuft. Hier wird mit LMMS 1.2.0 gearbeitet. Alle Beispiele und Beschreibungen beziehen sich auf diese Version. LMMS hat eine steile Lernkurve, aber sobald man die Oberfläche kennt, ist es ein sehr mächtiges Werkzeug.
+        </p>
+
+        <h2>9.1 — Das Hauptfenster</h2>
+        <p>
+          Beim Start begrüßt einen das Hauptfenster von LMMS. Es besteht aus mehreren Bereichen. Oben befindet sich die <span class="glow">Toolbar</span> mit Transportsteuerung (Play, Stop, Record), Tempo-Einstellung (BPM), Taktart und Master-Lautstärke. Links ist die <span class="glow">Instrument-Sidebar</span> mit Tabs für Instrumente, Projekte, Samples und Presets. In der Mitte befindet sich der <span class="glow">Song-Editor</span> — hier sieht man das gesamte Lied als Übersicht. Unten ist die <span class="glow">Statusleiste</span>.
+        </p>
+        <p>
+          Die drei wichtigsten Editoren in LMMS sind der <span class="glow">Song-Editor</span> (Makro-Übersicht: welche Spuren wann spielen), der <span class="glow">Beat+Bassline-Editor</span> (für Schlagzeug und repetitive Patterns) und der <span class="glow">Piano Roll</span> (für Melodien und Akkorde in einer Spur). Man öffnet sie über das View-Menü oder über die jeweiligen Schaltflächen in den Spuren.
+        </p>
+
+        <h2>9.2 — Der Song-Editor</h2>
+        <p>
+          Der Song-Editor zeigt die Struktur des gesamten Stücks. Auf der linken Seite stehen die Spuren (Instrumente, Beat+Bassline-Editoren, Automations-Spuren). Auf der rechten Seite sieht man Blöcke, die Segmente der Komposition darstellen. Man zieht Blöcke mit der rechten Maustaste, um sie zu verschieben, oder mit der linken, um neue zu erstellen. Ein Doppelklick auf einen Block öffnet ihn im Piano Roll (bei Melodiespuren) oder Beat+Bassline-Editor (bei Rhythmusspuren).
+        </p>
+        <p>
+          Jede Spur im Song-Editor hat links kleine Schaltflächen: Mute (stumm schalten), Solo, und den Namen der Spur. Der grüne Knopf mit dem Stiftsymbol öffnet das Instrument-Plugin der Spur.
+        </p>
+
+        <h2>9.3 — Keyboard Shortcuts in LMMS</h2>
+        <p>
+          Ohne Shortcuts ist das Arbeiten in LMMS langsam. Hier sind die wichtigsten:
+        </p>
+        <div class="codeblock">
+Ctrl+S          — Projekt speichern
+Ctrl+Z          — Rückgängig
+Ctrl+Y          — Wiederholen
+Ctrl+C/V/X      — Kopieren, Einfügen, Ausschneiden (im Piano Roll)
+Leertaste       — Play / Stop (im aktiven Editor)
+Entf            — Ausgewählte Noten löschen (Piano Roll)
+A               — Alle Noten auswählen (Piano Roll)
+Ctrl+A          — Alle Noten auswählen
+Q               — Quantisierungsraster umschalten
++/-             — Zoom im Piano Roll
+Shift+Scrollrad — Horizontales Scrollen
+Ctrl+Scrollrad  — Zoom
+R               — Record-Modus (für MIDI-Aufnahme)
+</div>
+
+        <h2>9.4 — Projekt-Einstellungen</h2>
+        <p>
+          Über "Edit → Settings" und "Edit → Project Settings" lassen sich globale Einstellungen wie Sample-Rate, Buffer-Größe und MIDI-Geräte konfigurieren. Für normale Arbeit reichen die Standardeinstellungen — 44100 Hz Sample-Rate und 512 Buffer-Größe sind ein guter Ausgangspunkt. Bei Latenzproblemen kann man die Buffer-Größe reduzieren (mehr CPU-Last, weniger Latenz).
+        </p>
+
+        <h2>9.5 — Übung 9.5</h2>
+        <p>
+          Starten sie LMMS und erkunden sie die Oberfläche. Erstellen sie ein neues Projekt über "File → New". Fügen sie drei Spuren hinzu: eine Beat+Bassline-Spur für Schlagzeug, eine Instrument-Spur für Melodie und eine zweite Instrument-Spur für Bassline. Benennen sie alle drei Spuren sinnvoll (Doppelklick auf den Namen). Spielen sie mit den Mute- und Solo-Schaltflächen. Speichern sie das Projekt.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-10">
+        <h1>Kapitel 10 — SF2-Player und Soundfonts</h1>
+        <p>
+          Soundfonts (Dateiformat: .sf2) sind Sammlungen von aufgenommenen Instrumentenklängen, die über MIDI gesteuert werden. Das Paket <span class="glow">500_Soundfonts_Full_GM_Sets</span> von Archive.org enthält hunderte solcher Sammlungen, geordnet nach dem General-MIDI-Standard. General MIDI (GM) definiert, welches MIDI-Instrument auf welchem Kanal welchen Sound spielt — Kanal 10 ist immer Schlagzeug, die Kanäle 1–9 und 11–16 sind melodische Instrumente.
+        </p>
+
+        <h2>10.1 — SF2-Player in LMMS einrichten</h2>
+        <p>
+          Um einen Soundfont zu verwenden, fügt man eine neue Instrument-Spur hinzu. Im Instrument-Plugin-Auswahlfenster wählt man <span class="glow">SF2 Player</span>. Im SF2-Player klickt man auf den Ordner-Button und navigiert zur gewünschten .sf2-Datei. Nach dem Laden zeigt der SF2-Player eine Liste aller enthaltenen Instrumente (Banks und Presets). Man wählt das gewünschte Instrument aus der Liste.
+        </p>
+        <p>
+          Der SF2-Player in LMMS hat Regler für <span class="glow">Attack, Decay, Sustain, Release</span> (ADSR — mehr dazu in Kapitel 12), Reverb, Chorus und einen Tune-Regler für die Stimmung. Für realisitisch klingende Spielemusik reicht der SF2-Player vollständig aus.
+        </p>
+
+        <h2>10.2 — General MIDI: Instrumente und ihre Nummern</h2>
+        <p>
+          General MIDI teilt die 128 Instrumente in Gruppen ein. Die wichtigsten für Spielemusik:
+        </p>
+        <div class="codeblock">
+1–8:    Pianos          (Grand Piano, Electric Piano, Honky-Tonk...)
+9–16:   Chromatic Perc. (Celesta, Glockenspiel, Vibraphone...)
+17–24:  Organs          (Church Organ, Hammond, Accordion...)
+25–32:  Guitars         (Acoustic, Electric, Muted, Distorted...)
+33–40:  Basses          (Acoustic, Electric, Slap, Synth Bass...)
+41–48:  Strings         (Violin, Viola, Cello, Contrabass, Tremolo...)
+49–56:  Ensemble        (String Ensemble, Choir, Orchestra Hit...)
+57–64:  Brass           (Trumpet, Trombone, Tuba, French Horn...)
+65–72:  Reed            (Saxophone, Oboe, Clarinet, Bassoon...)
+73–80:  Pipe            (Flute, Recorder, Pan Flute, Shakuhachi...)
+81–88:  Synth Lead       (Square, Sawtooth, Synth Calliope...)
+89–96:  Synth Pad        (Warm Pad, Chorus Pad, Space Voice...)
+97–104: Synth Effects    (Rain, Soundtrack, Crystal, Atmosphere...)
+105–112: Ethnic          (Sitar, Banjo, Shamisen, Koto, Kalimba...)
+113–120: Percussive      (Tinker Bell, Agogo, Wood Block, Taiko...)
+121–128: Sound Effects   (Guitar Fret, Telephone, Rain, Ocean...)
+</div>
+        <p>
+          Für ein orchestrales Spielethema greift man typischerweise auf Strings (41–48), Brass (57–64), Woodwinds (65–80) und Choir (52–53) zurück. Für ein modernes Action-Spiel kommen Synth-Leads und -Pads hinzu.
+        </p>
+
+        <h2>10.3 — Passende Instrumente für verschiedene Genres</h2>
+        <p>
+          Die Wahl der Instrumente prägt den Stil des Spiels mehr als jedes andere Element. Ein paar Leitlinien:
+        </p>
+        <p>
+          <span class="glow">Fantasy / RPG</span>: Orchester-Strings, Brass, Woodwinds, Choir, Harfe, Laute, Zither, Ethnische Instrumente. Kōji Kondō nutzt in Zelda oft Streichquartett-artige Arrangements mit Holzbläsern und gelegentlichem Blechbläsereinsatz.
+        </p>
+        <p>
+          <span class="glow">Sci-Fi / Space</span>: Synth Pads (besonders "Space Voice" und "Atmosphere"), Synth Leads, Orchestra Hit, elektronische Percussions, modulierte Sounds. Zurückhaltende, kühle Palette.
+        </p>
+        <p>
+          <span class="glow">Horror / Thriller</span>: Tiefe Streicher (Con Sord, Tremolo), Dissonante Chöre, Kontrabass, tiefes Blechbläser, Pauken, langsame Percussion, Synthie-Texturen.
+        </p>
+        <p>
+          <span class="glow">Platformer / Arcade</span>: Lebhafte Melodien auf Glockenspiel, Vibraphone, Electric Piano, Synth-Leads, aktive Percussion. C418's Minecraft nutzt Piano, Gitarre und ruhige Synths für einen entspannten, offenen Charakter.
+        </p>
+        <p>
+          <span class="glow">Kampf / Boss</span>: Brass, Heavy Percussion (Timpani, Taiko), E-Gitarre (Distorted Guitar, #30), Synth-Lead, schnelle Streicher.
+        </p>
+        <p>
+          <span class="glow">Dorf / Entspannung</span>: Acoustic Guitar, Accordion, Flute, Recorder, Piano, Harfe, Glockenspiel.
+        </p>
+
+        <h2>10.4 — Übung 10.4</h2>
+        <p>
+          Laden sie drei verschiedene Soundfont-Dateien aus dem Paket und wählen sie aus jeder mindestens ein Instrument aus. Erstellen sie eine kurze 8-taktige Sequenz mit denselben Noten, aber mit drei verschiedenen Instrumenten (z.B. Piano, Strings und Synth Pad). Vergleichen sie den Charakter des Stücks mit jedem Instrument. Welches klingt nach Fantasy, welches nach Sci-Fi, welches nach etwas ganz anderem?
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-11">
+        <h1>Kapitel 11 — Der Piano Roll in der Tiefe</h1>
+        <p>
+          Der Piano Roll ist der Kern jeder melodischen Arbeit in LMMS. Man öffnet ihn mit einem Doppelklick auf einen Block im Song-Editor. Die horizontale Achse ist die Zeit (in Takten und Schlägen), die vertikale Achse ist die Tonhöhe (die Klaviertastatur links). Noten werden als farbige Blöcke dargestellt.
+        </p>
+
+        <h2>11.1 — Noten einfügen und bearbeiten</h2>
+        <p>
+          Im "Draw"-Modus (Bleistift, Tastenkürzel D) erstellt man Noten mit einem Linksklick. Länge der Note: beim Erstellen die Maus nach rechts ziehen. Löschen: Rechtsklick auf eine Note. Verschieben: im "Select"-Modus (Tastenkürzel S) oder Strg+Drag. Alle Noten auswählen: Ctrl+A. Transponieren (nach oben/unten verschieben): Pfeiltasten bei ausgewählten Noten (Halbton pro Druck, Shift+Pfeiltaste für eine Oktave).
+        </p>
+        <p>
+          Das <span class="glow">Quantisierungsraster</span> bestimmt, auf welchen Zeitpunkt neue Noten snappen. Standardmäßig ist das 1/16 — man kann es auf 1/8, 1/4 oder feiner stellen. Mit Q lässt sich die Quantisierung schnell umschalten. Für freiere Rhythmen kann man die Quantisierung ausschalten.
+        </p>
+
+        <h2>11.2 — Velocity: Anschlagsdynamik</h2>
+        <p>
+          Jede Note hat einen <span class="glow">Velocity</span>-Wert (0–127), der bestimmt, wie laut und intensiv sie gespielt wird — bei einem Piano entspricht das dem Anschlagsdruck. Im Piano Roll sieht man unten eine Velocity-Spur als Balken. Mit einem Klick auf einen Balken kann man die Velocity einer Note ändern. Unterschiedliche Velocities machen Musik lebendiger — ein mechanisch gleichmäßiger Velocity-Wert klingt roboterhaft. Melodietöne auf betonten Schlägen haben meistens höhere Velocity als Durchgangsnoten.
+        </p>
+
+        <h2>11.3 — Chords und Akkorde im Piano Roll</h2>
+        <p>
+          Akkorde im Piano Roll zu schreiben ist einfach: mehrere Noten beginnen zum selben Zeitpunkt. Man kann im "Chord"-Modus auch automatisch Akkorde erzeugen lassen — dazu im Draw-Modus auf einen Ton klicken und dann im Chord-Dropdown (oben rechts im Piano Roll) einen Akkordtyp wählen. LMMS fügt dann automatisch die passenden weiteren Töne ein.
+        </p>
+        <p>
+          Für realistisch klingende Akkorde empfiehlt sich <span class="glow">Strum-Simulation</span>: die einzelnen Töne eines Akkords nicht exakt gleichzeitig starten zu lassen, sondern jeden leicht versetzt (5–10 ms). Das ahmt das Anschlagen einer Gitarrensaite nach und klingt wesentlich natürlicher.
+        </p>
+
+        <h2>11.4 — Patterns kopieren und Variationen schreiben</h2>
+        <p>
+          Effizientes Arbeiten im Piano Roll bedeutet, Patterns wiederzuverwenden. Ein Pattern kann mit Ctrl+C kopiert und mit Ctrl+V eingefügt werden. Im Song-Editor kann man einen Block Ctrl+Drag, um eine Kopie zu erstellen. Für Variationen empfiehlt sich, den Block zunächst zu kopieren und dann im Piano Roll die Variation zu schreiben — so behält man das Original und kann jederzeit vergleichen.
+        </p>
+
+        <h2>11.5 — Übung 11.5</h2>
+        <p>
+          Schreiben sie die Melodie aus Übung 6.5 in den Piano Roll und variieren sie die Velocity so, dass betonte Schläge höhere Werte haben (100–120) und unbetonte niedrigere (60–80). Kopieren sie das Pattern und schreiben sie in der Kopie eine leichte Variation der Melodie (andere Schlussnote, eine veränderte Phrase). Hören sie beide Versionen ab und entscheiden sie, welche besser klingt.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-12">
+        <h1>Kapitel 12 — Beat+Bassline-Editor und Schlagzeug</h1>
+        <p>
+          Der <span class="glow">Beat+Bassline-Editor</span> ist spezialisiert auf Schlagzeug und repetitive Patterns. Er zeigt ein Raster, in dem man auf Knöpfe klickt, um Schläge zu setzen — ähnlich wie ein klassischer Drum-Computer. Jede Reihe entspricht einem Instrument (z.B. Kick, Snare, Hi-Hat), jede Spalte einem Zeitpunkt im Takt.
+        </p>
+
+        <h2>12.1 — Grundlegendes Schlagzeug-Setup</h2>
+        <p>
+          Im Beat+Bassline-Editor fügt man links Instrumente hinzu. Für Schlagzeug lädt man eine Schlagzeug-Soundfont (die meisten GM-Soundfonts haben Schlagzeug auf Kanal 10, aber im SF2-Player kann man auch einzelne Samples laden). Die wichtigsten Schlagzeug-Elemente in General MIDI:
+        </p>
+        <div class="codeblock">
+MIDI-Note 35/36  — Kick (Bass Drum)       — das Fundament, Takt 1 und 3
+MIDI-Note 38/40  — Snare Drum             — Gegenbeton, Takt 2 und 4
+MIDI-Note 42     — Closed Hi-Hat          — pulsierender Rhythmus
+MIDI-Note 46     — Open Hi-Hat            — Öffnung, Luftholen
+MIDI-Note 49/57  — Crash Cymbal           — Akzente, Übergänge
+MIDI-Note 51/59  — Ride Cymbal            — gleichmäßiger Puls (statt Hi-Hat)
+MIDI-Note 41–47  — Low/Mid/High Tom       — Fills, Akzente
+MIDI-Note 54     — Tambourine             — leichter, ethnischer Groove
+MIDI-Note 56     — Cowbell                — Akzente, Pop und Funk
+</div>
+
+        <h2>12.2 — Schlagzeugpatterns für verschiedene Genres</h2>
+        <p>
+          <span class="glow">Standard-Rock (4/4)</span>: Kick auf 1 und 3, Snare auf 2 und 4, Closed Hi-Hat auf jede Achtel. Einfach, kraftvoll, universal.
+        </p>
+        <p>
+          <span class="glow">Funk</span>: Komplexerer Kick-Pattern (oft Synkopen), Snare auf 2 und 4 plus gelegentliche Synkopen, Hi-Hat auf Sechzehntel mit offenen und geschlossenen Variationen. Der Groove sitzt im Kick.
+        </p>
+        <p>
+          <span class="glow">Latin / Bossa Nova</span>: Clave-Rhythmus (3-2 oder 2-3) auf Shaker oder Clave, Congas-ähnliche Percussion, kein starker Downbeat-Kick.
+        </p>
+        <p>
+          <span class="glow">Elektronisch / EDM</span>: Vier-auf-den-Boden Kick (jede Viertelnote), Snare auf 2 und 4, Hi-Hat auf Sechzehntel. Sehr gerade, gleichmäßig.
+        </p>
+        <p>
+          <span class="glow">Orchestral / Cinematic</span>: Pauken (Timpani) für Akzente, Große Trommel für Gewicht, keine Hi-Hat, sparsame Snare. Alles ist auf Dramatik ausgerichtet, nicht auf Groove.
+        </p>
+        <p>
+          <span class="glow">Keine Schlagzeug</span>: Für Ambient-Musik, ruhige Erkundungsthemen und emotionale Cutscene-Musik wird oft überhaupt kein Schlagzeug eingesetzt. Die Rhythmik entsteht durch die Melodie und Harmonie selbst.
+        </p>
+
+        <h2>12.3 — Fills und Übergänge</h2>
+        <p>
+          Ein <span class="glow">Fill</span> ist eine kurze, improvisiert wirkende Abweichung vom normalen Beat, die meistens am Ende einer Phrase kommt und den Übergang zum nächsten Teil ankündigt. Im Beat+Bassline-Editor erstellt man dafür ein separates Pattern, das nur an den entsprechenden Stellen im Song-Editor eingesetzt wird. Ein Fill endet typischerweise mit einem Crash-Cymbal auf dem ersten Schlag des nächsten Takts.
+        </p>
+
+        <h2>12.4 — Übung 12.4</h2>
+        <p>
+          Erstellen sie im Beat+Bassline-Editor drei verschiedene Schlagzeugpatterns: einen Standard-Rock-Beat, einen einfachen Funk-Groove und ein orchestrales Muster mit Pauken und großer Trommel. Erstellen sie außerdem einen kurzen Fill (2 Takte) für den Übergang zwischen den Patterns. Hören sie alle drei in Verbindung mit der Akkordfolge aus Übung 3.5 ab.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-13">
+        <h1>Kapitel 13 — ADSR, Hüllkurven und Klangsynthese</h1>
+        <p>
+          Auch wenn man in LMMS primär mit Soundfonts arbeitet, ist es wichtig zu verstehen, wie Klänge funktionieren. Die <span class="glow">Hüllkurve</span> beschreibt, wie die Lautstärke (oder ein anderer Parameter) eines Tons sich über die Zeit verändert — von Beginn bis Ende. Das Standardmodell ist <span class="glow">ADSR</span>.
+        </p>
+
+        <h2>13.1 — ADSR im Detail</h2>
+        <div class="codeblock">
+A — Attack   — Zeit vom Ton-Start bis zur maximalen Lautstärke
+              — Kurz: percussiver, direkter Anschlag (Drum, Pizzicato)
+              — Lang: langsames Einsetzen (Streicher, Bläser-Pad)
+
+D — Decay    — Zeit von der maximalen bis zur Sustain-Lautstärke
+              — Kurz: schnelles Abfallen nach dem Peak
+              — Lang: sanfterer Übergang
+
+S — Sustain  — Lautstärke, auf der der Ton bleibt, solange die Note gehalten wird
+              — 0%: Ton fällt schnell ab (Klavier)
+              — 100%: bleibt auf Maximum (Orgel)
+
+R — Release  — Zeit vom Loslassen der Note bis zum völligen Verstummen
+              — Kurz: abruptes Ende (Staccato)
+              — Lang: natürliches Ausklingen (Streicher, Hall)
+</div>
+        <p>
+          Ein Piano hat kurzen Attack, mittleres Decay, niedrigen Sustain (der Ton fällt nach dem Anschlag ab) und mittleres Release. Eine Orgel hat kurzen Attack, keinen Decay, maximalen Sustain und kurzes Release. Streicher haben langes Attack (der Ton baut sich auf), hohen Sustain und langes Release. Diese Parameter bestimmen den "Charakter" eines Klangs enorm.
+        </p>
+        <p>
+          Im SF2-Player in LMMS kann man Attack und Release anpassen. Das ist besonders nützlich, um Soundfonts weicher oder härter klingen zu lassen als in der Original-Aufnahme — zum Beispiel einen Piano-Soundfont mit langem Release für eine traumhafte Pad-Textur.
+        </p>
+
+        <h2>13.2 — Vibrato und Modulation</h2>
+        <p>
+          <span class="glow">Vibrato</span> ist eine regelmäßige, schnelle Schwankung der Tonhöhe — charakteristisch für Gesang und Streichinstrumente. Es macht Töne lebendiger und emotional intensiver. Im SF2-Player kann man über MIDI-Controller 1 (Modulation Wheel) Vibrato hinzufügen. Auf einen Automation-Track kann man diesen Controller über Zeit variieren.
+        </p>
+
+        <h2>13.3 — Effekte: Reverb und Chorus</h2>
+        <p>
+          <span class="glow">Reverb</span> (Hall) simuliert den Klang in einem Raum — kleine Kammer bis große Kathedrale. Reverb gibt dem Klang Tiefe und Raumgefühl. Zu viel Reverb macht Musik undeutlich und "matschig". Für Spielemusik gilt: Schlagzeug und Percussion bekommen wenig bis keinen Reverb, Melodieinstrumente etwas, Pads und Chöre deutlich mehr.
+        </p>
+        <p>
+          <span class="glow">Chorus</span> erzeugt einen leicht verbreiterten, chorartig verdickten Klang, indem er leicht zeitverzögerte und tonhöhenvariierte Kopien des Signals mischt. Er klingt fülliger und wärmer. Im SF2-Player sind Reverb und Chorus direkt einstellbar — im FX-Bereich des Instruments kann man außerdem externe Effekt-Plugins anschließen.
+        </p>
+
+        <h2>13.4 — Übung 13.4</h2>
+        <p>
+          Nehmen sie einen Streicher-Soundfont und experimentieren sie mit den ADSR-Werten im SF2-Player. Stellen sie zuerst sehr kurzes Attack ein — die Streicher klingen dann fast wie gezupft. Dann maximal langes Attack — sie setzen ein wie ein schleichendes Crescendo. Erhöhen sie anschließend den Reverb-Wert und vergleichen sie den Klang. Welche Einstellung würde in welchem Spielkontext funktionieren?
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-14">
+        <h1>Kapitel 14 — Mixing und Abmischen</h1>
+        <p>
+          Mixing ist der Prozess, alle einzelnen Spuren zu einem kohärenten Gesamtklang zusammenzufügen. Selbst wenn alle Melodien und Rhythmen stimmen — schlechtes Mixing macht Musik klingen wie ein chaotisches Durcheinander. Gutes Mixing gibt jedem Instrument seinen Platz im Klangbild.
+        </p>
+
+        <h2>14.1 — Lautstärke und Balance</h2>
+        <p>
+          Der erste Schritt beim Mixing ist, die relativen Lautstärken der einzelnen Spuren einzustellen. In LMMS hat jede Spur im Song-Editor einen Lautstärkeregler (Volume-Knopf). Als Ausgangspunkt: Die Melodie soll am deutlichsten hörbar sein. Bass und Rhythmus sind das Fundament — präsent, aber nicht dominierend. Begleitung (Pads, Streicher-Hintergrund) ist der "Kleber" — füllend, aber zurückhaltend.
+        </p>
+        <p>
+          Ein häufiger Fehler: Alle Spuren auf voller Lautstärke — das klingt komprimiert, laut und unleserlich. Besser ist es, die meisten Spuren auf 70–80% der maximalen Lautstärke zu setzen und dann gezielt anzuheben, was hervorstechen soll.
+        </p>
+
+        <h2>14.2 — Panning: Stereo-Bild</h2>
+        <p>
+          <span class="glow">Panning</span> bestimmt, ob ein Instrument links, in der Mitte oder rechts im Stereo-Bild positioniert ist. Ein breites Stereo-Bild gibt dem Klang Raum und Tiefe. Als Faustregel: Kick, Bass und Hauptmelodie bleiben in der Mitte. Unterstützende Instrumente (zweite Melodiestimme, Streicher) können leicht nach links oder rechts gezogen werden. Percussionselemente können weiter außen liegen.
+        </p>
+        <p>
+          In LMMS findet man den Panning-Regler neben dem Volume-Regler in jeder Spur. Ein Automation-Track kann das Panning über Zeit verändern — zum Beispiel für einen Effekt, bei dem ein Klang von links nach rechts wandert.
+        </p>
+
+        <h2>14.3 — Frequenzbereiche und Konflikt</h2>
+        <p>
+          Jedes Instrument hat einen Frequenzbereich, in dem es hauptsächlich klingt. Wenn zwei Instrumente denselben Bereich besetzen, "kämpfen" sie und klingen undeutlich. Eine Bassline und ein Cello im selben tiefen Bereich — das gibt Matsch. Lösung: entweder ein Instrument transponieren (das Cello eine Oktave höher), oder EQ (Equalizer) nutzen, um Frequenzen zu schneiden. In LMMS kann man über "FX-Chain" einen EQ-Effekt einbinden. Für einfache Fälle reicht es, Instrumente in andere Oktaven zu verlegen.
+        </p>
+
+        <h2>14.4 — Layering: Instrumente schichten</h2>
+        <p>
+          <span class="glow">Layering</span> bedeutet, mehrere Instrumente auf denselben Noten zu schichten, um einen reicheren, individuelleren Klang zu erzeugen. Zum Beispiel: ein Piano und ein sanftes Streicher-Pad auf denselben Akkorden — das klingt wärmer und voller als beides alleine. Die Kunst liegt darin, Instrumente zu wählen, die sich ergänzen, statt sich zu überlagern. Instrumente mit unterschiedlichen Attack-Zeiten ergänzen sich gut: ein kurzes Klavier (schneller Attack) mit einem langen Pad (langsamer Attack) ergibt einen Ton, der direkt anschlägt und dann lange nachhallt.
+        </p>
+
+        <h2>14.5 — Export in LMMS</h2>
+        <p>
+          Wenn das Stück fertig ist, exportiert man es über "File → Export". LMMS exportiert als WAV oder OGG. WAV ist verlustfrei und sollte für finale Deliverables verwendet werden. OGG ist komprimiert und für Spieleimporte oft bevorzugt, da es kleiner ist. Die Sample-Rate sollte 44100 Hz sein, die Bittiefe 16 oder 32 Bit. Im Export-Dialog kann man auch Loop-Punkte setzen — für Spielemusik ein wichtiges Feature.
+        </p>
+
+        <h2>14.6 — Übung 14.6</h2>
+        <p>
+          Nehmen sie das Stück aus Übung 7.5 und mixen sie es: Setzen sie die Melodie laut, die Begleitung etwas leiser und die Bassline noch etwas darunter. Expermientieren sie mit Panning — bewegen sie ein Begleitinstrument leicht nach rechts und ein anderes nach links. Fügen sie Reverb auf das Melodie-Instrument hinzu. Exportieren sie das fertige Stück als WAV und hören sie es außerhalb von LMMS ab.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-15">
+        <h1>Kapitel 15 — Spielegenres und ihre Musik</h1>
+        <p>
+          TrafkHop Entertainment entwickelt Spiele aller Genres. Jedes Genre hat eigene musikalische Konventionen, Erwartungen und Möglichkeiten. Wer Spielemusik komponiert, muss das Genre des Spiels verstehen und die Musik darauf abstimmen — oder bewusst gegen die Konvention gehen, um einen Eindruck zu erzeugen.
+        </p>
+
+        <h2>15.1 — Platformer und Jump'n'Run</h2>
+        <p>
+          Platformer-Musik ist lebendig, eingängig und energiegeladen, ohne hektisch zu sein. Sie hat klar erkennbare Melodien, die nach wenigen Takten im Gedächtnis bleiben. Das Tempo liegt meist zwischen 120 und 160 BPM. Instrumente: Glockenspiel, Electric Piano, Synth-Leads, lebhafte Percussion. Das Hauptbeispiel ist natürlich Kōji Kondō's Super-Mario-Musik — fröhliches Dur, sprunghafte Melodien, eingängige Basslinie, perfekter Loop.
+        </p>
+        <p>
+          Verschiedene Welten eines Platformers brauchen verschiedene Themen — Wasser-Level klingen fließend und kühl (Flöten, Harfen, Vibraphone), Feuer-Level schnell und aufgeregt (Blechbläser, schnelle Streicher), Eis-Level klar und kalt (Celesta, Glockenspiel, stille Pads).
+        </p>
+
+        <h2>15.2 — Arcade-Racer</h2>
+        <p>
+          Arcade-Racer-Musik muss Tempo und Adrenalinen evozieren. Sehr schnelles BPM (140–180+), energetische Basslinie, dominierende Percussion, treibende Synths oder E-Gitarre. Progressive-Rock- und Electronic-Dance-Elemente mischen sich oft. Der Beat muss absolut solide sein — hier ist nicht der Ort für komplizierte Rhythmen, sondern für maximale Energie.
+        </p>
+
+        <h2>15.3 — Open World RPG</h2>
+        <p>
+          Open-World-RPGs haben die größte Bandbreite an musikalischen Anforderungen: Erkundungsmusik für weite Landschaften (atmosphärisch, ruhig, nicht ablenkend), Stadtthemen (lebendig, einladend), Dungeon-Musik (düster, spannend), Kampfmusik (intensiv), Bossthemen (episch, oft mit Leitmotiven), und emotionale Cutscene-Musik. Das ist praktisch ein komplettes Orchester-Portfolio.
+        </p>
+        <p>
+          Für Open-World-Erkundungsmusik ist Ambient-Komposition wichtig: wenige Noten, große Räume, viel Hall. C418's Minecraft ist das Paradebeispiel — ruhige Klavierlinien über sanften Pads, die man stundenlang hören kann ohne abgelenkt zu werden.
+        </p>
+
+        <h2>15.4 — Smash-Bros-artiger Fighter</h2>
+        <p>
+          Fighter-Musik ist intensiv, kraftvoll und hat oft einen hohen Wiedererkennungswert — da die Spieler während eines Matches kaum auf die Musik achten, muss sie unterschwellig wirken und Energie pumpen. Typisch: Mix aus orchestralen Elementen (Brass, Pauken) und elektronischen (Synth, Bassdrops), schnelles Tempo, markante Rhythmen. Arrangements aus anderen Spielen sind im Fighting-Game-Genre Tradition.
+        </p>
+
+        <h2>15.5 — Simulation und Management</h2>
+        <p>
+          Simulationen brauchen Musik, die nicht ablenkt, aber auch nicht nervt. Entspannte, positive Loops — weder zu aufgeregt noch zu traurig. Häufig genutzte Instrumente: Gitarre, Piano, leichte Percussion, Marimba, Bläser-Ensemble. Das Tempo ist moderat (90–120 BPM). Denken sie an Animal Crossing oder Stardew Valley — entspannte, wechselnde Jahreszeiten-Themen, die den Spielrhythmus unterstützen.
+        </p>
+
+        <h2>15.6 — Shooter</h2>
+        <p>
+          Shooter-Musik variiert stark je nach Subgenre. Ein militärischer Shooter hat orchestrale Dramatik mit Marsch-Elementen und Blechbläsern. Ein Sci-Fi-Shooter hat industriellen, elektronischen Klang mit harten Synthesizern und metallischem Percussion. Ein Cartoon-Shooter (z.B. Splatoon-artig) hat eingängige, fröhliche Melodien mit funkigem Groove. Allen gemein: starker Rhythmus und Energie.
+        </p>
+
+        <h2>15.7 — Horror und Thriller</h2>
+        <p>
+          Horrormusik ist die Kunst der Andeutung und Erwartungsunterbrechung. Das Gehirn mag Vorhersage — Horror bricht Vorhersagen absichtlich. Techniken: langsame dissonante Streicher, entfernte, unzuordbare Geräusche als Instrumente, plötzliche Stille gefolgt von lautem Ton (Stinger), verminderte und übermäßige Intervalle, sehr langsames oder unregelmäßiges Tempo.
+        </p>
+        <p>
+          Wichtig: Nicht nur laute Dissonanz — ruhige, scheinbar harmlose Musik, die langsam immer eigenartiger wird, ist oft gruseliger als offensichtliche Horror-Klischees.
+        </p>
+
+        <h2>15.8 — Motion-Controls und Rythmisches Gameplay</h2>
+        <p>
+          Bei Spielen mit Motion-Controls oder rhythmischem Gameplay ist die Musik oft das Spielprinzip selbst. Der Beat muss absolut klar und vorhersehbar sein. Keine Synkopen, die verwirren — klare Downbeats, erkennbare Phrasen. Das BPM sollte zur Schwierigkeit passen: Anfänger-Levels langsamer, fortgeschrittene Level schneller.
+        </p>
+
+        <h2>15.9 — Minecraft-Like und Sandbox</h2>
+        <p>
+          Sandbox-Spiele wie Minecraft brauchen Musik, die endlos wiederholt werden kann ohne zu ermüden. Das Geheimnis liegt in Reduktion: wenige Noten, viel Stille, ruhige Harmonik. Die Musik soll den Spielfluss begleiten, nicht unterbrechen. C418 hat dafür einen eigenen Stil entwickelt: minimalistische Klavierlinien mit langen Pausen, over time emerging — die Musik taucht auf und zieht sich zurück, als würde sie atmen.
+        </p>
+
+        <h2>15.10 — Übung 15.10</h2>
+        <p>
+          Wählen sie zwei Genres, für die TrafkHop Entertainment arbeitet, und schreiben sie für jedes ein 16-taktiges Thema. Das erste soll ein Platformer-Hauptthema sein (fröhlich, eingängig, 130 BPM, Dur), das zweite ein Dungeon-Thema für ein RPG (dunkel, atmosphärisch, 70 BPM, harmonisches Moll). Nutzen sie passende Instrumente aus dem Soundfont-Paket und achten sie auf das passende Schlagzeugmuster.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-16">
+        <h1>Kapitel 16 — Orchestrierung: Wie ein Orchester denkt</h1>
+        <p>
+          Viele Spielescores klingen orchestral — und das aus gutem Grund: Ein Orchester hat eine enorme Bandbreite an Klangfarben, Dynamiken und emotionalen Möglichkeiten. Wer Orchestrierung versteht, kann mit MIDI und Soundfonts überzeugend orchestrale Musik schreiben, ohne ein echtes Orchester zu brauchen.
+        </p>
+
+        <h2>16.1 — Die Orchestergruppen</h2>
+        <p>
+          Ein klassisches Orchester besteht aus vier Gruppen: <span class="glow">Streicher</span> (Violinen, Bratschen, Celli, Kontrabässe), <span class="glow">Holzbläser</span> (Flöte, Oboe, Klarinette, Fagott), <span class="glow">Blechbläser</span> (Trompete, Posaune, Tuba, Waldhorn) und <span class="glow">Schlagzeug/Perkussion</span> (Pauken, Große Trommel, Becken, Triangel, und viele mehr). Dazu kommt Harfe und manchmal Klavier als zusätzliche Instrumente.
+        </p>
+        <p>
+          Jede Gruppe hat einen typischen Charakter: Streicher sind das Rückgrat — warm, fließend, vielseitig, können sowohl Melodie als auch Begleitung übernehmen. Holzbläser sind lyrisch und hell — ideal für Melodien in ruhigeren Passagen, oder als Kontrast zu den Streichern. Blechbläser sind mächtig und laut — für dramatische Momente, Höhepunkte, Fanfaren. Schlagzeug gibt Energie, Gewicht und markiert Übergänge.
+        </p>
+
+        <h2>16.2 — Orchestrierungsprinzipien</h2>
+        <p>
+          <span class="glow">Verdopplung</span>: Wenn mehrere Instrumente dieselbe Melodie spielen, klingt sie voller und kraftvoller. Geige und Flöte auf derselben Melodie ist ein klassisches Muster. <span class="glow">Kontrapunkt</span>: Zwei verschiedene Melodien spielen gleichzeitig und ergänzen sich. Das erfordert mehr Kompositionserfahrung, klingt aber reich und komplex. <span class="glow">Call-and-Response</span>: Eine Gruppe "fragt", eine andere "antwortet" — dieses Prinzip findet sich in Klassik, Jazz und Spielemusik.
+        </p>
+        <p>
+          <span class="glow">Crescendo und Decrescendo</span>: In der MIDI-Orchestrierung erzeugt man ein Crescendo entweder durch Velocity-Anstieg in der einzelnen Spur, oder indem man Instrumente nach und nach hinzufügt. Das Hinzufügen von Blechbläsern über ein Streicher-Fundament ist eine klassische Crescendo-Technik.
+        </p>
+
+        <h2>16.3 — MIDI-Orchestrierung: Häufige Fehler</h2>
+        <p>
+          MIDI klingt oft "fake", wenn man nicht aufpasst. Typische Fehler: <span class="glow">Alle Velocity identisch</span> — klingt maschinell. Lösung: Velocity variieren, besonders in Füllnoten und Begleitstimmen. <span class="glow">Noten zu lang und perfekt quantisiert</span> — echte Musiker spielen nicht maschinengenau. Lösung: Noten leicht kürzen (Staccato-Effekt für kurze Noten), Quantisierung leicht verringern. <span class="glow">Alle Instrumente immer gleichzeitig</span> — das klingt überfüllt. Lösung: Instrumente kommen und gehen, Pausen einbauen. <span class="glow">Zu wenig Hall</span> — Orchesterinstrumente werden in großen Räumen aufgenommen. Reverb ist kein Effekt, sondern Realismus.
+        </p>
+
+        <h2>16.4 — Übung 16.4</h2>
+        <p>
+          Nehmen sie das Hauptthema aus Übung 8.4 (das Helden-Leitmotiv) und orchestrieren sie es: einmal als ruhige Kammermusik-Version (Streicher-Quartett: Violine, Bratsche, Cello, Kontrabass), einmal als epische Orchesterversion (volle Streicher, Blechbläser, Pauken). Schreiben sie für jede Version mindestens 4 verschiedene Spuren im Song-Editor. Vergleichen sie die emotionale Wirkung.
+        </p>
+      </section>
+
+
+
+
+      <section id="kapitel-17">
+        <h1>Kapitel 17 — Fortgeschrittene LMMS-Techniken</h1>
+        <p>
+          Dieser abschließende Kapitelblock behandelt Techniken, die über das Grundlegende hinausgehen — Automatisierung, Effekt-Chains, komplexere Arrangements und Tipps für professionell klingende Ergebnisse.
+        </p>
+
+        <h2>17.1 — Automation in LMMS</h2>
+        <p>
+          <span class="glow">Automation</span> bedeutet, Parameter wie Lautstärke, Panning, Effekte oder Instrumen-teinstellungen über die Zeit automatisch zu verändern. In LMMS erstellt man eine Automation-Spur im Song-Editor: Rechtsklick auf einen Parameterregler → "Add Automation Pattern". Dann kann man im Automation-Editor eine Kurve zeichnen, die den Wert des Parameters über die Zeit bestimmt.
+        </p>
+        <p>
+          Typische Automation: Lautstärke-Fade-in am Anfang eines Stücks, Fade-out am Ende. Langsames Pan von links nach rechts für einen Bewegungseffekt. Reverb-Zunahme für ein immer atmosphärischer werdendes Stück. Tempo-Änderung für ein Ritardando (langsamer werden) am Schluss.
+        </p>
+
+        <h2>17.2 — FX-Chain und Effektplugins</h2>
+        <p>
+          Jedes Instrument in LMMS hat eine FX-Chain, zu der man Effektplugins hinzufügen kann. Wichtige mitgelieferte Plugins: <span class="glow">Reverberator</span> (Hall), <span class="glow">Eq</span> (Equalizer — Frequenzen anheben oder absenken), <span class="glow">Compressor</span> (Dynamik einengen — macht leise Töne lauter und laute leiser, klingt "dichter"), <span class="glow">Delay</span> (Echo-Effekt), <span class="glow">Chorus</span> und <span class="glow">Flanger</span> (Klangeinfärbung).
+        </p>
+        <p>
+          Der <span class="glow">Compressor</span> ist ein wichtiges Werkzeug für professionell klingende Musik: Schlagzeug mit Kompression klingt "punchy" und kontrolliert. Piano-Compressor macht die Noten gleichmäßiger und präsenter. Zu viel Kompression klingt jedoch "totgequetscht" und ausdruckslos.
+        </p>
+
+        <h2>17.3 — Arpeggiator und Chord-Plugin</h2>
+        <p>
+          LMMS hat einen integrierten <span class="glow">Arpeggiator</span> in jedem Instrument — er wandelt eine Note automatisch in ein aufsteigendes oder absteigendes Akkord-Arpeggio um. Damit lassen sich mit wenig Aufwand lebendige, pulsende Begleitfiguren erzeugen. Das <span class="glow">Chord-Plugin</span> fügt automatisch zusätzliche Töne zu jeder gespielten Note hinzu — man kann damit Akkorde mit einer einzigen Melodielinie spielen.
+        </p>
+
+        <h2>17.4 — Arrangement-Strategien für längere Stücke</h2>
+        <p>
+          Für Stücke ab 2–3 Minuten gilt: Man braucht eine klare Struktur und einen Entwicklungsplan. Typisches Arrangement: Intro (sparse, ein oder zwei Instrumente), Hauptteil A (Hauptthema, volle Besetzung aufbauend), Übergang (Rhythmus bleibt, Melodie wechselt), Hauptteil B (Kontrast-Abschnitt, andere Tonart oder Mode), Wiederholung A (voller und dichter als zuvor), Höhepunkt (maximale Energie, alle Instrumente), Outro / Fade (Abbau, Rückkehr zu sparse).
+        </p>
+
+        <h2>17.5 — Inspirationsquellen und Herangehensweisen</h2>
+        <p>
+          Wenn die Inspiration fehlt, gibt es bewährte Herangehensweisen. <span class="glow">Reverse-Engineering</span>: Man analysiert ein Stück Musik, das man mag, und versucht herauszufinden, welche Akkorde, Tonart, Rhythmen und Instrumente verwendet werden. Dann schreibt man etwas im selben Stil, aber eigenes. <span class="glow">Constraints setzen</span>: Nur 4 Noten, nur ein Instrument, nur 8 Takte — Einschränkungen zwingen zur Kreativität. <span class="glow">Von einem Mood ausgehen</span>: Was soll die Musik auslösen? Ängstlichkeit, Freude, Nostalgie, Aufregung? Dann sucht man die musikalischen Mittel, die das erzeugen (Tonart, Tempo, Instrumente, Dynamik).
+        </p>
+
+        <h2>17.6 — Abschlussübung: Ein vollständiger Spielescore</h2>
+        <p>
+          Die Abschlussübung bringt alles zusammen. Wählen sie ein fiktives TrafkHop-Spiel — es kann ein Genre ihrer Wahl sein. Schreiben sie einen vollständigen kleinen Spielescore bestehend aus fünf Stücken:
+        </p>
+        <p>
+          <span class="glow">1.</span> Ein Hauptmenü-Thema (60–90 Sekunden, als Loop). <span class="glow">2.</span> Ein Gameplay-Thema für normale Erkundung (90–120 Sekunden, als Loop). <span class="glow">3.</span> Ein Kampf-Thema (60–90 Sekunden, deutlich intensiver als das Erkundungsthema). <span class="glow">4.</span> Ein kurzes emotionales Cutscene-Stück (30–45 Sekunden, kein Loop). <span class="glow">5.</span> Ein Boss-Thema (90–120 Sekunden, mehrphasig — beginnt moderiert, steigert sich).
+        </p>
+        <p>
+          Alle fünf Stücke sollen thematisch zusammenhängen — sie nutzen dasselbe Leitmotiv des Hauptcharakters, transponiert, variiert und instrumentiert je nach Situation. Exportieren sie alle fünf als WAV. Das ist das Niveau, das ein TrafkHop-Musiker für ein echtes Projekt liefern kann.
+        </p>
+      </section>
+
+
+
+
+      <section id="referenz">
+        <h1>Schnellreferenz</h1>
+        <div class="codeblock">
+NOTEN:       C D E F G A B (englisch, LMMS-Standard), + # und b für Halbtöne
+OKTAVEN:     C4 = mittleres C, A4 = 440 Hz Kammerton
+NOTENWERTE:  Ganze (4), Halbe (2), Viertel (1), Achtel (0.5), Sechzehntel (0.25)
+TAKTARTEN:   4/4 universal, 3/4 walzerartig, 6/8 fließend, 5/4 ungerade
+TEMPO:       BPM — Kampf 140+, Gameplay 100–130, Ambient 60–90
+TONLEITERN:  Dur (G G H G G G H), Moll (G H G G H G G), Penta (ohne 4. und 7.)
+MODI:        Dorisch (+gr.6), Phrygisch (+kl.2), Lydisch (+#4), Mixolydisch (+kl.7)
+DREIKLANG:   Dur = Gr.Terz+Quinte, Moll = Kl.Terz+Quinte
+STUFENFOLGE: I=Tonika, IV=Subdominante, V=Dominante (D→T = Auflösung)
+LEITMOTIV:   kurzes Motiv, einer Figur/einem Ort zugeordnet, variierbar
+ADSR:        Attack=Einsatz, Decay=Abfall, Sustain=Haltelautstärke, Release=Ausklang
+LMMS:        Song-Editor (Struktur), Piano Roll (Melodie), Beat+Bassline (Rhythmus)
+SF2-PLAYER:  Instrument laden → Bank wählen → Preset wählen → ADSR anpassen
+SOUNDFONT:   GM-Standard: Kanal 10 = Drums, 1–9 + 11–16 = melodische Instrumente
+MIXING:      Melodie laut, Begleitung mittel, Bass zurückhaltend, Panning für Breite
+EXPORT:      WAV (verlustfrei), OGG (komprimiert für Spiele), 44100 Hz, 16/32 Bit
+LOOP:        letzter Takt muss harmonisch zu Takt 1 passen (Tonika am Ende)
+GENRES:      Platformer=fröhlich/Dur, RPG=orchestral/breit, Horror=dissonant/sparse
+ORCHESTRIERUNG: Streicher=Fundament, Holzbläser=Lyrik, Blechbläser=Dramatik
+AUTOMATION:  Rechtsklick auf Parameter → "Add Automation Pattern"
+FX-CHAIN:    Reverb, EQ, Compressor, Delay über FX-Knopf im Instrument
+ARPEGGIATOR: Akkord-Spieler im Instrument-Plugin — für Begleitfiguren
+</div>
+      </section>
+
+
+
+
+    </main>
+
+  <script src="../../../../../../Files/Placeholder.js"></script>
+  <script src="../../../../../../Files/Nav.js"></script>
+  <script src="../../../../../../Files/Volume.js"></script>
+  </body>
+
+</html>
