@@ -1,0 +1,43 @@
+:root {
+    --Kraft:      #fff495;
+    --Kraft-dark: #ede59f;
+    --Trafk:      #5a3998;
+    --Trafk-dark: #351b67;
+}
+.notenblatt {
+    background: #fffdf7;
+    border: 1px solid var(--Kraft-dark);
+    border-radius: 6px;
+    padding: 12px 8px;
+    margin: 18px 0;
+    overflow-x: auto;
+}
+
+.notenblatt svg {
+    display: block;
+    margin: 0 auto;
+    min-width: 140px;
+}
+
+.referenzbild {
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    margin: 18px 0;
+    text-align: center;
+}
+
+.referenzbild img {
+    max-width: 80%;
+    height: auto;
+    border-radius: 3px;
+}
+
+.bildunterschrift {
+    font-size: 0.85em;
+    color: #666;
+    font-style: italic;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
