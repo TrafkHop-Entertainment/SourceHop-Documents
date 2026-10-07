@@ -1,0 +1,301 @@
+/*
+Farben
+*/
+
+:root {
+    --Kraft:      #fff495;
+    --Kraft-dark: #ede59f;
+    --Trafk:      #5a3998;
+    --Trafk-dark: #351b67;
+}
+
+#chat-window {
+    position: fixed;
+    top: 10.5rem;
+    right: 3rem;
+    left: 3rem;
+    bottom: 8rem;
+    color: white;
+    overflow: scroll;
+}
+#chat-input-row {
+    position: fixed;
+    bottom: 4rem;
+    height: 6rem;
+    left: 4rem;
+    right: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+#chat-input {
+    padding: 0.65rem;
+    font-size: 1.15rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 15px;
+    filter: drop-shadow(0px 0px 5px var(--Kraft));
+    background-color: var(--Kraft);
+}
+#chat-input::placeholder {
+    color: black;
+}
+
+#send-btn {
+    height: 3rem;
+    width: 3rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--Trafk);
+    border-radius: 50%;
+    filter: none;
+}
+/* === Datei-Anhang Chips === */
+#file-preview-container {
+    position: fixed;
+    bottom: 10.5rem;
+    left: 4rem;
+    right: 4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    pointer-events: none;
+}
+#file-preview-container > div {
+    pointer-events: all;
+}
+
+/* Attach-Button Hover */
+#attach-btn:hover {
+    background: rgba(90, 57, 152, 0.3) !important;
+    transition: all 0.2s;
+}
+
+/* ==========================================================================
+   NEU: Status-Leiste (Helper-Status, Modell-Auswahl, Export/Import)
+   Schmaler fixer Bereich unterhalb des Headers, oberhalb von #chat-window.
+   ========================================================================== */
+#alfonz-status-bar {
+    position: fixed;
+    top: 4rem;
+    left: 0;
+    right: 0;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 0.75rem;
+    background: var(--Kraft-dark);
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
+    z-index: 10;
+}
+
+.alfonz-status-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+#alfonz-status-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 50%;
+    background-color: #888;
+    display: inline-block;
+    transition: background-color 0.2s ease-in-out;
+}
+
+#alfonz-status-dot.alfonz-status-ok {
+    background-color: #00A86B;
+    filter: drop-shadow(0 0 3px #00A86B);
+}
+
+#alfonz-status-dot.alfonz-status-bad {
+    background-color: #C41E3A;
+    filter: drop-shadow(0 0 3px #C41E3A);
+}
+
+#alfonz-status-label {
+    font-size: 0.75rem;
+    color: var(--Kraft-dark);
+    white-space: nowrap;
+}
+
+#alfonz-model-select {
+    margin-left: auto;
+    font-size: 0.8rem;
+    font-weight: bold;
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 15px;
+    background-color: var(--Kraft-dark);
+    color: var(--Kraft-dark);
+    cursor: pointer;
+}
+
+.alfonz-bar-btn {
+    font-size: 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 15px;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#alfonz-think-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--Kraft-dark);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#alfonz-think-toggle {
+    cursor: pointer;
+    accent-color: var(--Kraft);
+}
+
+/* Ausklappbarer Gedankengang (nur sichtbar, wenn Thinking an war) */
+.alfonz-thinking {
+    margin: 6px 0;
+    font-size: 0.8rem;
+}
+
+.alfonz-thinking summary {
+    cursor: pointer;
+    color: #9069da;
+    user-select: none;
+}
+
+.alfonz-thinking summary:hover {
+    color: var(--Kraft);
+}
+
+.alfonz-thinking div {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: rgba(53, 27, 103, 0.35);
+    border: none;
+    border-radius: 15px;
+    color: #c9b8ee;
+    font-style: italic;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   NEU: Info-Popup (Datenschutz + Nutzungsanleitung, einmal pro Sitzung)
+   ========================================================================== */
+#alfonz-info-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 2rem;
+}
+
+#alfonz-info-box {
+    position: relative;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: #1a0a2e;
+    border: none;
+    border-radius: 15px;
+    padding: 2rem 2.25rem;
+    box-shadow: 0 0 30px rgba(90, 57, 152, 0.6);
+}
+
+#alfonz-info-box h2 {
+    margin-top: 0;
+    color: var(--Kraft);
+    border-: none;
+}
+
+#alfonz-info-box h3 {
+    color: var(--Kraft-dark);
+    margin-top: 1.5rem;
+}
+
+#alfonz-info-box p,
+#alfonz-info-box li {
+    color: #e8def8;
+    font-size: 0.95rem;
+}
+
+#alfonz-info-box ul,
+#alfonz-info-box ol {
+    padding-left: 1.4rem;
+    margin: 0.5rem 0;
+}
+
+#alfonz-info-box li {
+    margin-bottom: 0.5rem;
+}
+
+#alfonz-info-box code {
+    background: rgba(90, 57, 152, 0.4);
+    padding: 0.1rem 0.4rem;
+    border: none;
+    font-size: 0.85rem;
+}
+
+#alfonz-info-box .alfonz-info-code {
+    display: block;
+    margin: 0.5rem 0;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+#alfonz-info-close {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    background: transparent;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.alfonz-info-ok-btn {
+    display: block;
+    margin: 1.5rem auto 0;
+    background: var(--Trafk);
+    border: none;
+    border-radius: 15px;
+    padding: 0.6rem 1.4rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Schmale/Hochformat-Ansicht: Leiste wird zweizeilig statt überlaufend */
+@media (max-aspect-ratio: 1/1) {
+    #alfonz-status-bar {
+        top: 4rem;
+        flex-wrap: wrap;
+        height: auto;
+        padding: 0.4rem 0.6rem;
+    }
+    #chat-window {
+        top: 7.5rem;
+    }
+    #alfonz-model-select {
+        margin-left: 0;
+    }
+    #alfonz-info-box {
+        padding: 1.5rem;
+    }
+}
